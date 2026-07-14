@@ -1,10 +1,12 @@
 # Local K3s Data Analytics Stack Documentation
 
-This document outlines the architecture and deployment steps for a local, containerized data analytics stack running on WSL. The environment utilizes K3s for orchestration, HashiCorp Vault for secret management, and PostGIS for spatial database storage, configured for an on-demand, resource-efficient workflow.
+This document outlines the architecture and deployment operations for a local, containerized data analytics stack hosted on Windows Subsystem for Linux (WSL). Orchestrated via k3s, the environment is optimized for an on-demand, resource-efficient workflow, utilizing PostGIS as the primary spatial datastore.
+
+To establish a hardened security posture, the architecture integrates two critical infrastructure components: HashiCorp Vault is deployed to broker identity and dynamically manage database credentials—mitigating the vulnerabilities of static Kubernetes secrets—while Falco is implemented via the Falco Operator to enforce runtime security by monitoring kernel-level system calls for anomalous container behavior.
 
 ## 1. Engine Installation (K3s)
 
-Install the K3s engine without the Traefik ingress controller (to free up ports) and set up the local environment.
+The k3s engine is deployed with the default Traefik ingress controller explicitly disabled to prevent port-binding conflicts on the WSL host network. Bypassing this reverse proxy minimizes the cluster's resource overhead, aligning with the requirements of a lightweight, on-demand analytics stack. This strategy simplifies the local environment setup by eliminating the need to manage local DNS entries or complex ingress routing rules.
 
 ```bash
 # Install K3s
@@ -12,14 +14,13 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
 
 # Create a permanent symlink for the standard kubectl command
 sudo ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
-
-# Disable K3s systemd auto-start for on-demand usage
-sudo systemctl disable k3s
 ```
 
 ## 2. Vault Installation & Initialization
 
-Deploy HashiCorp Vault to securely manage database credentials.
+To establish secrets management within the k3s cluster, the architecture integrates HashiCorp Vault. Vault mitigates the vulnerabilities inherent to static, base64-encoded Kubernetes Secrets by functioning as a centralized identity broker and encryption engine.
+
+Deploying Vault enables the dynamic generation, automated lifecycle management, and strict access control of database credentials. This ensures that containerized workloads authenticate securely against backend datastores without exposing long-lived or hardcoded tokens within the cluster environment.
 
 ```bash
 # Add the HashiCorp Helm repository
@@ -138,7 +139,6 @@ spec:
       containers:
       - name: postgis
         # The PostGIS image repository typically tracks major PG versions.
-        # 18 will cover the 18.x line (e.g., 18.4).
         image: postgis/postgis:18-3.6 
         ports:
         - containerPort: 5432
@@ -210,11 +210,46 @@ Apply the blueprint to initialize the database:
 kubectl apply -f postgis-k3s.yaml
 ```
 
-## 4. Cluster Management
+## 4. Deploying the Falco Operator
+
+Within a k3s environment, Falco provides critical runtime security by monitoring system calls at the kernel level to detect anomalous container behavior, privilege escalations, and unauthorized cluster activity. To manage Falco’s lifecycle and rule configurations declaratively, the architecture utilizes the official Falco Operator.
+
+The following deployment script provisions a dedicated namespace and executes a Kubernetes server-side apply, installing the operator's controller components and Custom Resource Definitions (CRDs) directly from the upstream GitHub release manifests.
+
+```bash
+# Create the dedicated namespace
+kubectl create namespace falco-operator
+
+# Define the target version and apply the manifest
+VERSION=latest
+if [ "$VERSION" = "latest" ]; then
+  kubectl apply --server-side -f https://github.com/falcosecurity/falco-operator/releases/latest/download/install.yaml
+else
+  kubectl apply --server-side -f https://github.com/falcosecurity/falco-operator/releases/download/${VERSION}/install.yaml
+fi
+```
+
+### What This Deploys
+
+Applying this configuration automatically provisions the following resources in your cluster:
+
+- Namespace: falco-operator
+- Custom Resource Definitions (CRDs): Registers the core Falco artifacts (configs, plugins, rulesfiles) and instance definitions (components, falcos) to the Kubernetes API.
+- RBAC & Security: Configures the falco-operator service account, cluster role, and cluster role binding to give the operator the necessary permissions to manage cluster resources.
+- Controller: Deploys the falco-operator application deployment itself.
+
+## 5. Cluster Management
 
 The cluster is configured to operate on an on-demand basis to preserve system resources. Use these scripts to boot and safely spin down the environment.
 
 ### ~/stop-cluster.sh
+
+To remove k3s from the systemctl, allowing for user-directed deployment of the cluster:
+
+```bash
+# Disable K3s systemd auto-start for on-demand usage
+sudo systemctl disable k3s
+```
 
 To create the shutdown script file:
 
