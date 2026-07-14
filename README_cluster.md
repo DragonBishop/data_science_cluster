@@ -281,3 +281,73 @@ Make it executable:
 ```bash
 chmod +x ~/start-cluster.sh
 ```
+
+### Synchronizing Kubeconfig (WSL / k3s)
+
+This project uses a local k3s Kubernetes cluster running inside Windows Subsystem for Linux (WSL). By default, the active k3s configuration file is locked to the Linux root user.
+
+To manage the cluster efficiently, this project utilizes a client-server architecture: the k3s cluster operates as the backend server entirely within WSL, while management and development applications run natively on Windows. The kubeconfig file acts as the ultimate bridge between the two operating systems, providing the necessary routing addresses and security keys.
+
+By creating a static, user-owned copy of this configuration in the Linux ~/.kube directory , Windows can safely read the live file via the \\wsl$\ network path. This allows you to seamlessly connect your local cluster to powerful Windows-based desktop clients, including:
+
+- Headlamp Desktop: For intuitive, graphical cluster monitoring and resource management.
+- Lens Desktop: Another robust Kubernetes IDE that is highly popular for monitoring CPU/GPU utilization during intensive machine learning tasks.
+- VS Code (Kubernetes Extension): Allows managing data science pods, deploying JupyterHub instances, or orchestrating Kubeflow pipelines.
+- Standard kubectl: For native command-line execution directly from Windows PowerShell.
+
+To prevent these Windows applications from being blocked by Linux "Permission Denied" errors , this bash script automates the process of safely snapshotting the root-locked k3s file and assigning it the correct user permissions.
+
+Create the script file in the home directory:
+
+```bash
+nano ~/sync-kubeconfig.sh
+```
+
+Paste the bash script into the .sh file:
+
+```bash
+#!/bin/bash
+
+# Define file paths
+SOURCE_CONFIG="/etc/rancher/k3s/k3s.yaml"
+DEST_DIR="$HOME/.kube"
+DEST_CONFIG="$DEST_DIR/config"
+
+echo -e "\n🔄 Starting kubeconfig sync..."
+
+# Check if the k3s source file actually exists
+if [ ! -f "$SOURCE_CONFIG" ]; then
+    echo -e "❌ Error: Source config not found at $SOURCE_CONFIG."
+    echo -e "   Ensure k3s is installed and currently running."
+    exit 1
+fi
+
+# Ensure the hidden .kube directory exists
+mkdir -p "$DEST_DIR"
+
+# Copy the file using sudo to bypass the root lock
+echo "📋 Copying config from $SOURCE_CONFIG..."
+sudo cp "$SOURCE_CONFIG" "$DEST_CONFIG"
+
+# Update ownership of the copied file to the current Linux user
+echo "🔐 Updating file permissions for user: $USER..."
+sudo chown $(id -u):$(id -g) "$DEST_CONFIG"
+
+echo -e "✅ Success! Your local kubeconfig is now synced with the live k3s cluster.\n"
+```
+
+Execute the command from the terminal:
+
+```bash
+~/sync-kubeconfig.sh
+```
+
+**What this script does:**
+
+1. Validates that the active `k3s` cluster is running and generating a config.
+2. Creates the hidden `~/.kube` directory if it does not exist.
+3. Copies `/etc/rancher/k3s/k3s.yaml` to `~/.kube/config`.
+4. Changes the file ownership from `root` to the active standard Linux user.
+5. Prints status feedback to the terminal.
+
+*Note: You will be prompted for your standard Linux `sudo` password when running this script, as it must temporarily elevate privileges to read the root k3s file.*
