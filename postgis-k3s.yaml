@@ -50,7 +50,6 @@ spec:
       containers:
       - name: postgis
         # The PostGIS image repository typically tracks major PG versions.
-        # 18 will cover the 18.x line (e.g., 18.4).
         image: postgis/postgis:18-3.6 
         ports:
         - containerPort: 5432
