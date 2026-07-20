@@ -1,388 +1,328 @@
-# Local K3s Data Analytics Stack Documentation
+# k3s + Vault + CloudNativePG + MinIO Local Cluster
 
-This document outlines the architecture and deployment operations for a local, containerized data analytics stack hosted on Windows Subsystem for Linux (WSL). Orchestrated via k3s, the environment is optimized for an on-demand, resource-efficient workflow, utilizing PostGIS as the primary spatial datastore.
+This repository provisions a self-contained local Kubernetes cluster tailored for Data Science development using a postgreSQL server with the postGIS extension enabled. It is intended to be scalable for data science projects, such as Extract, Transform, and Load (ETL) pipelines, Machine Learning (ML), and data analytics.
 
-To establish a hardened security posture, the architecture integrates two critical infrastructure components: HashiCorp Vault is deployed to broker identity and dynamically manage database credentials—mitigating the vulnerabilities of static Kubernetes secrets—while Falco is implemented via the Falco Operator to enforce runtime security by monitoring kernel-level system calls for anomalous container behavior.
+This cluster's architecture relies on a system-installed Hashicorp Vault to act as a transit to unseal a cluster-situated Vault. This cluster Vault is the primary store for all secrets in the cluster. Secure provisioning of environment variables from this vault allows users to combine ease of use and best practices for Secrets Management, intended for local use but scalable for enterprises if necessary.
 
-## 1. Engine Installation (K3s)
+This README provides detailed instructions on how to assemble and deploy your own cluster, providing all of the tools needed to easily scale into larger and more complex tasks. Cilium in place of legacy Ingress, Hashicorp Vault, Falco, and minIO are all tools that may seem a bit excessive for simple hobbyist use. What they provide, to any edge computing developers, are a powerful basis for Data Science and development with Kubernetes' trademark customizability (and complexity!).
 
-The k3s engine is deployed with the default Traefik ingress controller explicitly disabled to prevent port-binding conflicts on the WSL host network. Bypassing this reverse proxy minimizes the cluster's resource overhead, aligning with the requirements of a lightweight, on-demand analytics stack. This strategy simplifies the local environment setup by eliminating the need to manage local DNS entries or complex ingress routing rules.
+## Core Architecture
+
+* **k3s:** A lightweight, certified Kubernetes distribution. It acts as the core control plane and execution environment for the database and its supporting services.
+* **Cilium:** The cluster's Container Network Interface (CNI). It replaces k3s's default networking components (Flannel and Kube-proxy) to provide highly efficient, eBPF-based network routing and Gateway API support.
+* **HashiCorp Vault (Transit Auto-Unseal):** The system utilizes two Vault instances to solve the "secret zero" problem. A lightweight **Transit Vault** runs natively on the WSL host. The **Main Vault** runs inside the Kubernetes cluster. When the cluster boots, the Main Vault automatically authenticates against the Transit Vault to unseal itself, requiring no manual intervention.
+* **Vault Secrets Operator (VSO):** A Kubernetes operator that acts as a secure bridge. It continuously reads credentials from the Main Vault and natively synchronizes them into standard Kubernetes `Secret` objects, allowing applications to mount them as standard environment variables.
+* **CloudNativePG (CNPG):** A Kubernetes operator designed to manage the full lifecycle of a PostgreSQL/PostGIS database. It handles provisioning, replication, and automated disaster recovery pipelines.
+* **MinIO:** An in-cluster, S3-compatible object storage service. It acts as the local backup target. CloudNativePG continuously streams database Write-Ahead Logs (WAL) and scheduled base backups to this storage bucket.
+* **Falco:** A cloud-native runtime security tool. It monitors system calls and Kubernetes audit logs to detect and alert on abnormal behavior.
+
+## Official Documentation
+
+| Component | Documentation Link |
+| --- | --- |
+| k3s | https://docs.k3s.io/ |
+| Cilium | https://docs.cilium.io/ |
+| Gateway API | https://gateway-api.sigs.k8s.io/ |
+| HashiCorp Vault | https://developer.hashicorp.com/vault/docs |
+| Vault Secrets Operator | https://developer.hashicorp.com/vault/docs/vault-secrets-operator |
+| CloudNativePG | https://cloudnative-pg.io/docs |
+| CNPG Hibernation | https://cloudnative-pg.io/documentation/current/declarative_hibernation/ |
+| MinIO | https://docs.min.io/ |
+| Falco | https://falco.org/docs/ |
+
+---
+
+## First-Time Setup Instructions
+
+This stack is designed so that this setup is intended to be completed in chronological order, and no guarantee can made of success if this workflow is not followed.
+
+### 1. Install k3s (and detach from systemd)
 
 ```bash
-# Install K3s
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
-
-# Create a permanent symlink for the standard kubectl command
-sudo ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
+curl -sfL [https://get.k3s.io](https://get.k3s.io) | sh -
 ```
 
-## 2. Vault Installation & Initialization
+By default, this script installs k3s as an auto-starting systemd service. This is ideal for enterprises, because Kubernetes' "Stay alive at all costs" approach helps enterprises built resilient networks. However, in edge computing development, it's practical to want to be able to safely wind down processes rather than hope they close gracefully without user intention.
 
-To establish secrets management within the k3s cluster, the architecture integrates HashiCorp Vault. Vault mitigates the vulnerabilities inherent to static, base64-encoded Kubernetes Secrets by functioning as a centralized identity broker and encryption engine.
-
-Deploying Vault enables the dynamic generation, automated lifecycle management, and strict access control of database credentials. This ensures that containerized workloads authenticate securely against backend datastores without exposing long-lived or hardcoded tokens within the cluster environment.
+Utilize custom lifecycle scripts (`start-cluster.sh` and `stop-cluster.sh`) to manage specific database hibernation tasks. Systemd simultaneously attempting to manage k3s will result in severe port conflicts and state corruption. Disable the service:
 
 ```bash
-# Add the HashiCorp Helm repository
-helm repo add hashicorp https://helm.releases.hashicorp.com
+sudo systemctl disable --now k3s
+```
+
+### 2. Initial Cluster Boot
+
+```bash
+./start-cluster.sh
+```
+
+This script initiates k3s with its default network components explicitly disabled. **If you check the node status, it will report `NotReady`.** This is the expected state until the CNI (Cilium) is applied in the next step.
+
+### 3. Install the Cilium CNI
+
+Cilium requires Kubernetes Gateway API CRDs to function. At time of writing, the **experimental** release channel of these CRDs is necessary for this cluster; the standard channel omits the `TLSRoute` definition, which can cause the Cilium operator to enter a fatal crash-loop upon startup.
+
+```bash
+kubectl apply -f [https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/experimental-install.yaml](https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/experimental-install.yaml)
+```
+
+Next, download and install the Cilium CLI:
+
+```bash
+CILIUM_CLI_VERSION=$(curl -s [https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt](https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt))
+curl -L --fail --remote-name-all [https://github.com/cilium/cilium-cli/releases/download/$](https://github.com/cilium/cilium-cli/releases/download/$){CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
+sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
+rm cilium-linux-amd64.tar.gz
+```
+
+Deploy Cilium into the cluster and wait for the daemonsets to report healthy:
+
+```bash
+cilium install --set gatewayAPI.enabled=true --set kubeProxyReplacement=true
+cilium status --wait
+```
+
+Verify the node has transitioned to a healthy state:
+
+```bash
+kubectl get nodes   # Status should now reflect "Ready"
+```
+
+### 4. Deploy the Host-Level Transit Vault
+
+This Vault instance runs directly the host and serves solely as the encryption engine to unlock the cluster's Main Vault.
+
+```bash
+wget -O- [https://apt.releases.hashicorp.com/gpg](https://apt.releases.hashicorp.com/gpg) | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] [https://apt.releases.hashicorp.com](https://apt.releases.hashicorp.com) $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt install -y vault
+```
+
+Generate a valid local TLS certificate with the required Subject Alternative Names (SANs) to allow secure communication from within the cluster:
+
+```bash
+sudo openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
+  -keyout /opt/vault/tls/tls.key \
+  -out /opt/vault/tls/tls.crt \
+  -subj "/CN=vault.local" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:<your host's LAN IP>"
+sudo chown vault:vault /opt/vault/tls/tls.key /opt/vault/tls/tls.crt
+```
+
+Modify `/etc/vault.d/vault.hcl`. Ensure the listener is bound to `0.0.0.0:8200` to allow cross-interface traffic, and append the following:
+
+```hcl
+api_addr = "https://<your host's LAN IP>:8200"
+```
+
+Enable the service, initialize the Vault, and configure the transit secret engine:
+
+```bash
+sudo systemctl enable --now vault
+
+export VAULT_ADDR="[https://127.0.0.1:8200](https://127.0.0.1:8200)"
+export VAULT_CACERT="/opt/vault/tls/tls.crt"
+
+vault operator init
+```
+
+**CRITICAL:** The initialization command will output 5 Unseal Keys and 1 Initial Root Token. Store these immediately in a secure password manager. If lost, the Vault data is irrecoverable.
+
+Unseal the Transit Vault by running the following command three times, providing a different unseal key each time:
+
+```bash
+vault operator unseal
+```
+
+Configure the auto-unseal policy and generate the token required for the Main Vault to authenticate against this Transit Vault:
+
+```bash
+vault secrets enable transit
+vault write -f transit/keys/autounseal
+
+vault policy write autounseal-policy - <<EOF
+path "transit/encrypt/autounseal" { capabilities = ["update"] }
+path "transit/decrypt/autounseal" { capabilities = ["update"] }
+EOF
+
+vault token create -policy=autounseal-policy -period=768h -orphan
+```
+
+Securely store the generated token.
+
+### 5. Deploy the In-Cluster Main Vault
+
+Add the HashiCorp Helm repository:
+
+```bash
+helm repo add hashicorp [https://helm.releases.hashicorp.com](https://helm.releases.hashicorp.com)
 helm repo update
+```
 
-# Create the vault namespace
+Create the namespace and inject the connection credentials required to reach the host Transit Vault:
+
+```bash
 kubectl create namespace vault
-
-# Install Vault in standalone mode
-helm install vault hashicorp/vault \
-    --namespace vault \
-    --set "server.dev.enabled=false" \
-    --set "injector.enabled=true"
+kubectl create secret generic vault-transit-secret \
+  --from-literal=token='<token from step 4>' -n vault
+kubectl create configmap vault-transit-ca \
+  --from-file=ca.crt=/opt/vault/tls/tls.crt -n vault
 ```
 
-Initialize the Vault to generate the master unseal keys and the root token:
-*(Note: Save the generated Root Token to a secure password manager.)*
+Deploy the Main Vault using the custom configuration file:
 
 ```bash
-kubectl exec -it vault-0 -n vault -- vault operator init
+helm install vault hashicorp/vault -n vault -f vault-values.yaml
 ```
 
-### Create unseal.keys
-
-Store the generated unseal keys in a highly restricted host file for the automated startup script:
+Initialize this Main Vault. Because it is a completely separate instance, it will generate a new set of master keys and a new root token. Store this root token securely.
 
 ```bash
-mkdir -p ~/.vault
-touch ~/.vault/unseal.keys
-chmod 600 ~/.vault/unseal.keys
+kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=[http://127.0.0.1:8200](http://127.0.0.1:8200) vault operator init"
 ```
 
-Open `~/.vault/unseal.keys` and paste exactly three unseal keys, one per line.
+If successful, the output will immediately report `Sealed: false`, verifying that the Transit auto-unseal mechanism is functioning.
 
-### Configure Database Secrets
+### 6. Configure Vault Kubernetes Authentication
 
-Unseal the Vault, log in with the Root Token, and store the PostGIS credentials:
+Establish the trust boundary between Vault and the Kubernetes API, allowing the Vault Secrets Operator to fetch passwords on behalf of the database.
 
 ```bash
-# Unseal using three keys
-kubectl exec -it vault-0 -n vault -- vault operator unseal <KEY_1>
-kubectl exec -it vault-0 -n vault -- vault operator unseal <KEY_2>
-kubectl exec -it vault-0 -n vault -- vault operator unseal <KEY_3>
+kubectl exec -it vault-0 -n vault -- sh -c '
+export VAULT_TOKEN="<main Vault root token>"
+export VAULT_ADDR=[http://127.0.0.1:8200](http://127.0.0.1:8200)
 
-# Log in
-kubectl exec -it vault-0 -n vault -- vault login <ROOT_TOKEN>
+vault secrets enable -path=secret kv-v2
+vault auth enable kubernetes
+vault write auth/kubernetes/config kubernetes_host="[https://kubernetes.default.svc](https://kubernetes.default.svc)"
 
-# Enable the Key-Value (KV) v2 secrets engine
-kubectl exec -it vault-0 -n vault -- vault secrets enable -path=secret kv-v2
+vault policy write postgis-policy - <<EOF
+path "secret/data/postgis" { capabilities = ["read"] }
+path "secret/data/minio" { capabilities = ["read"] }
+EOF
 
-# Store the default postgres credentials
-kubectl exec -it vault-0 -n vault -- vault kv put secret/postgis POSTGRES_USER="postgres" POSTGRES_PASSWORD="YourSecurePassword"
+vault write auth/kubernetes/role/postgis-role \
+  bound_service_account_names=postgis-vault-auth \
+  bound_service_account_namespaces=databases \
+  policies=postgis-policy \
+  ttl=24h
+'
 ```
 
-## 3. PostGIS Database Deployment
+### 7. Seed Application Credentials
 
-Create the namespace and deploy the database with Vault annotations to automatically inject credentials.
+Inject your required credentials into the Vault KV store. Replace the placeholder values with your desired secure passwords.
 
 ```bash
-kubectl create namespace data-processing
+kubectl exec -it vault-0 -n vault -- sh -c '
+export VAULT_TOKEN="<main Vault root token>"
+vault kv put secret/postgis username="<your username>" password="<your password>"
+vault kv put secret/minio \
+  MINIO_ROOT_USER="<user>" MINIO_ROOT_PASSWORD="<password>" \
+  ACCESS_KEY_ID="<same as user>" ACCESS_SECRET_KEY="<same as password>"
+'
 ```
 
-Save the following configuration as `postgis-k3s.yaml`:
+### 8. Install Software Operators
 
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgis-pvc
-  namespace: data-processing
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 10Gi
+Deploy the controllers responsible for managing the secrets lifecycle, database state, and security logging.
+
+```bash
+helm upgrade --install vault-secrets-operator hashicorp/vault-secrets-operator \
+  --namespace vault-secrets-operator-system --create-namespace
+
+helm repo add cnpg [https://cloudnative-pg.github.io/charts](https://cloudnative-pg.github.io/charts)
+helm repo update
+helm upgrade --install cnpg cnpg/cloudnative-pg \
+  --namespace cnpg-system --create-namespace
+
+helm repo add falcosecurity [https://falcosecurity.github.io/charts](https://falcosecurity.github.io/charts)
+helm install falco falcosecurity/falco --create-namespace --namespace falco
+```
+
+### 9. Deploy the Database and Storage Infrastructure
+
+Before applying these manifests, ensure the `database:` and `owner:` values in `cnpg-cluster.yaml` perfectly match the username seeded into Vault during Step 7.
+
+```bash
+kubectl apply -f vso-setup.yaml
+kubectl apply -f minio-backups.yaml
+kubectl apply -f cnpg-cluster.yaml
+kubectl get pods -n databases -w
+```
+
+Monitor the deployment until both the `minio` and `postgis-cluster-1` pods report a `Running` state.
+
+### 10. Database Restoration
+
+To restore an existing database into the newly provisioned CNPG cluster, target the primary read-write pod.
+
+For standard plaintext SQL dumps (`.sql`), stream the file via `stdin`:
+
+```bash
+kubectl exec -i postgis-cluster-1 -n databases -- psql -U <APP_DB_OWNER> -d <APP_DB_NAME> -f - < /path/to/your/backup.sql
+```
+
+For binary or custom-format dumps (`.dump`), utilize `pg_restore`. Append the `--no-owner` and `--no-privileges` flags to circumvent permission mapping errors:
+
+```bash
+kubectl exec -it postgis-cluster-1 -n databases -- pg_restore -d "postgres://<APP_DB_OWNER>:<APP_DB_PASSWORD>@localhost:5432/<APP_DB_NAME>" -c --no-owner --no-privileges /path/to/your/backup.dump
+```
+
+### 11. Sync Kubeconfig
+
+Execute the synchronization script to format and export the cluster's context to your local `.kube/config`, allowing tools like Headlamp and k9s to authenticate.
+
+```bash
+./sync-kubeconfig.sh
+```
+
 ---
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgis
-  namespace: data-processing
-spec:
-  serviceName: "postgis"
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgis
-  template:
-    metadata:
-      labels:
-        app: postgis
-      annotations:
-        # Enable the Vault sidecar injector
-        vault.hashicorp.com/agent-inject: "true"
-        # Reference the auth role for this server
-        vault.hashicorp.com/role: "postgis-role"
-        
-        # Inject the POSTGRES_USER secret into /vault/secrets/pguser
-        vault.hashicorp.com/agent-inject-secret-pguser: "secret/data/postgis"
-        vault.hashicorp.com/agent-inject-template-pguser: |
-          {{- with secret "secret/data/postgis" -}}
-          {{ .Data.data.POSTGRES_USER }}
-          {{- end -}}
-          
-        # Inject the POSTGRES_PASSWORD secret into /vault/secrets/pgpass
-        vault.hashicorp.com/agent-inject-secret-pgpass: "secret/data/postgis"
-        vault.hashicorp.com/agent-inject-template-pgpass: |
-          {{- with secret "secret/data/postgis" -}}
-          {{ .Data.data.POSTGRES_PASSWORD }}
-          {{- end -}}
-    spec:
-      serviceAccountName: postgis-sa
-      containers:
-      - name: postgis
-        # The PostGIS image repository typically tracks major PG versions.
-        image: postgis/postgis:18-3.6 
-        ports:
-        - containerPort: 5432
-          name: postgresql
-        env:
-        # Tell Postgres to read the credentials from the Vault-injected files
-        - name: POSTGRES_USER_FILE
-          value: "/vault/secrets/pguser"
-        - name: POSTGRES_PASSWORD_FILE
-          value: "/vault/secrets/pgpass"
-        volumeMounts:
-        - name: postgis-data
-          mountPath: /var/lib/postgresql
-      volumes:
-      - name: postgis-data
-        persistentVolumeClaim:
-          claimName: postgis-pvc
+
+## Daily Operations
+
+| Operation | Command |
+| --- | --- |
+| Initialize Cluster | `./start-cluster.sh` |
+| Shutdown Cluster | `./stop-cluster.sh` |
+| Sync API Context | `./sync-kubeconfig.sh` |
+| Trigger Manual DB Backup | `kubectl cnpg backup postgis-cluster -n databases` |
+| Verify Vault State | `kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault status"` |
+| Verify CNPG State | `kubectl cnpg status postgis-cluster -n databases` |
+| Port-Forward Database | `kubectl port-forward -n databases svc/postgis-cluster-rw 5432:5432` |
+| Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8200:8200` |
+
+**Note on Lifecycle Management:** The `./stop-cluster.sh` script utilizes CNPG's declarative hibernation feature to cleanly spin down the PostgreSQL instances, ensuring no data corruption or WAL desync occurs prior to the k3s process terminating. `./start-cluster.sh` reverses this process on boot.
+
+**Note on Backups:** The database manifest (`cnpg-cluster.yaml`) contains a `ScheduledBackup` resource that performs an automated base backup to MinIO daily at midnight. To trigger an immediate out-of-band snapshot, use the CNPG plugin command detailed in the table above.
+
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: wsl-localhost-bridge
-  namespace: data-processing
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: wsl-localhost-bridge
-  template:
-    metadata:
-      labels:
-        app: wsl-localhost-bridge
-    spec:
-      hostNetwork: true 
-      dnsPolicy: ClusterFirstWithHostNet 
-      containers:
-      - name: tcp-bridge
-        image: alpine/socat:latest 
-        command:
-          - "socat"
-          - "TCP-LISTEN:5432,fork,reuseaddr"
-          - "TCP:postgis-nodeport.data-processing.svc.cluster.local:5432"
-        resources:
-          requests:
-            cpu: "10m"
-            memory: "16Mi"
-          limits:
-            cpu: "50m"
-            memory: "32Mi"
+
+## Repository Structure
+
+* `start-cluster.sh`: Initiates the k3s process, waits for the API server, and runs readiness health checks.
+* `stop-cluster.sh`: Issues CNPG hibernation commands and gracefully terminates k3s.
+* `sync-kubeconfig.sh`: Extracts and maps the k3s admin context to the local user directory.
+* `vault-values.yaml`: Helm chart overrides for the in-cluster Vault StatefulSet.
+* `vso-setup.yaml`: Provisions namespaces, service accounts, and Vault operator connection CRDs.
+* `minio-backups.yaml`: Provisions the S3-compatible storage pod, PVCs, and automated bucket initialization jobs.
+* `cnpg-cluster.yaml`: Deploys the PostgreSQL cluster, assigns backup endpoints, and defines the automated backup schedule.
+
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgis-nodeport
-  namespace: data-processing
-spec:
-  type: NodePort
-  selector:
-    app: postgis
-  ports:
-    - port: 5432
-      targetPort: 5432
-      nodePort: 30543
-```
 
-Apply the blueprint to initialize the database:
+## Troubleshooting Guide
 
-```bash
-kubectl apply -f postgis-k3s.yaml
-```
+* **Pod Initialization Failure:** Run `kubectl describe pod <pod_name> -n databases` and review the "Events" stream for exact scheduler or image pull errors.
+* **Vault Permission Denied:** Verify the existence of the `postgis-role` policy generated in Step 6 via the Vault CLI.
+* **Secrets Failing to Mount:** Run `kubectl describe vaultstaticsecret <name> -n databases`. The resource status conditions will report the specific API failure preventing VSO from fetching the credential.
+* **Headlamp Visual Bugs (Ghost Clusters):** Close the Headlamp UI, purge its local cache directory (`%APPDATA%\Headlamp` on Windows), and relaunch the application.
+* **k3s Port Conflicts:** If k3s logs show bind errors on port 6443, the systemd process is likely active. Run `systemctl is-enabled k3s` to verify it is disabled.
 
-## 4. Deploying the Falco Operator
+---
 
-Within a k3s environment, Falco provides critical runtime security by monitoring system calls at the kernel level to detect anomalous container behavior, privilege escalations, and unauthorized cluster activity. To manage Falco’s lifecycle and rule configurations declaratively, the architecture utilizes the official Falco Operator.
+## Technical Debt
 
-The following deployment script provisions a dedicated namespace and executes a Kubernetes server-side apply, installing the operator's controller components and Custom Resource Definitions (CRDs) directly from the upstream GitHub release manifests.
+The following configurations require future remediation to meet standard production-hardening guidelines:
 
-```bash
-# Create the dedicated namespace
-kubectl create namespace falco-operator
-
-# Define the target version and apply the manifest
-VERSION=latest
-if [ "$VERSION" = "latest" ]; then
-  kubectl apply --server-side -f https://github.com/falcosecurity/falco-operator/releases/latest/download/install.yaml
-else
-  kubectl apply --server-side -f https://github.com/falcosecurity/falco-operator/releases/download/${VERSION}/install.yaml
-fi
-```
-
-### What This Deploys
-
-Applying this configuration automatically provisions the following resources in your cluster:
-
-- Namespace: falco-operator
-- Custom Resource Definitions (CRDs): Registers the core Falco artifacts (configs, plugins, rulesfiles) and instance definitions (components, falcos) to the Kubernetes API.
-- RBAC & Security: Configures the falco-operator service account, cluster role, and cluster role binding to give the operator the necessary permissions to manage cluster resources.
-- Controller: Deploys the falco-operator application deployment itself.
-
-## 5. Cluster Management
-
-The cluster is configured to operate on an on-demand basis to preserve system resources. Use these scripts to boot and safely spin down the environment.
-
-### ~/stop-cluster.sh
-
-To remove k3s from the systemctl, allowing for user-directed deployment of the cluster:
-
-```bash
-# Disable K3s systemd auto-start for on-demand usage
-sudo systemctl disable k3s
-```
-
-To create the shutdown script file:
-
-```bash
-nano ~/stop-cluster.sh
-```
-
-Content of the shutdown script:
-
-```bash
-#!/bin/bash
-echo "📉 Winding down safely before closing..."
-kubectl scale statefulset postgis --replicas=0 -n data-processing
-
-# Wait for the pod to fully terminate
-until [ "$(kubectl get pods -n data-processing -l app=postgis --no-headers 2>/dev/null | wc -l)" -eq 0 ]; do sleep 2; done
-
-echo "🛑 Stopping K3s engine..."
-sudo systemctl stop k3s
-echo "✅ Cluster Offline. Use ~/start-cluster.sh to restart the cluster."
-```
-
-Make it executable:
-
-```bash
-chmod +x ~/stop-cluster.sh
-```
-
-### ~/start-cluster.sh
-
-To create the `~/start-cluster.sh` file:
-
-```bash
-nano ~/start-cluster.sh
-```
-
-Script for the startup:
-
-```bash
-#!/bin/bash
-echo "🚀 Booting K3s engine..."
-sudo systemctl start k3s
-
-echo "⏳ Waiting for Kubernetes API..."
-until kubectl get nodes > /dev/null 2>&1; do sleep 2; done
-
-echo "⏳ Waiting for Vault to initialize..."
-until kubectl get pods -n vault | grep -q "vault-0"; do sleep 2; done
-sleep 5 # Brief buffer for the Vault API
-
-echo "🔓 Unsealing Vault from secure host file..."
-kubectl exec -n vault vault-0 -- vault operator unseal $(sed -n '1p' ~/.vault/unseal.keys) > /dev/null
-kubectl exec -n vault vault-0 -- vault operator unseal $(sed -n '2p' ~/.vault/unseal.keys) > /dev/null
-kubectl exec -n vault vault-0 -- vault operator unseal $(sed -n '3p' ~/.vault/unseal.keys) > /dev/null
-
-echo "📈 Starting PostGIS database..."
-kubectl scale statefulset postgis --replicas=1 -n data-processing
-
-echo "✅ Cluster Online! Use ~/stop-cluster.sh to wind down the cluster."
-```
-
-Make it executable:
-
-```bash
-chmod +x ~/start-cluster.sh
-```
-
-### Synchronizing Kubeconfig (WSL / k3s)
-
-This project uses a local k3s Kubernetes cluster running inside Windows Subsystem for Linux (WSL). By default, the active k3s configuration file is locked to the Linux root user.
-
-To manage the cluster efficiently, this project utilizes a client-server architecture: the k3s cluster operates as the backend server entirely within WSL, while management and development applications run natively on Windows. The kubeconfig file acts as the ultimate bridge between the two operating systems, providing the necessary routing addresses and security keys.
-
-By creating a static, user-owned copy of this configuration in the Linux ~/.kube directory , Windows can safely read the live file via the \\wsl$\ network path. This allows you to seamlessly connect your local cluster to powerful Windows-based desktop clients, including:
-
-- Headlamp Desktop: For intuitive, graphical cluster monitoring and resource management.
-- Lens Desktop: Another robust Kubernetes IDE that is highly popular for monitoring CPU/GPU utilization during intensive machine learning tasks.
-- VS Code (Kubernetes Extension): Allows managing data science pods, deploying JupyterHub instances, or orchestrating Kubeflow pipelines.
-- Standard kubectl: For native command-line execution directly from Windows PowerShell.
-
-To prevent these Windows applications from being blocked by Linux "Permission Denied" errors , this bash script automates the process of safely snapshotting the root-locked k3s file and assigning it the correct user permissions.
-
-Create the script file in the home directory:
-
-```bash
-nano ~/sync-kubeconfig.sh
-```
-
-Paste the bash script into the .sh file:
-
-```bash
-#!/bin/bash
-
-# Define file paths
-SOURCE_CONFIG="/etc/rancher/k3s/k3s.yaml"
-DEST_DIR="$HOME/.kube"
-DEST_CONFIG="$DEST_DIR/config"
-
-echo -e "\n🔄 Starting kubeconfig sync..."
-
-# Check if the k3s source file actually exists
-if [ ! -f "$SOURCE_CONFIG" ]; then
-    echo -e "❌ Error: Source config not found at $SOURCE_CONFIG."
-    echo -e "   Ensure k3s is installed and currently running."
-    exit 1
-fi
-
-# Ensure the hidden .kube directory exists
-mkdir -p "$DEST_DIR"
-
-# Copy the file using sudo to bypass the root lock
-echo "📋 Copying config from $SOURCE_CONFIG..."
-sudo cp "$SOURCE_CONFIG" "$DEST_CONFIG"
-
-# Update ownership of the copied file to the current Linux user
-echo "🔐 Updating file permissions for user: $USER..."
-sudo chown $(id -u):$(id -g) "$DEST_CONFIG"
-
-echo -e "✅ Success! Your local kubeconfig is now synced with the live k3s cluster.\n"
-```
-
-Execute the command from the terminal:
-
-```bash
-~/sync-kubeconfig.sh
-```
-
-**What this script does:**
-
-1. Validates that the active `k3s` cluster is running and generating a config.
-2. Creates the hidden `~/.kube` directory if it does not exist.
-3. Copies `/etc/rancher/k3s/k3s.yaml` to `~/.kube/config`.
-4. Changes the file ownership from `root` to the active standard Linux user.
-5. Prints status feedback to the terminal.
-
-*Note: You will be prompted for your standard Linux `sudo` password when running this script, as it must temporarily elevate privileges to read the root k3s file.*
+* **Permissive Ingress Network Policies:** The main Vault listener (port 8200) currently accepts internal cluster traffic globally. A Default Deny `NetworkPolicy` should be implemented to strictly restrict ingress traffic solely to the Vault Secrets Operator namespace.
+* **Lack of High Availability (HA):** Both the PostgreSQL database and HashiCorp Vault are deployed as single replicas. While adequate for local development, this architecture lacks automatic failover redundancy.
