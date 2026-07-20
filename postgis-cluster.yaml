@@ -1,0 +1,88 @@
+# postgis-cluster.yaml
+#
+# Deploys a CloudNativePG-managed PostGIS cluster. Database credentials are
+# synchronized from Vault, and continuous WAL archiving is configured to use
+# the in-cluster MinIO object store.
+
+# Synchronizes the application database credentials from Vault into a
+# Kubernetes Secret. CloudNativePG uses this Secret when creating the
+# database owner and configuring client authentication.
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: postgis-vault-secret
+  namespace: databases
+spec:
+  type: kv-v2
+  mount: secret
+  path: postgis
+  destination:
+    name: postgis-app-credentials
+    create: true
+    type: kubernetes.io/basic-auth
+  refreshAfter: 1h
+  vaultAuthRef: vault-auth
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgis-cluster
+  namespace: databases
+spec:
+  instances: 1
+
+  # CloudNativePG's official PostGIS image, built specifically for the
+  # operator's bootstrap and lifecycle management. The image version matches
+  # the PostgreSQL and PostGIS versions of the source database.
+  imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
+
+  bootstrap:
+    initdb:
+      # Initializes the application database and its owner. The owner name
+      # must match the username stored in the credentials Secret so the
+      # provisioned role and password refer to the same database user.
+      database: <your database name>
+      owner: <your username — must match Vault's stored username>
+      secret:
+        name: postgis-app-credentials
+
+  # Persistent storage for the database. CloudNativePG provisions and manages
+  # the underlying PersistentVolumeClaim for the cluster.
+  storage:
+    size: 100Gi
+    storageClass: local-path
+
+  # Continuously archives PostgreSQL WAL files to the in-cluster MinIO
+  # object store, enabling point-in-time recovery and backup retention.
+  # Authentication uses the MinIO credentials synchronized from Vault.
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://cnpg-backups/
+      endpointURL: http://minio-service.databases.svc:9000
+      s3Credentials:
+        accessKeyId:
+          name: minio-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: minio-credentials
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+---
+# Scheduled backup at midnight of postgis server.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgis-cluster-daily-backup
+  namespace: databases
+spec:
+  # Runs at midnight (00:00) every day.
+  schedule: "0 0 0 * * *"
+  
+  # Tells the schedule which database cluster to target
+  cluster:
+    name: postgis-cluster
+    
+  # 'self' means the backup objects are owned by this schedule. 
+  # 'cluster' means they are owned by the database itself.
+  backupOwnerReference: cluster

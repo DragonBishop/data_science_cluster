@@ -1,0 +1,115 @@
+# minio-backups.yaml
+#
+# Deploys an in-cluster MinIO server that provides S3-compatible object
+# storage for CloudNativePG backups and WAL archiving. Credentials are
+# synchronized from Vault by the Vault Secrets Operator, so no secrets are
+# stored in this manifest.
+
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: minio-vault-secret
+  namespace: databases
+spec:
+  type: kv-v2
+  mount: secret
+  path: minio
+  destination:
+    name: minio-credentials
+    create: true
+  refreshAfter: 1h
+  vaultAuthRef: vault-auth
+---
+# Provides persistent storage for MinIO's object data so backups survive
+# pod restarts and recreation.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-storage
+  namespace: databases
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: databases
+spec:
+  replicas: 1
+  # MinIO uses a ReadWriteOnce volume, so only one pod can mount the
+  # persistent storage at a time. Recreate ensures the existing pod fully
+  # terminates before a replacement is started.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio:latest
+        args: ["server", "/data", "--console-address", ":9001"]
+        envFrom:
+        - secretRef:
+            name: minio-credentials
+        ports:
+        - containerPort: 9000
+        - containerPort: 9001
+        volumeMounts:
+        - name: minio-storage
+          mountPath: /data
+      volumes:
+      - name: minio-storage
+        persistentVolumeClaim:
+          claimName: minio-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-service
+  namespace: databases
+spec:
+  ports:
+  - name: api
+    port: 9000
+    targetPort: 9000
+  - name: console
+    port: 9001
+    targetPort: 9001
+  selector:
+    app: minio
+---
+# Initializes the S3 bucket used for CloudNativePG backups. The job is
+# idempotent, so it can be safely reapplied after the bucket already exists.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-minio-bucket
+  namespace: databases
+spec:
+  template:
+    spec:
+      containers:
+      - name: mc
+        image: minio/mc:latest
+        envFrom:
+        - secretRef:
+            name: minio-credentials
+        command:
+        - /bin/sh
+        - -c
+        - |
+          sleep 10;
+          mc alias set myminio http://minio-service:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD;
+          mc mb myminio/cnpg-backups || true;
+      restartPolicy: OnFailure
