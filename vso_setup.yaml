@@ -1,0 +1,50 @@
+# vso-setup.yaml
+#
+# Creates the databases namespace and configures the Vault Secrets Operator
+# (VSO) to authenticate with the in-cluster Vault. This file establishes the
+# connection to Vault; workloads and the secrets they consume are defined in
+# their respective manifests.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: databases
+---
+# Service account used by VSO when authenticating to Vault's Kubernetes auth
+# method. Vault authorizes this identity according to the configured
+# `postgis-role`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgis-vault-auth
+  namespace: databases
+---
+# Defines the connection from VSO to the in-cluster Vault service.
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: vault-connection
+  namespace: databases
+spec:
+  address: http://vault-internal.vault.svc.cluster.local:8200
+---
+# Configures VSO to authenticate to Vault using the Kubernetes auth method.
+# The service account's projected token is exchanged for a Vault token
+# associated with the `postgis-role`.
+#
+# The `audiences` field specifies the intended recipient of the projected
+# service account token. Vault validates this audience during authentication.
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: vault-auth
+  namespace: databases
+spec:
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: postgis-role
+    serviceAccount: postgis-vault-auth
+    audiences:
+      - vault
+  vaultConnectionRef: vault-connection
