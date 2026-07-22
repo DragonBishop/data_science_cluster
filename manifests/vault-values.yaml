@@ -21,6 +21,12 @@ server:
     repository: "hashicorp/vault"
     tag: "2.0.3"
 
+  # THIS IS NEW: Automatically mounts the TLS certificate ConfigMap 
+  # we created into the Vault pod at /vault/userconfig/vault-transit-ca/
+  extraVolumes:
+    - type: configMap
+      name: vault-transit-ca
+
   standalone:
     enabled: true
     config: |
@@ -44,3 +50,11 @@ server:
       # Automatically unseal this Vault by using the transit seal provided
       # by an external Vault instance. This allows the in-cluster Vault to
       # recover from restarts without manual unseal operations.
+      seal "transit" {
+        address         = "https://HOST_IP:8200"
+        token           = "<TRANSIT TOKEN HERE>"
+        disable_renewal = "false"
+        key_name        = "autounseal"
+        mount_path      = "transit/"
+        tls_ca_cert     = "/vault/userconfig/vault-transit-ca/ca.crt"
+      }
