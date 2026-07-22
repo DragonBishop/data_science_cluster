@@ -1,0 +1,115 @@
+# postgis-cluster.yaml
+#
+# Deploys a CloudNativePG-managed PostGIS cluster, synchronizes credentials
+# from Vault, configures continuous WAL archiving to the in-cluster MinIO
+# object store, and bridges the database to the WSL host via a socat
+# Deployment (bound to hostPort 5432) rather than a LoadBalancer or NodePort.
+
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: postgis-vault-secret
+  namespace: databases
+spec:
+  type: kv-v2
+  mount: secret
+  path: postgis
+  destination:
+    name: postgis-app-credentials
+    create: true
+    type: kubernetes.io/basic-auth
+    labels:
+      cnpg.io/reload: "true"
+  refreshAfter: 1h
+  vaultAuthRef: vault-auth
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgis-cluster
+  namespace: databases
+spec:
+  instances: 1
+
+  # CloudNativePG's official PostGIS image, built specifically for the
+  # operator's bootstrap and lifecycle management. The image version matches
+  # the PostgreSQL and PostGIS versions of the source database.
+  imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
+
+  # `postgres` is CNPG's reserved system role — it's permanently excluded
+  # from managed.roles reconciliation. enableSuperuserAccess defaults to
+  # false, and when false, CNPG's operator blanks the postgres user's
+  # password to NULL on every reconciliation cycle. Both fields below are
+  # required together — superuserSecret alone is silently ignored without
+  # enableSuperuserAccess: true.
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: postgis-app-credentials
+
+  bootstrap:
+    initdb:
+      database: postgres
+      owner: postgres
+      secret:
+        name: postgis-app-credentials
+
+  storage:
+    size: 100Gi
+    storageClass: local-path
+
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://cnpg-backups/
+      endpointURL: http://minio-service.databases.svc:9000
+      s3Credentials:
+        accessKeyId:
+          name: minio-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: minio-credentials
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgis-cluster-daily-backup
+  namespace: databases
+spec:
+  schedule: "0 0 0 * * *"
+  cluster:
+    name: postgis-cluster
+  backupOwnerReference: cluster
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-proxy
+  namespace: databases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-proxy
+  template:
+    metadata:
+      labels:
+        app: postgres-proxy
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: socat-bridge
+        image: alpine/socat:latest
+        command:
+          - socat
+          - TCP-LISTEN:5432,bind=127.0.0.1,fork,reuseaddr
+          - TCP:postgis-cluster-rw.databases.svc.cluster.local:5432
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "50m"
+            memory: "32Mi"
