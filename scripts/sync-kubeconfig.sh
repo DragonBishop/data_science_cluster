@@ -1,45 +1,57 @@
+#!/bin/bash
 #
-# sync-kubeconfig.sh — copies the live k3s kubeconfig to a Windows-side
-# path so Headlamp can reach the cluster on Windows. WSL-side tools 
-# read the live file directly via `export KUBECONFIG=/etc/rancher/k3s/k3s.yaml`
-# in ~/.bashrc.
+# sync-kubeconfig.sh
+# Copies the live k3s kubeconfig to two independent destinations:
+# 1. ~/.kube/config on WSL (bind-mount source for devcontainers).
+# 2. Windows-side path (for Windows-native applications).
 #
- 
+# Requires re-execution after any cluster rebuild to maintain synchronization.
+
+set -euo pipefail
+
 SOURCE_CONFIG="/etc/rancher/k3s/k3s.yaml"
+WSL_DEST="$HOME/.kube/config"
 WINDOWS_DEST="/mnt/c/Users/benco/.kube/config"
- 
+
 echo -e "\n🔄 Starting kubeconfig sync..."
 
-
-# Windows-side destination for Headlamp.
-WINDOWS_DEST="/mnt/c/Users/benco/.kube/config"
- 
-echo -e "\n🔄 Starting kubeconfig sync..."
-
-# --- Step 1: Confirm the source file exists ---------------------------------
-# k3s only writes this file while the server is running. Its absence means
-# k3s either isn't installed or isn't currently up.
+# --- Step 1: Verify source configuration exists -----------------------------
 if [ ! -f "$SOURCE_CONFIG" ]; then
     echo -e "❌ Error: Source config not found at $SOURCE_CONFIG."
-    echo -e "   Ensure k3s is installed and currently running."
+    echo -e "   Ensure k3s is installed and actively running."
     exit 1
 fi
 
+# --- Step 2: Validate destinations are regular files ------------------------
+# Prevents silent failures caused by symlinks or erroneous directory creation
+# from container engine bind mounts.
+for dest in "$WSL_DEST" "$WINDOWS_DEST"; do
+    if [ -L "$dest" ]; then
+        echo -e "❌ Error: $dest is a symlink."
+        echo -e "   Destination must be a regular file. Execute: rm \"$dest\""
+        exit 1
+    fi
+    if [ -e "$dest" ] && [ ! -f "$dest" ]; then
+        echo -e "❌ Error: $dest exists but is not a regular file."
+        echo -e "   Execute: sudo rm -rf \"$dest\""
+        exit 1
+    fi
+done
 
-# --- Step 2: Ensure the destination directory exists ------------------------
-mkdir -p "$DEST_DIR"
+# --- Step 3: Ensure destination directories exist ---------------------------
+mkdir -p "$(dirname "$WSL_DEST")"
+mkdir -p "$(dirname "$WINDOWS_DEST")"
 
+# --- Step 4: Write WSL copy -------------------------------------------------
+# Modifies ownership to the executing user to allow unprivileged access.
+echo "📋 Copying config to WSL path ($WSL_DEST)..."
+sudo cp "$SOURCE_CONFIG" "$WSL_DEST"
+sudo chown "$(id -u):$(id -g)" "$WSL_DEST"
+chmod 600 "$WSL_DEST"
 
-# --- Step 3: Copy the config --------------------------------------------------
-# The source file is root-owned, so sudo is required to read it.
-echo "📋 Copying config from $SOURCE_CONFIG..."
-sudo cp "$SOURCE_CONFIG" "$DEST_CONFIG"
+# --- Step 5: Write Windows copy ---------------------------------------------
+# Skips chown/chmod operations, as drvfs mounts do not utilize Linux permissions.
+echo "📋 Copying config to Windows path ($WINDOWS_DEST)..."
+sudo cp "$SOURCE_CONFIG" "$WINDOWS_DEST"
 
-
-# --- Step 4: Hand ownership to the current user -----------------------------
-# Without this, the copied file stays root-owned and kubectl/Headlamp can't
-# read it without sudo.
-echo "🔐 Updating ownership and permissions for user: $USER..."
-sudo chown "$(id -u):$(id -g)" "$DEST_CONFIG"
-
-echo -e "✅ Success! Your local kubeconfig is now synced with the live cluster.\n"
+echo -e "✅ Success! Kubeconfig copies are synchronized with the live cluster.\n"
