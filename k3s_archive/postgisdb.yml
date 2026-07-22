@@ -1,0 +1,84 @@
+# One-time prereqs (see chat) before applying this:
+#   1. vault kv put secret/postgis username=<owner> password=<password>
+#   2. Vault kubernetes auth method + policy + role (postgis-role) — see chat
+#
+# Apply with: kubectl apply -f postgis-cluster.yaml
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgis-vault-auth
+  namespace: databases
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: vault-connection
+  namespace: databases
+spec:
+  # Reused from your working auto-unseal pod; swap to a client-facing
+  # "vault" service instead of "vault-internal" if you have one.
+  address: http://vault-internal.vault.svc.cluster.local:8200
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: postgis-vault-auth
+  namespace: databases
+spec:
+  vaultConnectionRef: vault-connection
+  method: kubernetes
+  mount: kubernetes        # matches `vault auth enable kubernetes` (default mount path)
+  kubernetes:
+    role: postgis-role      # matches auth/kubernetes/role/postgis-role created above
+    serviceAccount: postgis-vault-auth
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: postgis-app-credentials
+  namespace: databases
+spec:
+  vaultAuthRef: postgis-vault-auth
+  mount: secret             # matches `vault secrets enable -path=secret kv-v2`
+  type: kv-v2
+  path: postgis              # matches `vault kv put secret/postgis ...`
+  refreshAfter: 1h
+  destination:
+    create: true
+    name: postgis-app-credentials
+    type: kubernetes.io/basic-auth
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgis
+  namespace: databases
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
+  storage:
+    size: 100Gi
+
+  # External LoadBalancer to expose database on port 5432
+  managed:
+    services:
+      additional:
+        - selectorType: rw
+          serviceTemplate:
+            metadata:
+              name: postgis-external-lb
+            spec:
+              type: LoadBalancer
+              ports:
+                - name: postgres
+                  port: 5432
+                  targetPort: 5432
+                  protocol: TCP
+
+  bootstrap:
+    initdb:
+      database: <APP_DB_NAME>     # must match the database name
+      owner: <APP_DB_OWNER>       # must match the database username
+      secret:
+        name: postgis-app-credentials
