@@ -1,0 +1,87 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgis
+  namespace: databases
+spec:
+  
+  instances: 1
+  imageName: postgis/postgis:18-3.6
+  storage: 100Gi
+
+  template:
+    metadata:
+      annotations:
+        # These annotations trigger the Vault sidecar injector
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "postgis-role"
+        
+        # Inject the credentials as you did before
+        vault.hashicorp.com/agent-inject-secret-pguser: "secret/data/postgis"
+        vault.hashicorp.com/agent-inject-template-pguser: |
+          {{- with secret "secret/data/postgis" -}}
+          {{ .Data.data.POSTGRES_USER }}
+          {{- end -}}
+        
+        vault.hashicorp.com/agent-inject-secret-pgpass: "secret/data/postgis"
+        vault.hashicorp.com/agent-inject-template-pgpass: |
+          {{- with secret "secret/data/postgis" -}}
+          {{ .Data.data.POSTGRES_PASSWORD }}
+          {{- end -}}
+    spec:
+      serviceAccountName: postgis-sa
+      # The Vault injector will automatically append its sidecar here
+      containers:
+        - name: postgres
+          # You would point your PG setup to read from /vault/secrets/
+          env:
+            - name: POSTGRES_USER_FILE
+              value: "/vault/secrets/pguser"
+            - name: POSTGRES_PASSWORD_FILE
+              value: "/vault/secrets/pgpass"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wsl-localhost-bridge
+  namespace: data-processing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wsl-localhost-bridge
+  template:
+    metadata:
+      labels:
+        app: wsl-localhost-bridge
+    spec:
+      hostNetwork: true 
+      dnsPolicy: ClusterFirstWithHostNet 
+      containers:
+      - name: tcp-bridge
+        image: alpine/socat:latest 
+        command:
+          - "socat"
+          - "TCP-LISTEN:5432,fork,reuseaddr"
+          - "TCP:postgis-nodeport.data-processing.svc.cluster.local:5432"
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "50m"
+            memory: "32Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgis-nodeport
+  namespace: data-processing
+spec:
+  type: NodePort
+  selector:
+    app: postgis
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: 30543

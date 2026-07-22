@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault-auto-unseal
+  namespace: vault
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault-auto-unseal
+  template:
+    metadata:
+      labels:
+        app: vault-auto-unseal
+    spec:
+      containers:
+      - name: unsealer
+        # Using the same image version as your Vault server for CLI compatibility
+        image: hashicorp/vault:2.0.3 
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Starting Vault Auto-Unseal watchdog..."
+            while true; do
+              # We append '|| true' because vault status returns an error code if sealed
+              STATUS=$(vault status || true)
+              
+              if echo "$STATUS" | grep -q "Sealed.*true"; then
+                echo "Vault is sealed. Injecting keys..."
+                vault operator unseal $KEY1 > /dev/null
+                vault operator unseal $KEY2 > /dev/null
+                vault operator unseal $KEY3 > /dev/null
+                echo "Vault successfully unsealed."
+              fi
+              
+              # Rest for 15 seconds before checking again
+              sleep 15
+            done
+        env:
+        # Point the CLI to the internal Vault service
+        - name: VAULT_ADDR
+          value: "http://vault-internal.vault.svc.cluster.local:8200"
+        
+        # Inject the secrets securely into memory
+        - name: KEY1
+          valueFrom:
+            secretKeyRef:
+              name: vault-unseal-keys
+              key: key1
+        - name: KEY2
+          valueFrom:
+            secretKeyRef:
+              name: vault-unseal-keys
+              key: key2
+        - name: KEY3
+          valueFrom:
+            secretKeyRef:
+              name: vault-unseal-keys
+              key: key3
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "50m"
+            memory: "64Mi"
