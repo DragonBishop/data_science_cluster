@@ -1,15 +1,20 @@
-#!/bin/bash
 #
-# sync-kubeconfig.sh — copies the live k3s kubeconfig to the user's default
-# kubectl location, so tools like Headlamp/kubectl work without sudo.
+# sync-kubeconfig.sh — copies the live k3s kubeconfig to a Windows-side
+# path so Headlamp can reach the cluster on Windows. WSL-side tools 
+# read the live file directly via `export KUBECONFIG=/etc/rancher/k3s/k3s.yaml`
+# in ~/.bashrc.
 #
-
+ 
 SOURCE_CONFIG="/etc/rancher/k3s/k3s.yaml"
-DEST_DIR="$HOME/.kube"
-DEST_CONFIG="$DEST_DIR/config"
-
+WINDOWS_DEST="/mnt/c/Users/benco/.kube/config"
+ 
 echo -e "\n🔄 Starting kubeconfig sync..."
 
+
+# Windows-side destination for Headlamp.
+WINDOWS_DEST="/mnt/c/Users/benco/.kube/config"
+ 
+echo -e "\n🔄 Starting kubeconfig sync..."
 
 # --- Step 1: Confirm the source file exists ---------------------------------
 # k3s only writes this file while the server is running. Its absence means
