@@ -75,19 +75,27 @@ Before installing Cilium, ensure your WSL configuration is compatible with eBPF 
 
 *Architecture Note:* Mirrored networking works by having WSL2 register a BPF program that intercepts `bind()` calls to route traffic between Windows and the VM. Cilium's `kubeProxyReplacement` mode uses the same kind of host-level eBPF traffic interception. Attempting to run both simultaneously causes a multi-minute total network outage within the cluster. Standard NAT mode (the WSL2 default) avoids this collision while still supporting localhost port forwarding.
 
-### 3. Install the Cilium CNI
+### 3. Install Cilium
 
-Cilium requires Kubernetes Gateway API CRDs to function. Currently, the **experimental** release channel is required; the standard channel omits the TLSRoute definition, causing the Cilium operator to enter a fatal crash-loop.
+**Prerequisites:** Step 3's WSL networking check must be complete (mirrored mode disabled). Furthermore, `k3s` must be installed with the `--disable-kube-proxy` boolean flag and `--flannel-backend=none` per Step 1. Cilium's `kubeProxyReplacement` only fully assumes L4 routing if the native `kube-proxy` is genuinely disabled.
+
+#### 3a. Install the Gateway API CRDs
+
+Gateway API Custom Resource Definitions (CRDs) must be installed prior to Cilium. The CRD version must strictly align with the requirements of the deployed Cilium release (e.g., Cilium 1.19.x requires Gateway API v1.4.1). A version mismatch results in silent failures, leaving the GatewayClass in an `ACCEPTED: Unknown` state. This deployment utilizes the standard (GA) release channel.
 
 ```bash
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/experimental-install.yaml
+kubectl apply --server-side -f [https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml](https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml)
 ```
 
-Download and install the Cilium CLI:
+The `--server-side` flag is mandatory because these manifests exceed the annotation size limit utilized by client-side apply operations.\
+
+#### 3b. Install the Cilium CLI
+
+Retrieve the latest stable CLI release and install the executable to `/usr/local/bin` for system-wide access.
 
 ```bash
-CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
+CILIUM_CLI_VERSION=$(curl -s [https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt](https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt))
+curl -L --fail --remote-name-all [https://github.com/cilium/cilium-cli/releases/download/$](https://github.com/cilium/cilium-cli/releases/download/$){CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
 sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
 rm cilium-linux-amd64.tar.gz
 ```
@@ -107,7 +115,7 @@ kubectl get nodes
 
 ### 4. Deploy the Host-Level Transit Vault
 
-This Vault instance runs directly on the host and serves solely to unlock the cluster's Main Vault.
+This Vault instance runs directly on the host and serves to unlock the cluster's Main Vault.
 
 ```bash
 wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
