@@ -1,4 +1,4 @@
-# k3s Data Science Cluster
+# ⎈ k3s Data Science Cluster
 
 This repository provisions a self-contained local Kubernetes cluster tailored for Data Science development using a PostgreSQL server with the PostGIS extension enabled. It is intended to be scalable for data science projects, such as Extract, Transform, and Load (ETL) pipelines, Machine Learning (ML), and data analytics.
 
