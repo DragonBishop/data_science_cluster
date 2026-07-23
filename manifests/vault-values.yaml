@@ -63,4 +63,5 @@ server:
         key_name        = "autounseal"
         mount_path      = "transit/"
         tls_ca_cert     = "/vault/userconfig/vault-transit-ca/ca.crt"
+        tls_server_name = "vault.local"
       }
