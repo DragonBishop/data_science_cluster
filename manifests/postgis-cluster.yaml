@@ -23,6 +23,22 @@ spec:
   refreshAfter: 1h
   vaultAuthRef: vault-auth
 ---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: postgis-app-user-vault-secret
+  namespace: databases
+spec:
+  type: kv-v2
+  mount: secret
+  path: postgis-app-user
+  destination:
+    name: postgis-app-user-credentials
+    create: true
+    type: kubernetes.io/basic-auth
+  refreshAfter: 1h
+  vaultAuthRef: vault-auth
+---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -36,16 +52,11 @@ spec:
   # the PostgreSQL and PostGIS versions of the source database.
   imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
 
-  # `postgres` is CNPG's reserved system role — it's permanently excluded
-  # from managed.roles reconciliation. enableSuperuserAccess defaults to
-  # false, and when false, CNPG's operator blanks the postgres user's
-  # password to NULL on every reconciliation cycle. Both fields below are
-  # required together — superuserSecret alone is silently ignored without
-  # enableSuperuserAccess: true.
+  # Both fields below are required together — superuserSecret alone is
+  # silently ignored without enableSuperuserAccess: true.
   enableSuperuserAccess: true
   superuserSecret:
     name: postgis-app-credentials
-
   bootstrap:
     initdb:
       database: postgres
