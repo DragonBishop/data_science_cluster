@@ -1,17 +1,14 @@
 #!/bin/bash
 #
 # sync-kubeconfig.sh
-# Copies the live k3s kubeconfig to two independent destinations:
-# 1. ~/.kube/config on WSL (bind-mount source for devcontainers).
-# 2. Windows-side path (for Windows-native applications).
+# Copies the live k3s kubeconfig to ~/.kube/config on WSL
+# (bind-mount source for devcontainers).
 #
 # Requires re-execution after any cluster rebuild to maintain synchronization.
-
 set -euo pipefail
 
 SOURCE_CONFIG="/etc/rancher/k3s/k3s.yaml"
 WSL_DEST="$HOME/.kube/config"
-WINDOWS_DEST="/mnt/c/Users/benco/.kube/config"
 
 echo -e "\n🔄 Starting kubeconfig sync..."
 
@@ -22,36 +19,30 @@ if [ ! -f "$SOURCE_CONFIG" ]; then
     exit 1
 fi
 
-# --- Step 2: Validate destinations are regular files ------------------------
+# --- Step 2: Validate destination is a regular file --------------------------
 # Prevents silent failures caused by symlinks or erroneous directory creation
 # from container engine bind mounts.
-for dest in "$WSL_DEST" "$WINDOWS_DEST"; do
-    if [ -L "$dest" ]; then
-        echo -e "❌ Error: $dest is a symlink."
-        echo -e "   Destination must be a regular file. Execute: rm \"$dest\""
-        exit 1
-    fi
-    if [ -e "$dest" ] && [ ! -f "$dest" ]; then
-        echo -e "❌ Error: $dest exists but is not a regular file."
-        echo -e "   Execute: sudo rm -rf \"$dest\""
-        exit 1
-    fi
-done
+if [ -L "$WSL_DEST" ]; then
+    echo -e "❌ Error: $WSL_DEST is a symlink."
+    echo -e "   Destination must be a regular file. Execute: rm \"$WSL_DEST\""
+    exit 1
+fi
+if [ -e "$WSL_DEST" ] && [ ! -f "$WSL_DEST" ]; then
+    echo -e "❌ Error: $WSL_DEST exists but is not a regular file."
+    echo -e "   Execute: sudo rm -rf \"$WSL_DEST\""
+    exit 1
+fi
 
-# --- Step 3: Ensure destination directories exist ---------------------------
+# --- Step 3: Ensure destination directory exists -----------------------------
 mkdir -p "$(dirname "$WSL_DEST")"
-mkdir -p "$(dirname "$WINDOWS_DEST")"
 
-# --- Step 4: Write WSL copy -------------------------------------------------
+# --- Step 4: Write WSL copy ---------------------------------------------------
 # Modifies ownership to the executing user to allow unprivileged access.
+# Leaves 127.0.0.1 intact — the devcontainer runs with --network=host,
+# so it shares the WSL loopback with the k3s API server.
 echo "📋 Copying config to WSL path ($WSL_DEST)..."
 sudo cp "$SOURCE_CONFIG" "$WSL_DEST"
 sudo chown "$(id -u):$(id -g)" "$WSL_DEST"
 chmod 600 "$WSL_DEST"
 
-# --- Step 5: Write Windows copy ---------------------------------------------
-# Skips chown/chmod operations, as drvfs mounts do not utilize Linux permissions.
-echo "📋 Copying config to Windows path ($WINDOWS_DEST)..."
-sudo cp "$SOURCE_CONFIG" "$WINDOWS_DEST"
-
-echo -e "✅ Success! Kubeconfig copies are synchronized with the live cluster.\n"
+echo -e "✅ Success! Kubeconfig is synchronized with the live cluster.\n"
