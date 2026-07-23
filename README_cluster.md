@@ -4,7 +4,7 @@ This repository provisions a self-contained local Kubernetes cluster tailored fo
 
 This cluster's architecture relies on a system-installed HashiCorp Vault to act as a transit to unseal a cluster-situated Vault. This cluster Vault is the primary store for all secrets in the cluster. Secure provisioning of environment variables from this vault allows users to combine ease of use and best practices for Secrets Management, intended for local use but scalable for enterprises if necessary.
 
-This README provides detailed instructions on how to assemble and deploy your own cluster, providing all of the tools needed to easily scale into larger and more complex tasks. Cilium in place of legacy Ingress, HashiCorp Vault, Falco, and MinIO are all tools that may seem a bit excessive for simple hobbyist use. What they provide, to any edge computing developers, are a powerful basis for Data Science and development with Kubernetes' trademark customizability (and complexity!).
+This README provides detailed instructions on how to assemble and deploy your own cluster, providing all of the tools needed to easily scale into larger and more complex tasks. Cilium, HashiCorp Vault, CloudNative PostgreSQL (CNPG), and MinIO are all tools suitable for production purposes. What they provide, to any edge computing developers, are a powerful basis for Data Science and development with Kubernetes' trademark customizability (and complexity!).
 
 ## Core Architecture
 
@@ -15,7 +15,6 @@ This README provides detailed instructions on how to assemble and deploy your ow
 * **HashiCorp Vault (Transit Auto-Unseal):** The system utilizes two Vault instances to solve the "secret zero" problem. A lightweight **Transit Vault** runs natively on the WSL host. The **Main Vault** runs inside the Kubernetes cluster. When the cluster boots, the Main Vault automatically authenticates against the Transit Vault to unseal itself, requiring no manual intervention. The Transit Vault itself still re-seals on every host reboot and requires one human-entered passphrase to unseal — `start-cluster.sh` automates this via a GPG-encrypted keyfile (see Step 5 below) rather than pasting 3 raw unseal keys by hand.
 * **Vault Secrets Operator (VSO):** A Kubernetes operator that acts as a secure bridge. It continuously reads credentials from the Main Vault and natively synchronizes them into standard Kubernetes `Secret` objects.
 * **MinIO:** An in-cluster, S3-compatible object storage service. It acts as the local backup target. CloudNativePG continuously streams database Write-Ahead Logs (WAL) and scheduled base backups to this storage bucket.
-* **Falco:** A cloud-native runtime security tool. It monitors system calls and Kubernetes audit logs to detect and alert on abnormal behavior.
 
 ## Repository Structure
 
@@ -44,7 +43,7 @@ This README provides detailed instructions on how to assemble and deploy your ow
 | CNPG Hibernation | [https://cloudnative-pg.io/documentation/current/declarative_hibernation/](https://cloudnative-pg.io/documentation/current/declarative_hibernation/) |
 | CNPG Role Management | [https://cloudnative-pg.io/documentation/current/declarative_role_management/](https://cloudnative-pg.io/documentation/current/declarative_role_management/) |
 | MinIO | [https://docs.min.io/](https://docs.min.io/) |
-| Falco | [https://falco.org/docs/](https://falco.org/docs/) |
+| Headlamp | [https://headlamp.dev/docs/latest/](https://headlamp.dev/docs/latest/) |
 
 ---
 
@@ -130,17 +129,17 @@ sudo openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
   -keyout /opt/vault/tls/transit.key \
   -out /opt/vault/tls/transit.crt \
   -subj "/CN=vault.local" \
-  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:<your WSL host's current IP>"
+  -addext "subjectAltName=DNS:vault.local,DNS:localhost,IP:127.0.0.1"
 sudo chown vault:vault /opt/vault/tls/transit.key /opt/vault/tls/transit.crt
 sudo chmod o+x /opt/vault/tls
 ```
 
-NOTE: This TLS certificate is dependent on whatever address WSL2 currently holds. If Windows/WSL reallocates this IP, the verification will break. If auto-unseal ever starts failing after a WSL/Windows change, check hostname -I on the host first, regenerate this certificate, and update the api_addr in manifests/vault-values.yaml with the new address.
+NOTE: The cert is issued for the `vault.local` hostname rather than the WSL host's dynamic IP. Add `127.0.0.1 vault.local` to `/etc/hosts` on the host. The in-cluster Main Vault dials Transit by IP (`vault-values.yaml`'s seal `address`, substituted from the Downward API at every pod start) but verifies TLS against the `vault.local` name via `tls_server_name`, so IP changes require no manual cert or config update.
 
 Modify /etc/vault.d/vault.hcl. Ensure the listener is bound to 0.0.0.0:8200 to allow cross-interface traffic, and define the api_addr:
 
 ```hcl
-api_addr = "https://<your WSL host's current IP>:8200"
+api_addr = "https://vault.local:8200"
 
 listener "tcp" {
   address       = "0.0.0.0:8200"
@@ -228,13 +227,17 @@ kubectl create configmap vault-transit-ca \
   --from-file=ca.crt=/opt/vault/tls/transit.crt -n vault
 ```
 
-Deploy the Main Vault using `manifests/vault-values.yaml`. Ensure the seal transit block's `address` matches your WSL IP and the `tls_ca_cert` points to the mounted `ConfigMap`.
+Deploy the Main Vault using manifests/vault-values.yaml.
+
+The `seal "transit"` block defines the host address using `HOST_IP`. The Vault Helm chart's entrypoint dynamically substitutes this variable via the Kubernetes Downward API during pod initialization. This ensures the IP address remains accurate across host subsystem (e.g., WSL) restarts without requiring manual reconfiguration.
+
+TLS verification is enforced using the `tls_server_name = "vault.local"` directive. This matches the Subject Alternative Name (SAN) of the transit certificate, ensuring the connection is securely verified by hostname despite routing via an IP address. The `tls_ca_cert` parameter within the same block must point to the mounted Certificate Authority ConfigMap.
 
 ```bash
 helm install vault hashicorp/vault -n vault -f manifests/vault-values.yaml
 ```
 
-Initialize this distinct instance and securely store its new root token:
+Initialize this distinct instance and securely store its new root token and recovery key shares.
 
 ```bash
 kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault operator init"
@@ -258,6 +261,10 @@ vault write auth/kubernetes/config kubernetes_host="https://kubernetes.default.s
 vault policy write postgis-policy - <<EOF
 path "secret/data/postgis" { capabilities = ["read"] }
 path "secret/data/minio" { capabilities = ["read"] }
+path "secret/data/postgis-app-user" { capabilities = ["read"] }
+path "secret/metadata/postgis" { capabilities = ["read"] }
+path "secret/metadata/minio" { capabilities = ["read"] }
+path "secret/metadata/postgis-app-user" { capabilities = ["read"] }
 EOF
 
 vault write auth/kubernetes/role/postgis-role \
@@ -292,9 +299,6 @@ helm repo add cnpg https://cloudnative-pg.github.io/charts
 helm repo update
 helm upgrade --install cnpg cnpg/cloudnative-pg \
   --namespace cnpg-system --create-namespace
-
-helm repo add falcosecurity https://falcosecurity.github.io/charts
-helm install falco falcosecurity/falco --create-namespace --namespace falco
 ```
 
 ### 9. Deploy the Database and Storage Infrastructure
@@ -334,13 +338,46 @@ For binary or custom-format dumps (`.dump`), utilize `pg_restore`. Append `--no-
 kubectl exec -it postgis-cluster-1 -n databases -- pg_restore -d "
 ```
 
-### 10. Sync Kubeconfig (Optional)
+### 10. Deploy Headlamp (Optional)
 
-To use Windows-side UI tools such as Headlamp, use the provided `sync-kubeconfig.sh` script to create a config file accessible to them.
+Add the official Helm repository — note this moved under Kubernetes SIGs; the older `headlamp-k8s.github.io` repo is dead and will 404:
+
+```bash
+helm repo add headlamp [https://kubernetes-sigs.github.io/headlamp/](https://kubernetes-sigs.github.io/headlamp/)
+helm repo update
+helm install headlamp headlamp/headlamp --namespace kube-system
+```
+
+Create a dedicated service account and bind it to `cluster-admin`:
+
+```bash
+kubectl create serviceaccount headlamp-admin -n kube-system
+kubectl create clusterrolebinding headlamp-admin-binding \
+  --clusterrole=cluster-admin \
+  --serviceaccount=kube-system:headlamp-admin
+```
+
+**Important:** the Helm chart itself creates a `ClusterRoleBinding` also named `headlamp-admin`, but it binds a *different* service account (`headlamp`, the chart's own default) to `cluster-admin`. That name collision looks like your token's service account already has the grant it needs — it doesn't. Always bind your own `headlamp-admin` service account under its own binding name (as above), and verify with:
+
+```bash
+kubectl auth can-i list nodes.metrics.k8s.io --as=system:serviceaccount:kube-system:headlamp-admin
+```
+
+Generate a login token (short-lived by default — regenerate as needed, or add `--duration` for a longer-lived one):
+
+```bash
+kubectl create token headlamp-admin -n kube-system
+```
+
+#### Sync Kubeconfig (Optional)
+
+To use Windows-side UI tools such as the Headlamp desktop app, use the provided `sync-kubeconfig.sh` script to create a config file accessible to them.
 
 ```bash
 ./scripts/sync-kubeconfig.sh
 ```
+
+Note: this script overwrites both destination kubeconfig files with a fresh copy every run. Anything already holding an open connection using the *old* file's cert/CA (an existing port-forward, an already-authenticated desktop session) won't notice the swap — it'll just start failing. Restart whatever was using the old file rather than assuming the cluster itself broke.
 
 ---
 
@@ -351,17 +388,60 @@ The `socat` deployment included in the postgis-cluster manifest exposes the data
 * WSL2's Windows-to-localhost forwarding (`wslrelay.exe`) expects genuine bound sockets. Cilium's `kubeProxyReplacement` handles Service traffic via eBPF interception rather than a conventional bound socket, which wslrelay.exe doesn't reliably see.
 * Cilium's native `hostPort` implementation has a confirmed, long-standing bug (see cilium/cilium #12116 from 2020, and #34792 from 2024) where it cannot serve traffic on loopback (`127.0.0.1`) under any configuration. The pod runs fine, but nothing binds on the host.
 
-## Operations Reference
+## VS Code Integration
+
+These files live in the shared devcontainer workspace root (`~/coding/.vscode/`), not in this repo, since one devcontainer is reused across all projects.
+
+**`devcontainer.json`** — declare the port so it shows up without relying on auto-detection:
+
+```jsonc
+"forwardPorts": [8080],
+"portsAttributes": {
+  "8080": { "label": "Headlamp UI", "onAutoForward": "silent" }
+}
+```
+
+**`tasks.json`** — warms the port-forward automatically on folder open, regenerates a token each run, and pushes that token straight to the clipboard via an OSC 52 escape sequence (works from a local devcontainer's integrated terminal, no `clip.exe`/filesystem bridge needed):
+
+```jsonc
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "headlamp: start",
+      "type": "shell",
+      "command": "pkill -f 'kubectl.*port-forward.*svc/headlamp' >/dev/null 2>&1; TOKEN=$(kubectl create token headlamp-admin -n kube-system); echo \"$TOKEN\"; printf '\\033]52;c;%s\\a' \"$(printf '%s' \"$TOKEN\" | base64 -w0)\"; nohup kubectl port-forward svc/headlamp 8080:80 -n kube-system >/tmp/headlamp.log 2>&1 & sleep 1",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": [],
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}
+```
+
+**`launch.json`** — opens Headlamp using VS Code's `editor-browser` debug type (1.110+), a real Edge/Chrome instance via CDP rather than the built-in Simple Browser. Use this, not Simple Browser: Simple Browser is a restricted webview that renders Headlamp's WebSocket-driven live views unreliably (blank panels, slow loads) — `editor-browser` behaves like a normal browser tab.
+
+```jsonc
+{
+  "version": "0.2.0",
+  "configurations": [
+    { "type": "editor-browser", "request": "launch", "name": "Headlamp", "url": "[http://127.0.0.1:8080](http://127.0.0.1:8080)" }
+  ]
+}
+```
+
+Workflow: open the folder (port-forward warms, token lands on clipboard) → Run and Debug → "Headlamp" → paste the token when prompted.
 
 | Operation | Command | When |
 | --- | --- | --- |
 | Start the cluster | `./start-cluster.sh` | Each work session |
 | Stop the cluster | `./stop-cluster.sh` | Each work session |
-| Sync API Context | `./sync-kubeconfig.sh` | Only if Headlamp or another Windows-side tool shows a stale kubeconfig (e.g. after a WSL IP change) — WSL-native tools already read `k3s.yaml` directly |
+| Sync API Context | `./sync-kubeconfig.sh` | Only if Headlamp or another tool shows a stale kubeconfig (e.g. after a WSL IP change) directly |
 | Trigger Manual DB Backup | `kubectl cnpg backup postgis-cluster -n databases` | Before a risky schema change, outside the nightly automated backup |
 | Verify Vault State | `kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault status"` | Troubleshooting only |
 | Verify CNPG State | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
 | Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8200:8200` | Ad hoc token/policy management |
+| Open Headlamp | Run and Debug → "Headlamp" (see VS Code Integration) | Cluster inspection during dev work |
 
 * **Database access:** `localhost:5432` is reachable via the proxy bridge any time the cluster is up — always-on, not something you run.
 * **Scheduled Backups:** `postgis-cluster.yaml`'s `ScheduledBackup` resource pushes a base backup to MinIO nightly at midnight on its own — no action needed.
@@ -372,10 +452,12 @@ The `socat` deployment included in the postgis-cluster manifest exposes the data
 * **Pod Initialization Failure:** Run `kubectl describe pod <pod_name> -n databases` and review the "Events" stream for exact scheduler or image pull errors.
 * **Vault Permission Denied:** Verify the existence of the `postgis-role` policy generated in Step 7 via the Vault CLI.
 * **Secrets Failing to Mount:** Run `kubectl describe vaultstaticsecret <name> -n databases`. Resource status conditions will report the specific API failure.
-* **Vault Sealed After IP Change:** If your WSL host's IP address dynamically shifts, Transit Vault TLS verification will fail. Verify `hostname -I` on the host, regenerate the Transit Vault TLS certificate, and update the `api_addr` in `vault-values.yaml`.
 * **Transit Vault Prompts Every Run, or GPG Decryption Fails:** `start-cluster.sh` only prompts for the GPG passphrase if the Transit Vault is actually sealed — if it's prompting on every run despite no host reboot, check whether the `vault` systemd service is being restarted independently (`systemctl status vault`). If decryption itself fails, confirm `~/.vault-keys.gpg` exists and is readable (`ls -l ~/.vault-keys.gpg`, expect `600` permissions) and that the passphrase matches what was set during the one-time GPG setup in Step 5. `sudo chmod o+x /opt/vault/tls` allows both vaults access to the location of the tls certificate. `sudo stat -c "%a %U:%G %n" /opt/vault/tls will confirm the correct permissions.`
 * **Password Authentication Fails on Valid Password:** Ensure `enableSuperuserAccess: true` and `superuserSecret` are both present in `postgis-cluster.yaml`. Without both, CNPG actively nullifies or rotates the passwords during reconciliation.
 * **Credentials Unresponsive Post-Rotation:** Database credentials silently stop working after a Vault password rotation. The credentials Secret must carry the `cnpg.io/reload: "true"` label for CNPG to notice the change. VSO's `destination.labels` field for setting this via `VaultStaticSecret` has open reliability issues (hashicorp/vault-secrets-operator #472, #1045) where the label fails to apply reliably. Manually force the refresh by labeling the secret directly: `kubectl label secret postgis-app-credentials -n databases cnpg.io/reload=true`.
-* **Headlamp Visual Bugs (Ghost Clusters):** Close the Headlamp UI, purge its local cache directory (`%APPDATA%\Headlamp` on Windows), and relaunch the application.
-* **k3s Port Conflicts:** If k3s logs show bind errors on port 6443, the systemd process is likely active. Run `systemctl is-enabled k3s` to verify it is disabled.
+* **Headlamp Ghost Clusters (Windows):** Close the Headlamp UI, purge its local cache directory (`%APPDATA%\Headlamp` on Windows), and relaunch the application.
+* **Headlamp `Forbidden` errors despite a `cluster-admin` token:** Check the actual binding, not just its name — `kubectl get clusterrolebinding headlamp-admin -o yaml` and confirm `subjects` points at the `headlamp-admin` service account, not the chart's own `headlamp` one (see Step 10). Confirm directly with `kubectl auth can-i <verb> <resource> --as=system:serviceaccount:kube-system:headlamp-admin` before assuming it's an RBAC gap elsewhere.
+* **Headlamp console shows `Unable to parse error json` for `localhost:4466/config`:** Benign. The frontend bundle always checks for a desktop-app companion backend on port 4466; nothing's listening there in the in-cluster deployment, and the check fails harmlessly.
+* **Headlamp blank panels or very slow loads in VS Code:** Almost always Simple Browser's restricted webview, not the cluster. Use the `editor-browser` launch config instead (see VS Code Integration).
+* **k3s Port Conflicts:** If k3s logs show bind errors on port 6443, the systemd process is likely active. Run `systemctl is-enabled k3s` to verify it is disabled.* **k3s Port Conflicts:** If k3s logs show bind errors on port 6443, the systemd process is likely active. Run `systemctl is-enabled k3s` to verify it is disabled.
 * **Stale Cilium Endpoints:** If network conditions change on the host machine, long-running pods may retain stale IP records. Delete the affected pods; the deployment controller will recreate them with fresh network identities.
