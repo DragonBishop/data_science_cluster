@@ -146,9 +146,11 @@ until kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 v
     if [ $retries -ge 9 ]; then
         echo "❌ ERROR: In-cluster Vault failed to unseal after 45 seconds. Continuing — VSO sync below will report its own status."
         echo "💡 TROUBLESHOOTING:"
-        echo "   1. Check if host Transit Vault is sealed: VAULT_CACERT=/opt/vault/tls/transit.crt vault status -address=https://127.0.0.1:8200"
-        echo "   2. Did your WSL IP change? Update vault-values.yaml and restart the vault-0 pod."
-        echo "   3. Check logs: kubectl logs -n vault vault-0"
+        echo "   1. Is the host Transit Vault sealed? vault status -address=https://vault.local:8200"
+        echo "   2. Cert/name mismatch? The seal verifies against 'vault.local' (tls_server_name),"
+        echo "      which must be in the Transit cert's SANs and in /etc/hosts."
+        echo "   3. Transit token expired? It renews while running, but >32d downtime kills it."
+        echo "   4. Check logs: kubectl logs -n vault vault-0"
         had_warnings=true
         break
     fi
@@ -259,7 +261,6 @@ check_pod_ready() {
 }
 
 check_pod_ready 60 databases "app=minio" "MinIO running" || had_warnings=true
-check_pod_ready 60 falco "app.kubernetes.io/name=falco" "Falco running" || had_warnings=true
 
 phase=$(kubectl get cluster postgis-cluster -n databases -o jsonpath='{.status.phase}' 2>/dev/null)
 if [[ "$phase" == "Cluster in healthy state" ]]; then
