@@ -1,45 +1,28 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgis-pvc
-  namespace: data-processing
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 10Gi
----
-apiVersion: apps/v1
-kind: StatefulSet
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
 metadata:
   name: postgis
-  namespace: data-processing
+  namespace: databases
 spec:
-  serviceName: "postgis"
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgis
+  
+  instances: 1
+  imageName: postgis/postgis:18-3.6
+  storage: 100Gi
+
   template:
     metadata:
-      labels:
-        app: postgis
       annotations:
-        # Enable the Vault sidecar injector
+        # These annotations trigger the Vault sidecar injector
         vault.hashicorp.com/agent-inject: "true"
-        # Reference the auth role for this server
         vault.hashicorp.com/role: "postgis-role"
         
-        # Inject the POSTGRES_USER secret into /vault/secrets/pguser
+        # Inject the credentials as you did before
         vault.hashicorp.com/agent-inject-secret-pguser: "secret/data/postgis"
         vault.hashicorp.com/agent-inject-template-pguser: |
           {{- with secret "secret/data/postgis" -}}
           {{ .Data.data.POSTGRES_USER }}
           {{- end -}}
-          
-        # Inject the POSTGRES_PASSWORD secret into /vault/secrets/pgpass
+        
         vault.hashicorp.com/agent-inject-secret-pgpass: "secret/data/postgis"
         vault.hashicorp.com/agent-inject-template-pgpass: |
           {{- with secret "secret/data/postgis" -}}
@@ -47,27 +30,15 @@ spec:
           {{- end -}}
     spec:
       serviceAccountName: postgis-sa
+      # The Vault injector will automatically append its sidecar here
       containers:
-      - name: postgis
-        # The PostGIS image repository typically tracks major PG versions.
-        # 18 will cover the 18.x line (e.g., 18.4).
-        image: postgis/postgis:18-3.6 
-        ports:
-        - containerPort: 5432
-          name: postgresql
-        env:
-        # Tell Postgres to read the credentials from the Vault-injected files
-        - name: POSTGRES_USER_FILE
-          value: "/vault/secrets/pguser"
-        - name: POSTGRES_PASSWORD_FILE
-          value: "/vault/secrets/pgpass"
-        volumeMounts:
-        - name: postgis-data
-          mountPath: /var/lib/postgresql
-      volumes:
-      - name: postgis-data
-        persistentVolumeClaim:
-          claimName: postgis-pvc
+        - name: postgres
+          # You would point your PG setup to read from /vault/secrets/
+          env:
+            - name: POSTGRES_USER_FILE
+              value: "/vault/secrets/pguser"
+            - name: POSTGRES_PASSWORD_FILE
+              value: "/vault/secrets/pgpass"
 ---
 apiVersion: apps/v1
 kind: Deployment
