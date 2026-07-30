@@ -1,0 +1,131 @@
+# seaweedfs-backups.yaml
+#
+# Deploys a single-process SeaweedFS server (master, volume server, filer, 
+# and S3 gateway) to provide S3-compatible object storage for CloudNativePG 
+# backups. Credentials are synchronized via Vault Secrets Operator.
+
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: seaweedfs-vault-secret
+  namespace: databases
+spec:
+  type: kv-v2
+  mount: secret
+  path: seaweedfs
+  destination:
+    name: seaweedfs-credentials
+    create: true
+  refreshAfter: 1h
+  vaultAuthRef: vault-auth
+---
+# Provides persistent storage for SeaweedFS's data directory.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seaweedfs-storage
+  namespace: databases
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seaweedfs
+  namespace: databases
+spec:
+  replicas: 1
+  # Uses Recreate strategy to safely unmount the ReadWriteOnce volume 
+  # before starting a replacement pod.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: seaweedfs
+  template:
+    metadata:
+      labels:
+        app: seaweedfs
+    spec:
+      containers:
+      - name: seaweedfs
+        # Pins SeaweedFS to a specific release version.
+        image: chrislusf/seaweedfs:4.40
+        args:
+          - server
+          - -dir=/data
+          - -s3
+          - -s3.port=9000
+          - -s3.config=/etc/seaweedfs/config.json
+          - -master.volumeSizeLimitMB=1024
+        ports:
+        - name: s3
+          containerPort: 9000
+        - name: master
+          containerPort: 9333
+        - name: filer
+          containerPort: 8888
+        volumeMounts:
+        - name: seaweedfs-storage
+          mountPath: /data
+        - name: s3-config
+          mountPath: /etc/seaweedfs
+          readOnly: true
+      volumes:
+      - name: seaweedfs-storage
+        persistentVolumeClaim:
+          claimName: seaweedfs-storage
+      # Mounts the S3 gateway configuration (config.json) synchronized 
+      # from Vault via the VaultStaticSecret.
+      - name: s3-config
+        secret:
+          secretName: seaweedfs-credentials
+          items:
+            - key: config.json
+              path: config.json
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-service
+  namespace: databases
+spec:
+  ports:
+  - name: s3
+    port: 9000
+    targetPort: 9000
+  - name: master
+    port: 9333
+    targetPort: 9333
+  - name: filer
+    port: 8888
+    targetPort: 8888
+  selector:
+    app: seaweedfs
+---
+# Idempotently creates the S3 bucket directory (/buckets/cnpg-backups) 
+# using the SeaweedFS shell.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-seaweedfs-bucket
+  namespace: databases
+spec:
+  template:
+    spec:
+      containers:
+      - name: weed-shell
+        image: chrislusf/seaweedfs:4.40
+        command:
+        - /bin/sh
+        - -c
+        - |
+          sleep 10;
+          weed shell -master=seaweedfs-service.databases.svc.cluster.local:9333 \
+            -c "fs.mkdir /buckets/cnpg-backups"
+      restartPolicy: OnFailure
