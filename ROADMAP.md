@@ -40,6 +40,6 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 
 ## Technical Debt
 
-**1. Identity Federation for Workloads** — Extending the existing Vault Kubernetes auth pattern (`postgis-role`) to Prefect workers and ML inference pods isn't useful to build yet, because those workloads don't exist yet. This is squarely an ETL/ML-stage item; revisit it when the first Prefect worker or inference pod actually needs a scoped-down Service Account and Vault role, rather than speculatively building the mapping now.
+**1. Single-Node Availability Limits (HA)** — Scaling Vault and CloudNativePG to 3 replicas with pod anti-affinity remains appropriate only once this moves out of local, single-node development. Not a priority while the cluster is still single-node local development and ETL/ML workloads aren't yet running.
 
-**2. Single-Node Availability Limits (HA)** — Scaling Vault and CloudNativePG to 3 replicas with pod anti-affinity remains appropriate only once this moves out of local, single-node development. Not a priority while the cluster is still single-node local development and ETL/ML workloads aren't yet running.
+**2. Identity Federation for Workloads** — Extending the existing Vault Kubernetes auth pattern (`postgis-role`) to Prefect workers and ML inference pods isn't useful to build yet, because those workloads don't exist yet. This is squarely an ETL/ML-stage item; revisit it when the first Prefect worker or inference pod actually needs a scoped-down Service Account and Vault role, rather than speculatively building the mapping now.
