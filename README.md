@@ -11,11 +11,11 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 * **k3s:** A lightweight, certified Kubernetes distribution. It acts as the core control plane and execution environment for the database and its supporting services.
 * **CloudNativePG (CNPG):** A Kubernetes operator designed to manage the full lifecycle of a PostgreSQL/PostGIS database. It handles provisioning, replication, and automated disaster recovery pipelines directly via Pods and PVCs, enabling database-aware failovers.
 * **Cilium:** The cluster's Container Network Interface (CNI). It replaces k3s's default networking components to provide highly efficient, eBPF-based network routing and Gateway API support.
-* **HashiCorp Vault:** The system utilizes two Vault instances to solve the "secret zero" problem. A lightweight **Transit Vault** runs natively on the Linux host. The **Main Vault** runs inside the Kubernetes cluster. When the cluster boots, the Main Vault automatically authenticates against the Transit Vault to unseal itself, requiring no manual intervention. The Transit Vault itself still re-seals on every host reboot and requires one human-entered passphrase to unseal — `start-cluster.sh` automates this via a GPG-encrypted keyfile (see Step 5 below) rather than pasting 3 raw unseal keys by hand.
+* **HashiCorp Vault:** The system utilizes two Vault instances to solve the "secret zero" problem. A lightweight **Transit Vault** runs natively on the Linux host. The **Main Vault** runs inside the Kubernetes cluster. When the cluster boots, the Main Vault automatically authenticates against the Transit Vault to unseal itself, requiring no manual intervention. The Transit Vault itself still re-seals on every host reboot and requires one human-entered passphrase to unseal — `start-cluster.sh` automates this via a GPG-encrypted keyfile (see Step 3 below) rather than pasting 3 raw unseal keys by hand.
 * **Vault Database Secrets Engine**: Vault can connect to Postgres itself and issue short-lived, per-session PostgreSQL roles on demand. Application credentials expire on a lease (an hour by default), with vault revoking the underlying role automatically.
 * **Vault Secrets Operator (VSO):** A Kubernetes operator that acts as a secure bridge. It continuously reads credentials from the Main Vault and natively synchronizes them into standard Kubernetes `Secret` objects.
 * **Barman Cloud Plugin:** CloudNativePG's plugin-based backup architecture. The in-tree `spec.backup.barmanObjectStore` field this project used previously is deprecated as of CNPG 1.26 and is slated for removal in 1.30, so backups and WAL archiving are configured through this plugin instead.
-* **cert-manager**: Issues and renews local CA N Provides proper Subject Alternative Names (SAN), including `localhost`. Makes `sslmode=verify-full` possible. Necessary dependency for the Barman Cloud plugin.
+* **cert-manager**: Issues and renews local CA and provides proper Subject Alternative Names (SAN), including `localhost`. Makes `sslmode=verify-full` possible. Necessary dependency for the Barman Cloud plugin.
 * **SeaweedFS:** An in-cluster, S3-compatible object storage service acting as the local backup. CloudNativePG continuously streams database Write-Ahead Logs (WAL) and scheduled base backups to its storage bucket.
 * **Headlamp:** Lightweight GUI to monitor cluster status and implement changes. See *WSL2* branch for workarounds to deploy Headlamp in a WSL2 stack.
 
@@ -30,7 +30,7 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 * `scripts/`
   * `start-cluster.sh`: Sequential boot script enforcing API, Transit Vault unseal, Secret, and Database readiness state checks.
   * `stop-cluster.sh`: Graceful shutdown script utilizing CNPG declarative hibernation.
-  * `sync-kubeconfig.sh`: Exports the cluster config to the Windows environment.
+  * `sync-kubeconfig.sh`: Copies the live k3s kubeconfig into `~/.kube/config`.
 * `manifests/`
   * `vault-values.yaml`: Helm chart overrides, mapping the in-cluster Vault to the host Transit Vault.
   * `vault-networkpolicy.yaml`: CiliumNetworkPolicy restricting ingress to the in-cluster Vault API.
@@ -46,7 +46,7 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 | k3s | [https://docs.k3s.io/](https://docs.k3s.io/) |
 | Cilium | [https://docs.cilium.io/](https://docs.cilium.io/) |
 | Gateway API | [https://gateway-api.sigs.k8s.io/](https://gateway-api.sigs.k8s.io/) |
-| HashiCorp Vault | [https://developer.hashicorp.com/vault/docs)](https://developer.hashicorp.com/vault/docs) |
+| HashiCorp Vault | [https://developer.hashicorp.com/vault/docs](https://developer.hashicorp.com/vault/docs) |
 | Vault Secrets Operator | [https://developer.hashicorp.com/vault/docs/vault-secrets-operator](https://developer.hashicorp.com/vault/docs/vault-secrets-operator) |
 | cert-manager | [https://cert-manager.io/docs/](https://cert-manager.io/docs/) |
 | CloudNativePG | [https://cloudnative-pg.io/docs](https://cloudnative-pg.io/docs) |
@@ -68,7 +68,7 @@ This setup workflow is designed to be completed sequentially. Deviating from thi
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --disable traefik --disable servicelb --disable-kube-proxy --disable-network-policy --flannel-backend=none" sh -
 ```
 
-The default installation configures k3s as an auto-starting systemd service. This ensures the cluster survives WSL restarts independently, allowing setup to span multiple sessions without custom lifecycle scripting.
+The default installation configures k3s as an auto-starting systemd service. This ensures the cluster survives host reboots independently, allowing setup to span multiple sessions without custom lifecycle scripting.
 
 The `INSTALL_K3S_EXEC` flags configure the startup environment, specifically disabling default k3s networking components to allow Cilium to manage the network:
 
@@ -79,9 +79,30 @@ The `INSTALL_K3S_EXEC` flags configure the startup environment, specifically dis
 
 Systemd manages the cluster during the initial build phase, with custom lifecycle scripts (`scripts/start-cluster.sh` and `scripts/stop-cluster.sh`) provided to take over management once the build is complete.
 
+This installer also gives you `kubectl`: k3s bundles its own copy and symlinks it to `/usr/local/bin/kubectl` automatically, as long as nothing else already occupies that path. Verify it landed:
+
+```bash
+kubectl version --client
+```
+
+k3s writes its kubeconfig to `/etc/rancher/k3s/k3s.yaml`, not `~/.kube/config` — `kubectl`'s default lookup path. Every command from here on depends on `kubectl` actually finding the cluster, so sync it now:
+
+```bash
+./scripts/sync-kubeconfig.sh
+```
+
+Helm isn't bundled by anything above and is needed starting in Step 4, so install it now too:
+
+```bash
+curl -fsSL -o /tmp/get-helm-3 https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod +x /tmp/get-helm-3
+/tmp/get-helm-3
+rm /tmp/get-helm-3
+```
+
 ### 2. Install Cilium
 
-**Prerequisites:** `k3s` must be installed with the `--disable-kube-proxy` boolean flag and `--flannel-backend=none` per Step 2. Cilium's `kubeProxyReplacement` only fully assumes L4 routing if the native `kube-proxy` is genuinely disabled.
+**Prerequisites:** `k3s` must be installed with the `--disable-kube-proxy` boolean flag and `--flannel-backend=none` per Step 1. Cilium's `kubeProxyReplacement` only fully assumes L4 routing if the native `kube-proxy` is genuinely disabled.
 
 #### 2a. Install the Gateway API CRDs
 
@@ -186,7 +207,7 @@ Securely store this token. (Note: This token requires periodic renewal prior to 
 
 **Automating future unseals (one-time setup):**
 
-The Transit Vault re-seals every time the host reboots (WSL restart), which would otherwise mean re-running the three `vault operator unseal` calls above by hand every time. `scripts/start-cluster.sh` automates this by decrypting the 3 keys from a GPG-encrypted keyfile with a single passphrase.
+The Transit Vault re-seals every time the host reboots, which would otherwise mean re-running the three `vault operator unseal` calls above by hand every time. `scripts/start-cluster.sh` automates this by decrypting the 3 keys from a GPG-encrypted keyfile with a single passphrase.
 
 Generate the keyfile once, from a RAM-backed tmpfs so the plaintext keys never touch disk:
 
@@ -227,14 +248,14 @@ Create the namespace and inject connection credentials:
 ```bash
 kubectl create namespace vault
 kubectl create secret generic vault-transit-secret \
-  --from-literal=token='<token from step 4>' -n vault
+  --from-literal=token='<token from step 3>' -n vault
 kubectl create configmap vault-transit-ca \
   --from-file=ca.crt=/opt/vault/tls/transit.crt -n vault
 ```
 
 Deploy the Main Vault using manifests/vault-values.yaml.
 
-The `seal "transit"` block defines the host address using `HOST_IP`. The Vault Helm chart's entrypoint dynamically substitutes this variable via the Kubernetes Downward API during pod initialization. This ensures the IP address remains accurate across host subsystem (e.g., WSL) restarts without requiring manual reconfiguration.
+The `seal "transit"` block defines the host address using `HOST_IP`. The Vault Helm chart's entrypoint dynamically substitutes this variable via the Kubernetes Downward API during pod initialization. This ensures the IP address remains accurate across host restarts without requiring manual reconfiguration.
 
 TLS verification is enforced using the `tls_server_name = "vault.local"` directive. This matches the Subject Alternative Name (SAN) of the transit certificate, ensuring the connection is securely verified by hostname despite routing via an IP address. The `tls_ca_cert` parameter within the same block must point to the mounted Certificate Authority ConfigMap.
 
@@ -254,31 +275,50 @@ If successful, the output will report Sealed: false, verifying the auto-unseal m
 
 Establish the trust boundary allowing the Vault Secrets Operator to fetch credentials. This includes policies for applications that will be deployed later in setup.
 
+Launch an interactive shell inside the Vault pod — empty, with no token on the command line, since anything passed to `kubectl exec` as an argument is visible to other processes on the host via `/proc/<pid>/cmdline`:
+
 ```bash
-kubectl exec -it vault-0 -n vault -- sh -c '
+kubectl exec -it vault-0 -n vault -- sh
+```
+
+Once inside, set the token and address first:
+
+```bash
 export VAULT_TOKEN="<main Vault root token>"
 export VAULT_ADDR=http://127.0.0.1:8200
+```
 
+Then enable the KV store and Kubernetes auth method:
+
+```bash
 vault secrets enable -path=secret kv-v2
 vault auth enable kubernetes
 vault write auth/kubernetes/config kubernetes_host="https://kubernetes.default.svc"
+```
 
+This policy includes a `database/creds/postgis-app-role` path up front, even though that secrets engine isn't configured until Step 9 below — Vault policies are just ACL rules and don't require the target backend to already be mounted, so it's simpler to define the complete policy once here. Heredocs like this one work the same interactively as they do piped in: type or paste the whole block, and the shell waits for the closing `EOF` before running it.
+
+```bash
 vault policy write postgis-policy - <<EOF
 path "secret/data/postgis" { capabilities = ["read"] }
-path "secret/data/minio" { capabilities = ["read"] }
-path "secret/data/postgis-app-user" { capabilities = ["read"] }
+path "secret/data/seaweedfs" { capabilities = ["read"] }
 path "secret/metadata/postgis" { capabilities = ["read"] }
-path "secret/metadata/minio" { capabilities = ["read"] }
-path "secret/metadata/postgis-app-user" { capabilities = ["read"] }
+path "secret/metadata/seaweedfs" { capabilities = ["read"] }
+path "database/creds/postgis-app-role" { capabilities = ["read"] }
 EOF
+```
 
+Bind that policy to the service account VSO will actually authenticate as:
+
+```bash
 vault write auth/kubernetes/role/postgis-role \
   bound_service_account_names=postgis-vault-auth \
   bound_service_account_namespaces=databases \
   policies=postgis-policy \
   ttl=24h
-'
 ```
+
+`exit` the pod shell once these complete.
 
 ### 6. Seed Application Credentials
 
@@ -298,7 +338,7 @@ vault kv put secret/seaweedfs \
 '
 ```
 
-### 8. Install Software Operators
+### 7. Install Software Operators
 
 cert-manager is a hard prerequisite for both the PostGIS server certificate (Step 8) and the Barman Cloud Plugin — install and confirm it's healthy first.
 
@@ -333,7 +373,7 @@ kubectl rollout status deployment -n cnpg-system barman-cloud
 
 ### 8. Deploy the Database and Storage Infrastructure
 
-Before applying these manifests, ensure the `database:` and `owner:` values in `manifests/postgis-cluster.yaml match those seeded into the vault.
+Before applying these manifests, ensure the `database:` and `owner:` values in `manifests/postgis-cluster.yaml` match those seeded into the vault.
 
 Furthermore, verify both `enableSuperuserAccess:` true and `superuserSecret` are explicitly set in the Cluster spec:
 
@@ -341,7 +381,7 @@ Furthermore, verify both `enableSuperuserAccess:` true and `superuserSecret` are
 enableSuperuserAccess: true
 superuserSecret:
   name: postgis-app-credentials
-  ```
+```
 
 Without `enableSuperuserAccess: true`, CNPG actively blanks the role's password to NULL on every reconciliation cycle by design. If `enableSuperuserAccess: true` is set without a superuserSecret, CNPG auto-generates its own random `<cluster-name>-superuser` password, completely bypassing your Vault setup silently.
 
@@ -423,18 +463,6 @@ flatpak install flathub dev.headlamp.Headlamp
 *(Alternatively, download the latest `.deb` or `AppImage` from the [Headlamp GitHub Releases page](https://github.com/headlamp-k8s/headlamp/releases)).*
 
 Launch Headlamp from your application menu (or `flatpak run dev.headlamp.Headlamp` in the terminal) — it detects your synced `~/.kube/config` and connects immediately. No token to generate, no port-forward, no browser step: that whole flow only exists on the WSL2 branch, where Headlamp runs as an in-cluster web service accessed from a separate Windows browser.
-
-```bash
-flatpak install flathub dev.headlamp.Headlamp
-```
-
-*(Alternatively, you can download the latest `.deb` or `AppImage` from the [Headlamp GitHub Releases page](https://github.com/headlamp-k8s/headlamp/releases)).*
-
-#### **Headlamp for Windows/Windows Subsystem for Linux 2 (WSL2)**
-
-Please see the WSL2 branch for documentation of workflows to deploy Headlamp when managing k3s deployed in WSL2.
-
-**Note: Mirrored networking is needed to use Headlamp as a Windows App. Use Traefik or another Ingress controller instead of Cilium**.
 
 ## Cluster Operations
 
