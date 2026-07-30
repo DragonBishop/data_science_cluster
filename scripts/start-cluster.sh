@@ -79,11 +79,11 @@ echo "✅ Node is Ready."
 echo ""
 
 # --- Step 5: Unseal the Host Transit Vault ----------------------------------
-# The Transit Vault re-seals on every host reboot. We check its status first 
-# to avoid unnecessary password prompts if already unsealed. If sealed, the 
-# 3 unseal keys are decrypted via GPG with a single passphrase and applied.
-# Failures from this point onward are tracked as warnings but do not halt
-# the script, allowing downstream components to report their own status.
+# The Transit Vault re-seals on every host reboot. Check its status first, then
+# 3 unseal keys are decrypted via GPG with a single passphrase and applied
+# directly against Vault's HTTP API. Failures from this point onward are tracked
+# as warnings, allowing them to report, without halting the script.
+
 export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_CACERT="/opt/vault/tls/transit.crt"
 
@@ -101,18 +101,22 @@ else
         echo "💡 TROUBLESHOOTING: Did you create the GPG keyfile setup (README Step 5)?. Continuing..."
         had_warnings=true
     else
-        # Decrypts and applies the keys. Shamir's threshold scheme requires keys 
-        # to be submitted individually, hence the loop.
+        # Decrypts and applies the keys. Shamir's threshold scheme requires keys
+        # to be submitted individually, hence the loop. Each key is written into
+        # a heredoc that only bash itself expands — it lands directly in curl's
+        # stdin (read via `--data @-`) and never becomes a separate argument on
+        # curl's own command line, so it never appears in any process's
+        # /proc/<pid>/cmdline.
         #
-        # NOTE: `vault operator unseal` lacks a stdin mode, requiring keys as 
-        # arguments. This makes them briefly visible to other processes via `ps`. 
-        # This is an accepted tradeoff for a single-user local machine.
-        #
-        # Wrapped in a function to capture gpg's true exit code via PIPESTATUS, 
+        # Wrapped in a function to capture gpg's true exit code via PIPESTATUS,
         # otherwise the while loop would always exit 0 even on decryption failure.
         decrypt_and_unseal() {
             gpg --quiet --decrypt "$KEYFILE" | while IFS= read -r key; do
-                [ -n "$key" ] && vault operator unseal "$key" > /dev/null
+                [ -n "$key" ] || continue
+                curl -sf --cacert "$VAULT_CACERT" --request PUT --data @- \
+                    "$VAULT_ADDR/v1/sys/unseal" > /dev/null <<EOF
+{"key":"$key"}
+EOF
             done
             return "${PIPESTATUS[0]}"
         }
@@ -160,12 +164,12 @@ if [ "$retries" -lt 9 ]; then
     echo "✅ Vault is unsealed."
 fi
 
-# Once Vault is unsealed, the Vault Secrets Operator (VSO) needs a moment to
-# sync each VaultStaticSecret into a Kubernetes Secret. Checks the 'Ready'
-# condition of each secret independently, allowing one to fail without
-# blocking the check for the other.
+# Once Vault unseals, the Vault Secrets Operator (VSO) needs time to sync
+# each VaultStaticSecret into a Kubernetes Secret. Checks 'Ready' condition
+# of secrets independently, allowing one to fail without blocking others.
+
 echo "⏳ Waiting for Vault Secrets Operator to sync credentials..."
-for vss in postgis-vault-secret minio-vault-secret; do
+for vss in postgis-vault-secret seaweedfs-vault-secret; do
     retries=0
     until [ "$(kubectl get vaultstaticsecret "$vss" -n databases -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" == "True" ]; do
         sleep 5
@@ -182,11 +186,31 @@ for vss in postgis-vault-secret minio-vault-secret; do
         echo "✅ $vss synced."
     fi
 done
+
+# The dynamic application credential (Vault's database secrets engine) is a
+# separate CRD kind from the static KV secrets above, and only becomes Ready
+# once Vault's `database/` mount is configured (README's "Dynamic Application
+# Credentials" step) — so this is expected to still be pending on a cluster
+# that hasn't completed that one-time setup yet.
+
+retries=0
+until [ "$(kubectl get vaultdynamicsecret postgis-app-dynamic-secret -n databases -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" == "True" ]; do
+    sleep 5
+    retries=$((retries+1))
+    if [ $retries -ge 6 ]; then
+        echo "⚠️  postgis-app-dynamic-secret not Ready after 30 seconds — expected if Vault's database secrets engine hasn't been configured yet."
+        had_warnings=true
+        break
+    fi
+    echo "   ...still waiting on postgis-app-dynamic-secret ... ($((retries * 5))s elapsed)"
+done
+[ "$retries" -lt 6 ] && echo "✅ postgis-app-dynamic-secret synced."
 echo ""
 
 # --- Step 7: Wait for CNPG and Un-hibernate ---------------------------------
 # Confirms the CNPG operator pod itself is ready before touching the database
 # resource it manages. Tracks failures as warnings without halting the script.
+
 echo "⏳ Verifying CNPG operator status..."
 retries=0
 until [ "$(kubectl get pods -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" == "True" ]; do
@@ -205,6 +229,7 @@ done
 # annotation, flips it off to bring the database back up. Retries the
 # annotate call itself since CNPG's admission webhook can transiently reject
 # requests while it's still initializing.
+
 if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
   hib=$(kubectl get cluster postgis-cluster -n databases \
     -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null)
@@ -239,6 +264,7 @@ echo ""
 # --- Step 8: Final health checks -----------------------------------------
 # A non-blocking summary that reports workload statuses and captures any
 # final warnings to reflect in the script's final exit code.
+
 echo "🔎 Final workload health check..."
 
 check_pod_ready() {
@@ -260,7 +286,7 @@ check_pod_ready() {
   return 1
 }
 
-check_pod_ready 60 databases "app=minio" "MinIO running" || had_warnings=true
+check_pod_ready 60 databases "app=seaweedfs" "SeaweedFS running" || had_warnings=true
 
 phase=$(kubectl get cluster postgis-cluster -n databases -o jsonpath='{.status.phase}' 2>/dev/null)
 if [[ "$phase" == "Cluster in healthy state" ]]; then
