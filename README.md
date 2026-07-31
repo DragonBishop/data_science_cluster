@@ -27,6 +27,8 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 * `devcontainers/` - Provision a VSCode Dev Container to manage the cluster. Customize to suit your own needs!
   * `devcontainer.json`: Configuration file for a devcontainer designed to be platform and engine agnostic.
   * `Dockerfile` contains build instructions to provision a Data Science focused Dev Container.
+* `tests/`
+  * `lifecycle-test.sh`: Runs both lifecycle scripts against stubbed system commands, with no cluster required.
 * `scripts/`
   * `start-cluster.sh`: Sequential boot script enforcing API, Transit Vault unseal, Secret, and Database readiness state checks.
   * `stop-cluster.sh`: Graceful shutdown script utilizing CNPG declarative hibernation.
@@ -465,6 +467,59 @@ Verify the extension is installed:
 kubectl cnpg psql postgis-cluster -n databases -- postgres -c 'SELECT postgis_full_version()'
 ```
 
+**Restoring from a SeaweedFS backup:** recovery with the Barman Cloud Plugin is not in place. It bootstraps a *new* cluster from the object store and replays WAL to a chosen point, leaving the original untouched. Define the backup as an external cluster and name it as the bootstrap source:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgis-restore
+  namespace: databases
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
+  storage:
+    size: 100Gi
+    storageClass: local-path
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: postgis-app-credentials
+  bootstrap:
+    recovery:
+      source: postgis-backup-store
+      # Omit recoveryTarget to replay every archived WAL segment. To recover to
+      # a moment before a mistake, name it here instead:
+      # recoveryTarget:
+      #   targetTime: "2026-07-30 21:15:00.00000+00"
+  externalClusters:
+    - name: postgis-backup-store
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: postgis-backups
+          serverName: postgis-cluster
+```
+
+The restore cluster carries no `plugins` stanza, so it archives nothing and cannot write into the path the live cluster owns. Reusing one object store path across two archiving clusters lets the newer one overwrite the older one's history.
+
+The restore cluster's `storage.size` must be at least the source cluster's, and it is a third `local-path` claim on the same disk as the live database and the backup store. `local-path` reserves nothing, so confirm the space actually exists before starting:
+
+```bash
+df -h /var/lib/rancher/k3s/storage
+kubectl apply -f /tmp/postgis-restore.yaml
+kubectl get cluster postgis-restore -n databases -w
+kubectl cnpg psql postgis-restore -n databases -- postgres -c '\dt'
+kubectl delete cluster postgis-restore -n databases
+```
+
+Deleting the Cluster leaves its PersistentVolumeClaim behind; remove that too once the rehearsal is done:
+
+```bash
+kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
+```
+
+Rehearse this once while the setup is fresh. A restore path that has never been executed is not known to work, and the moment you need it is the worst moment to discover a missing bucket or an unreadable WAL segment.
+
 ### 9. Configure Dynamic Application Credentials
 
 This step runs inside the pod shell, as in Step 5, so the Vault root token is exported within the container rather than passed to `kubectl exec` as an argument, where `/proc/<pid>/cmdline` exposes it to every other process on the host. Working interactively also removes the outer quoting layer, so the literal single quotes the SQL in `creation_statements` requires need no escaping.
@@ -532,6 +587,23 @@ flatpak install flathub dev.headlamp.Headlamp
 
 Launch Headlamp from your application menu (or `flatpak run dev.headlamp.Headlamp` in the terminal) — it detects your synced `~/.kube/config` and connects immediately. No token to generate, no port-forward, no browser step: that whole flow only exists on the WSL2 branch, where Headlamp runs as an in-cluster web service accessed from a separate Windows browser.
 
+## Pre-flight Validation
+
+Everything below runs without touching a cluster, and catches the class of error that otherwise surfaces halfway through a boot:
+
+```bash
+bash -n scripts/*.sh
+./tests/lifecycle-test.sh
+kubectl apply --dry-run=client -f manifests/vso-setup.yaml \
+                              -f manifests/postgres-tls.yaml \
+                              -f manifests/seaweedfs-backups.yaml \
+                              -f manifests/postgis-cluster.yaml
+```
+
+`lifecycle-test.sh` drives `start-cluster.sh` and `stop-cluster.sh` through stubbed `kubectl`, `vault`, `systemctl`, and `ss`, covering the happy path and each failure branch. The stubs accept only the flags the real binaries accept and log anything else, so a scenario fails on a nonexistent flag even when the script exits as expected — a command called with a flag that does not exist returns non-zero, which is otherwise indistinguishable from a command that ran and reported failure. `sleep` returns immediately, so the retry ceilings are exercised without waiting them out.
+
+`--dry-run=client` validates YAML structure and required fields locally. Swapping it for `--dry-run=server` additionally runs the CNPG and cert-manager admission webhooks, which catches schema errors the client cannot see — but requires a running cluster with those operators installed.
+
 ## Cluster Operations
 
 | Operation | Command | When |
@@ -544,8 +616,8 @@ Launch Headlamp from your application menu (or `flatpak run dev.headlamp.Headlam
 | Verify CNPG State | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
 | Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8200:8200` | Ad hoc token/policy management |
 
-* **Scheduled Backups:** `postgis-cluster.yaml`'s `ScheduledBackup` resource pushes a base backup to SeaweedFS nightly at midnight on its own — no action needed.
-* **Lifecycle Management:** `start-cluster.sh` enforces a strict dependency order (API → CNI → Transit Vault Unseal → Cluster Vault Auto-Unseal → Secrets Sync → DB Un-hibernation) and halts with specific errors on failure. `stop-cluster.sh` cleanly hibernates the database and validates state before issuing a SIGTERM to k3s.
+* **Scheduled Backups:** `postgis-cluster.yaml`'s `ScheduledBackup` resource pushes a base backup to SeaweedFS nightly at midnight on its own — no action needed. The `ObjectStore` prunes anything older than 30 days, and SeaweedFS is capped at 100 volumes of 1024MB to match its 100Gi claim. Both live on the same physical disk as the database, so this protects against operator error and corruption, not against losing the drive; mirroring the bucket elsewhere is the remaining gap.
+* **Lifecycle Management:** `start-cluster.sh` enforces a strict dependency order (API → CNI → Transit Vault Unseal → Transit Token Roll → Cluster Vault Auto-Unseal → Secrets Sync → DB Un-hibernation) and halts with specific errors on failure. `stop-cluster.sh` cleanly hibernates the database and validates state before issuing a SIGTERM to k3s.
 
 ## Troubleshooting Guide
 
