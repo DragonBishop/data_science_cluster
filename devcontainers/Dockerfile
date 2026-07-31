@@ -23,8 +23,10 @@ FROM mcr.microsoft.com/devcontainers/python:3
 # 1. System Utilities
 # ------------------------------------------------------------------------------
 # postgresql-client: Native interaction with local DB bridges.
+# unzip: Required by the DuckDB CLI install below, which ships as a zip archive.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
+    unzip \
  && rm -rf /var/lib/apt/lists/*
 
 # ------------------------------------------------------------------------------

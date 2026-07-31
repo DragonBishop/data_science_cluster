@@ -142,6 +142,10 @@ metadata:
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 12
+  # A backstop across all retries. The wait inside the container is bounded too,
+  # so a filer that never answers fails the attempt and lets backoffLimit run;
+  # this deadline covers the case where the pod itself cannot make progress.
+  activeDeadlineSeconds: 600
   template:
     spec:
       containers:
@@ -154,10 +158,18 @@ spec:
           MASTER=seaweedfs-service.databases.svc.cluster.local:9333
 
           # Polls the filer through the master until it answers, rather than
-          # sleeping a fixed interval and hoping the server arrived first.
+          # sleeping a fixed interval and hoping the server arrived first. The
+          # cap is finite: a filer that never answers fails this attempt and
+          # hands control back to restartPolicy rather than waiting forever.
+          waited=0
           until weed shell -master="$MASTER" -c "fs.ls /" > /dev/null 2>&1; do
-            echo "   ...waiting for the SeaweedFS filer to answer..."
+            if [ "$waited" -ge 120 ]; then
+              echo "SeaweedFS filer did not answer within 120s."
+              exit 1
+            fi
+            echo "   ...waiting for the SeaweedFS filer to answer... (${waited}s elapsed)"
             sleep 3
+            waited=$((waited + 3))
           done
 
           weed shell -master="$MASTER" -c "fs.mkdir /buckets" > /dev/null 2>&1 || true

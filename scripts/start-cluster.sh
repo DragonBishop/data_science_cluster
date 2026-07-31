@@ -159,8 +159,12 @@ echo ""
 #
 # The token is read from the Secret and handed to the vault CLI through the
 # environment rather than the command line, so it never appears in
-# /proc/<pid>/cmdline. VAULT_ADDR and VAULT_CACERT still point at the host
-# Transit Vault from Step 5, which is the Vault that issued this token.
+# /proc/<pid>/cmdline. Passing it as an argument instead would also change which
+# endpoint the CLI calls: with no argument `vault token renew` uses
+# auth/token/renew-self, which every token may call through the default policy,
+# while naming a token uses auth/token/renew, which autounseal-policy does not
+# grant. VAULT_ADDR and VAULT_CACERT still point at the host Transit Vault from
+# Step 5, which is the Vault that issued this token.
 #
 # Failure is a warning, not a stop: an unrenewed token keeps working until its
 # window closes, so reporting the remaining time is more useful than halting a
@@ -173,8 +177,8 @@ if [ -z "$transit_token" ]; then
     echo "⚠️  Could not read vault-transit-secret — skipping renewal."
     echo "💡 TROUBLESHOOTING: kubectl get secret vault-transit-secret -n vault"
     had_warnings=true
-elif VAULT_TOKEN="$transit_token" vault token renew -self > /dev/null 2>&1; then
-    ttl=$(VAULT_TOKEN="$transit_token" vault token lookup -self 2>/dev/null \
+elif VAULT_TOKEN="$transit_token" vault token renew > /dev/null 2>&1; then
+    ttl=$(VAULT_TOKEN="$transit_token" vault token lookup 2>/dev/null \
         | awk '$1=="ttl"{print $2}') || ttl=""
     echo "✅ Transit token renewed (ttl now ${ttl:-unknown})."
 else
