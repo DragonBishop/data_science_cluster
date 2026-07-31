@@ -5,6 +5,7 @@
 # - Python
 # - uv (Modern Python package manager)
 # - kubectl & Helm (Cluster management)
+# - cnpg plugin (CloudNativePG status, backups, and psql access)
 # - Cilium CLI (Network visibility)
 # - PostgreSQL Client (Database access)
 # - DuckDB CLI & Quarto (Data analytics & publishing)
@@ -41,7 +42,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
 # ------------------------------------------------------------------------------
-# 4. Cluster Management (kubectl & Helm)
+# 4. Cluster Management (kubectl, Helm & the cnpg plugin)
 # ------------------------------------------------------------------------------
 RUN curl -LsSfo /usr/local/bin/kubectl \
       "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
@@ -53,6 +54,12 @@ RUN curl -LsSfo /tmp/get-helm-3 https://raw.githubusercontent.com/helm/helm/main
  && /tmp/get-helm-3 \
  && rm /tmp/get-helm-3 \
  && helm version
+
+# Registers as a kubectl subcommand by filename: `kubectl cnpg status`,
+# `kubectl cnpg backup`, and `kubectl cnpg psql` resolve to kubectl-cnpg on PATH.
+RUN curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/install-cnpg-plugin.sh \
+      | sh -s -- -b /usr/local/bin \
+ && kubectl cnpg version
 
 # ------------------------------------------------------------------------------
 # 5. Networking Visibility (Cilium CLI)

@@ -232,7 +232,7 @@ done
 
 if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
   hib=$(kubectl get cluster postgis-cluster -n databases \
-    -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null)
+    -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null) || hib=""
     
   if [ "$hib" == "on" ]; then
     echo "⏳ Rehydrating postgis-cluster from hibernation..."
@@ -288,7 +288,10 @@ check_pod_ready() {
 
 check_pod_ready 60 databases "app=seaweedfs" "SeaweedFS running" || had_warnings=true
 
-phase=$(kubectl get cluster postgis-cluster -n databases -o jsonpath='{.status.phase}' 2>/dev/null)
+# Reads the cluster's reported phase, falling back to an empty string when the
+# resource is absent so the summary below reports "not found" rather than the
+# script exiting on the failed lookup.
+phase=$(kubectl get cluster postgis-cluster -n databases -o jsonpath='{.status.phase}' 2>/dev/null) || phase=""
 if [[ "$phase" == "Cluster in healthy state" ]]; then
   echo "  ✅ postgis-cluster: $phase"
 else
