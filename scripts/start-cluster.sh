@@ -7,7 +7,7 @@
 # them at the end, ensuring independent processes aren't needlessly
 # interrupted while still surfacing failures to the user.
 #
-set -e
+set -eu
 had_warnings=false
 
 # --- Step 1: Refuse to start a duplicate instance --------------------------
@@ -62,9 +62,11 @@ done
 echo "✅ Kubernetes API is up."
 
 # --- Step 4: Wait for the node to go Ready ----------------------------------
-# The node won't report Ready until a CNI is installed for Cilium. This loop
-# has no retry cap since a first-time installation takes time, but it continues
-# to verify the k3s process remains alive to prevent an indefinite hang.
+# The node won't report Ready until a CNI is installed for Cilium. The cap is
+# generous because a first-time image pull takes time, but it is finite: a node
+# with no CNI installed never goes Ready, and waiting forever hides that from
+# the operator instead of reporting it. Each iteration also verifies the k3s
+# process is still alive so a crash is caught immediately.
 retries=0
 until kubectl get nodes | grep -q " Ready"; do
     if ! sudo kill -0 "$K3S_PID" 2>/dev/null; then
@@ -73,6 +75,14 @@ until kubectl get nodes | grep -q " Ready"; do
     fi
     sleep 5
     retries=$((retries+1))
+    if [ $retries -ge 60 ]; then
+        echo "❌ ERROR: Node did not reach Ready within 5 minutes."
+        echo "💡 TROUBLESHOOTING: A node with no CNI stays NotReady indefinitely."
+        echo "   1. Is Cilium installed?  cilium status --wait"
+        echo "   2. On a first-time build, install it now (README Step 2):"
+        echo "      cilium install --set gatewayAPI.enabled=true --set kubeProxyReplacement=true"
+        exit 1
+    fi
     echo "   ...still waiting for node... ($((retries * 5))s elapsed)"
 done
 echo "✅ Node is Ready."
@@ -139,7 +149,48 @@ EOF
 fi
 echo ""
 
-# --- Step 6: Wait for Cluster Vault and Secrets -----------------------------
+# --- Step 6: Roll the Transit auto-unseal token forward ---------------------
+# The token the in-cluster Vault presents to Transit is periodic: it carries a
+# 768h (32 day) window that restarts every time the token is renewed, and the
+# token dies if that window ever elapses in full. Renewing here means the window
+# runs from the last time the cluster was started rather than from the last time
+# someone remembered to renew by hand, so the only way to lose auto-unseal is to
+# leave the cluster unused for 32 consecutive days.
+#
+# The token is read from the Secret and handed to the vault CLI through the
+# environment rather than the command line, so it never appears in
+# /proc/<pid>/cmdline. VAULT_ADDR and VAULT_CACERT still point at the host
+# Transit Vault from Step 5, which is the Vault that issued this token.
+#
+# Failure is a warning, not a stop: an unrenewed token keeps working until its
+# window closes, so reporting the remaining time is more useful than halting a
+# startup that would otherwise succeed.
+echo "⏳ Rolling the Transit auto-unseal token forward..."
+transit_token=$(kubectl get secret vault-transit-secret -n vault \
+    -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null) || transit_token=""
+
+if [ -z "$transit_token" ]; then
+    echo "⚠️  Could not read vault-transit-secret — skipping renewal."
+    echo "💡 TROUBLESHOOTING: kubectl get secret vault-transit-secret -n vault"
+    had_warnings=true
+elif VAULT_TOKEN="$transit_token" vault token renew -self > /dev/null 2>&1; then
+    ttl=$(VAULT_TOKEN="$transit_token" vault token lookup -self 2>/dev/null \
+        | awk '$1=="ttl"{print $2}') || ttl=""
+    echo "✅ Transit token renewed (ttl now ${ttl:-unknown})."
+else
+    echo "⚠️  Transit token renewal failed. Auto-unseal keeps working until the"
+    echo "   token's window closes; after that the in-cluster Vault cannot unseal."
+    echo "💡 TROUBLESHOOTING: Issue a replacement from the host Transit Vault and"
+    echo "   replace the Secret (README Steps 3 and 4):"
+    echo "   vault token create -policy=autounseal-policy -period=768h -orphan"
+    echo "   kubectl create secret generic vault-transit-secret -n vault \\"
+    echo "     --from-literal=token='<new token>' --dry-run=client -o yaml | kubectl apply -f -"
+    echo "   kubectl delete pod -n vault vault-0"
+    had_warnings=true
+fi
+echo ""
+
+# --- Step 7: Wait for Cluster Vault and Secrets -----------------------------
 # With the Transit Vault unsealed, the in-cluster Main Vault should now be
 # able to auto-unseal itself. Polls vault-0's status every 5 seconds.
 echo "⏳ Waiting for Vault to unseal..."
@@ -207,7 +258,7 @@ done
 [ "$retries" -lt 6 ] && echo "✅ postgis-app-dynamic-secret synced."
 echo ""
 
-# --- Step 7: Wait for CNPG and Un-hibernate ---------------------------------
+# --- Step 8: Wait for CNPG and Un-hibernate ---------------------------------
 # Confirms the CNPG operator pod itself is ready before touching the database
 # resource it manages. Tracks failures as warnings without halting the script.
 
@@ -261,7 +312,7 @@ if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
 fi
 echo ""
 
-# --- Step 8: Final health checks -----------------------------------------
+# --- Step 9: Final health checks -----------------------------------------
 # A non-blocking summary that reports workload statuses and captures any
 # final warnings to reflect in the script's final exit code.
 
