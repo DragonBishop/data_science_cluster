@@ -101,6 +101,30 @@ spec:
       secret:
         name: postgis-app-credentials
 
+      # Runs against the postgres database once, at initdb time. The application
+      # database here IS the postgres database, so postInitApplicationSQL never
+      # fires -- CNPG skips it when the database already exists -- and this is
+      # the hook that reaches the right target.
+      #
+      # The image ships the PostGIS libraries but leaves the extension
+      # uninstalled; CREATE EXTENSION is what makes it available to queries.
+      #
+      # app_readwrite carries the privileges the Vault database secrets engine
+      # hands out (see README Step 9). Dynamic roles are granted membership
+      # rather than privileges directly, so the privilege set is defined in one
+      # place and every lease inherits it. The ALTER DEFAULT PRIVILEGES lines
+      # extend the same rights to tables and sequences created later by
+      # postgres, which the ON ALL TABLES grants above cannot cover.
+      postInitSQL:
+        - CREATE EXTENSION IF NOT EXISTS postgis
+        - CREATE ROLE app_readwrite NOLOGIN
+        - GRANT CONNECT ON DATABASE postgres TO app_readwrite
+        - GRANT USAGE ON SCHEMA public TO app_readwrite
+        - GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_readwrite
+        - GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_readwrite
+        - ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_readwrite
+        - ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_readwrite
+
   storage:
     size: 100Gi
     storageClass: local-path
@@ -141,6 +165,10 @@ metadata:
   namespace: databases
 spec:
   replicas: 1
+  # Uses Recreate strategy so the replacement pod binds 127.0.0.1:5432 only
+  # after the outgoing one has released it.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: postgres-proxy

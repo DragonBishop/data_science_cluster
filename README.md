@@ -77,7 +77,7 @@ The `INSTALL_K3S_EXEC` flags configure the startup environment, specifically dis
 * `--flannel-backend=none` and `--disable-network-policy`: Prevents the default CNI and network policies from loading, deferring routing and enforcement entirely to Cilium.
 * `--write-kubeconfig-mode 644`: Sets read permissions for the kubeconfig file so standard, non-root users can execute `kubectl` and `helm` commands without triggering permission errors.
 
-Systemd manages the cluster during the initial build phase, with custom lifecycle scripts (`scripts/start-cluster.sh` and `scripts/stop-cluster.sh`) provided to take over management once the build is complete.
+Systemd manages the cluster during the initial build phase. The custom lifecycle scripts (`scripts/start-cluster.sh` and `scripts/stop-cluster.sh`) take over afterwards: the first run of `stop-cluster.sh` stops and disables `k3s.service`, after which k3s no longer starts at boot and `start-cluster.sh` owns startup. `start-cluster.sh` refuses to run while the unit is still active, so the handover happens on the first clean shutdown rather than needing a separate step.
 
 This installer also gives you `kubectl`: k3s bundles its own copy and symlinks it to `/usr/local/bin/kubectl` automatically, as long as nothing else already occupies that path. Verify it landed:
 
@@ -326,17 +326,30 @@ Inject required credentials into the Vault KV store. The `postgis` path is the b
 
 The `seaweedfs` path stores the same access/secret key pair twice: once as flat fields (`ACCESS_KEY_ID`/`ACCESS_SECRET_KEY`, consumed by the Barman Cloud Plugin's `s3Credentials` references), and once pre-rendered into the JSON shape SeaweedFS's own S3 gateway expects for its identity file (`config.json`, mounted directly into the SeaweedFS pod).
 
-```bash
-kubectl exec -it vault-0 -n vault -- sh -c '
-export VAULT_TOKEN="<main Vault root token>"
+Run this inside the pod shell for the same reason as Step 5: an `sh -c '...'` wrapper places the root token, the database password and the S3 secret key on the `kubectl exec` command line, where any process on the host can read them from `/proc/<pid>/cmdline`.
 
-vault kv put secret/postgis username="<your username>" password="<your password>"
+```bash
+kubectl exec -it vault-0 -n vault -- sh
+```
+
+Once inside, set the token and address first:
+
+```bash
+export VAULT_TOKEN="<main Vault root token>"
+export VAULT_ADDR=http://127.0.0.1:8200
+```
+
+Then write both paths. Single-quoting `config.json` keeps the JSON readable, since no outer shell layer is consuming the double quotes:
+
+```bash
+vault kv put secret/postgis username="postgres" password="<your password>"
 
 vault kv put secret/seaweedfs \
   ACCESS_KEY_ID="<your access key>" ACCESS_SECRET_KEY="<your secret key>" \
-  config.json="{\"identities\":[{\"name\":\"cnpg\",\"credentials\":[{\"accessKey\":\"<your access key>\",\"secretKey\":\"<your secret key>\"}],\"actions\":[\"Read\",\"Write\",\"List\",\"Tagging\",\"Admin\"]}]}"
-'
+  config.json='{"identities":[{"name":"cnpg","credentials":[{"accessKey":"<your access key>","secretKey":"<your secret key>"}],"actions":["Read","Write","List","Tagging","Admin"]}]}'
 ```
+
+`exit` the pod shell once these complete.
 
 ### 7. Install Software Operators
 
@@ -360,8 +373,8 @@ helm upgrade --install cnpg cnpg/cloudnative-pg \
 The Barman Cloud Plugin requires CloudNativePG 1.26 or newer. Confirm the operator version before installing the plugin:
 
 ```bash
-kubectl get deployment -n cnpg-system cnpg-controller-manager \
-  -o jsonpath="{.spec.template.spec.containers[*].image}"
+kubectl get deployment -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg \
+  -o jsonpath="{.items[*].spec.template.spec.containers[*].image}"
 ```
 
 Then install the plugin into the same namespace as the operator (check the [releases page](https://github.com/cloudnative-pg/plugin-barman-cloud/releases) for a version newer than v0.13.0 before running this):
@@ -371,9 +384,17 @@ kubectl apply -f https://github.com/cloudnative-pg/plugin-barman-cloud/releases/
 kubectl rollout status deployment -n cnpg-system barman-cloud
 ```
 
+Finally, install the `cnpg` kubectl plugin. It supplies `kubectl cnpg status`, `kubectl cnpg backup`, and `kubectl cnpg psql`, which the Cluster Operations table and the troubleshooting steps below rely on, and which `stop-cluster.sh` names in its hibernation warning:
+
+```bash
+curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/install-cnpg-plugin.sh \
+  | sudo sh -s -- -b /usr/local/bin
+kubectl cnpg version
+```
+
 ### 8. Deploy the Database and Storage Infrastructure
 
-Before applying these manifests, ensure the `database:` and `owner:` values in `manifests/postgis-cluster.yaml` match those seeded into the vault.
+The `database:` and `owner:` values in `manifests/postgis-cluster.yaml` are both `postgres`, and the username seeded into Vault in Step 6 must match. CNPG hardcodes `postgres` as the superuser name and compares it against the `username` field of the Secret, rejecting any mismatch with `wrong username '<x>' in secret, expected 'postgres'`. That comparison happens before the password is applied, so a mismatch presents as failed password authentication against a password that reads back correctly from Vault.
 
 Furthermore, verify both `enableSuperuserAccess:` true and `superuserSecret` are explicitly set in the Cluster spec:
 
@@ -411,37 +432,78 @@ libpq checks `~/.postgresql/root.crt` automatically, so `psql "host=localhost po
 For standard plaintext SQL dumps (.sql), stream the file via stdin:
 
 ```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U <APP_DB_OWNER> -d <APP_DB_NAME> -f - < /path/to/backup.sql
+kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -f - < /path/to/backup.sql
 ```
 
 For binary or custom-format dumps (`.dump`), utilize `pg_restore` via stdin the same way. Append `--no-owner` and `--no-privileges` to bypass permission mapping constraints:
 
 ```bash
-kubectl exec -i postgis-cluster-1 -n databases -- pg_restore -U <APP_DB_OWNER> -d <APP_DB_NAME> --no-owner --no-privileges < /path/to/backup.dump
+kubectl exec -i postgis-cluster-1 -n databases -- pg_restore -U postgres -d postgres --no-owner --no-privileges < /path/to/backup.dump
+```
+
+**Enabling PostGIS and the application privilege set:** the image ships the PostGIS libraries, but the extension is not installed into the database until `CREATE EXTENSION` runs. `manifests/postgis-cluster.yaml` carries these statements in `bootstrap.initdb.postInitSQL`, which executes only at initdb time on a freshly created cluster. Apply them directly to a cluster that is already running:
+
+```bash
+kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres <<'EOF'
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE ROLE app_readwrite NOLOGIN;
+GRANT CONNECT ON DATABASE postgres TO app_readwrite;
+GRANT USAGE ON SCHEMA public TO app_readwrite;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_readwrite;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_readwrite;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_readwrite;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_readwrite;
+EOF
+```
+
+`app_readwrite` holds the privileges granted to the short-lived roles Vault issues in Step 9. Membership is granted rather than privileges directly, so the privilege set lives in one place and every lease inherits it. The two `ALTER DEFAULT PRIVILEGES` statements extend the same rights to tables and sequences created later by `postgres`; the `ON ALL TABLES` grants apply only to objects that exist at the moment they run.
+
+Verify the extension is installed:
+
+```bash
+kubectl cnpg psql postgis-cluster -n databases -- postgres -c 'SELECT postgis_full_version()'
 ```
 
 ### 9. Configure Dynamic Application Credentials
 
-This block is piped in via a quoted heredoc (`sh <<'EOF'`) rather than `sh -c '...'`, specifically because the SQL in `creation_statements` needs literal single quotes — those would otherwise prematurely close a single-quoted `-c '...'` wrapper before ever reaching the pod.
+This step runs inside the pod shell, as in Step 5, so the Vault root token is exported within the container rather than passed to `kubectl exec` as an argument, where `/proc/<pid>/cmdline` exposes it to every other process on the host. Working interactively also removes the outer quoting layer, so the literal single quotes the SQL in `creation_statements` requires need no escaping.
 
 ```bash
-kubectl exec -i -n vault vault-0 -- env VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN="<main Vault root token>" sh <<'EOF'
+kubectl exec -it vault-0 -n vault -- sh
+```
+
+Once inside, set the token and address first:
+
+```bash
+export VAULT_TOKEN="<main Vault root token>"
+export VAULT_ADDR=http://127.0.0.1:8200
+```
+
+Enable the database secrets engine and register the connection Vault uses to create and drop roles:
+
+```bash
 vault secrets enable database
 
 vault write database/config/postgis-cluster \
   plugin_name=postgresql-database-plugin \
   allowed_roles="postgis-app-role" \
   connection_url="postgresql://{{username}}:{{password}}@postgis-cluster-rw.databases.svc.cluster.local:5432/postgres?sslmode=require" \
-  username="<the same username you seeded into secret/postgis in Step 6>" \
+  username="postgres" \
   password="<the same password you seeded into secret/postgis in Step 6>"
+```
 
+Define the role leases are issued from. Each lease creates a login role that expires with it and draws its privileges from the `app_readwrite` group provisioned in Step 8:
+
+```bash
 vault write database/roles/postgis-app-role \
   db_name=postgis-cluster \
-  creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; GRANT ALL PRIVILEGES ON DATABASE postgres TO \"{{name}}\";" \
+  creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; GRANT app_readwrite TO \"{{name}}\";" \
   default_ttl="1h" \
   max_ttl="24h"
-EOF
 ```
+
+`exit` the pod shell once these complete.
 
 Confirm it worked:
 
@@ -450,7 +512,13 @@ kubectl get vaultdynamicsecret postgis-app-dynamic-secret -n databases
 kubectl get secret postgis-app-dynamic-credentials -n databases -o jsonpath='{.data.username}' | base64 -d
 ```
 
-The `creation_statements` above grant broad privileges on the single `postgres` database, matching what the previous static credential effectively had. Once real ETL/ML workloads exist, narrow this to whatever each workload actually needs rather than reusing one broad role for everything.
+Confirm the issued role carries the privileges — `app_readwrite` appears in its "Member of" column:
+
+```bash
+kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c '\du'
+```
+
+An issued role reads and writes the `public` schema — SELECT, INSERT, UPDATE and DELETE on tables, USAGE and SELECT on sequences — and reaches nothing beyond it. Those grants sit on the group rather than on each lease, so adjusting them is a change to `app_readwrite` alone and applies to the next lease issued. Once real ETL/ML workloads exist, give each one its own group role scoped to what it needs rather than sharing this one.
 
 ### 10. Install Headlamp Desktop (Optional)
 
@@ -482,7 +550,7 @@ Launch Headlamp from your application menu (or `flatpak run dev.headlamp.Headlam
 ## Troubleshooting Guide
 
 * **Pod Initialization Failure:** Run `kubectl describe pod <pod_name> -n databases` and review the "Events" stream for exact scheduler or image pull errors.
-* **Vault Permission Denied:** Verify the existence of the `postgis-role` policy generated in Step 5 via the Vault CLI.
+* **Vault Permission Denied:** Verify the `postgis-policy` policy and the `postgis-role` Kubernetes auth role created in Step 5 via the Vault CLI.
 * **Secrets Failing to Mount:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for the dynamic application credential). Resource status conditions will report the specific API failure.
 * **Transit Vault Prompts Every Run, or GPG Decryption Fails:** `start-cluster.sh` only prompts for the GPG passphrase if the Transit Vault is actually sealed — if it's prompting on every run despite no host reboot, check whether the `vault` systemd service is being restarted independently (`systemctl status vault`). If decryption itself fails, confirm `~/.vault-keys.gpg` exists and is readable (`ls -l ~/.vault-keys.gpg`, expect `600` permissions) and that the passphrase matches what was set during the one-time GPG setup in Step 3. `sudo chmod o+x /opt/vault/tls` allows both vaults access to the location of the tls certificate. `sudo stat -c "%a %U:%G %n" /opt/vault/tls` will confirm the correct permissions.
 * **Password Authentication Fails on Valid Password:** Ensure `enableSuperuserAccess: true` and `superuserSecret` are both present in `postgis-cluster.yaml`. Without both, CNPG actively nullifies or rotates the passwords during reconciliation.
