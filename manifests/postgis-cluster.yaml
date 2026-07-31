@@ -63,6 +63,10 @@ metadata:
   name: postgis-backups
   namespace: databases
 spec:
+  # Barman prunes base backups and the WAL segments they depend on past this
+  # window. Without it the store grows without bound, and the first symptom is
+  # a full volume server refusing the next WAL archive.
+  retentionPolicy: "30d"
   configuration:
     destinationPath: s3://cnpg-backups/
     endpointURL: http://seaweedfs-service.databases.svc:9000

@@ -9,7 +9,6 @@
 # - Cilium CLI (Network visibility)
 # - PostgreSQL Client (Database access)
 # - DuckDB CLI & Quarto (Data analytics & publishing)
-# - just (Command runner for lifecycle scripts)
 #
 # NOTE: Project-specific Python libraries do not belong here. 
 # Manage them via `uv init`, `uv add`, and `uv sync` in your pyproject.toml.
@@ -37,12 +36,7 @@ ENV UV_INSTALL_DIR="/usr/local/bin" \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # ------------------------------------------------------------------------------
-# 3. Task Runner (just)
-# ------------------------------------------------------------------------------
-RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
-
-# ------------------------------------------------------------------------------
-# 4. Cluster Management (kubectl, Helm & the cnpg plugin)
+# 3. Cluster Management (kubectl, Helm & the cnpg plugin)
 # ------------------------------------------------------------------------------
 RUN curl -LsSfo /usr/local/bin/kubectl \
       "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
@@ -62,7 +56,7 @@ RUN curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/in
  && kubectl cnpg version
 
 # ------------------------------------------------------------------------------
-# 5. Networking Visibility (Cilium CLI)
+# 4. Networking Visibility (Cilium CLI)
 # ------------------------------------------------------------------------------
 RUN CILIUM_CLI_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt) \
  && curl -LsSfo /tmp/cilium-linux-amd64.tar.gz \
@@ -72,7 +66,7 @@ RUN CILIUM_CLI_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/cil
  && cilium version --client
 
 # ------------------------------------------------------------------------------
-# 6. Data Analytics & Publishing Tools (DuckDB & Quarto)
+# 5. Data Analytics & Publishing Tools (DuckDB & Quarto)
 # ------------------------------------------------------------------------------
 RUN curl -LsSfo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip \
  && unzip -q /tmp/duckdb.zip -d /usr/local/bin \

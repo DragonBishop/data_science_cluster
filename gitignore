@@ -1,0 +1,47 @@
+# Vault unseal material. The GPG keyfile lives at ~/.vault-keys.gpg by design,
+# outside the repository, but a stray copy made during setup must never land here.
+*.gpg
+*.key
+vault-keys*
+*-unseal*
+*recovery-keys*
+
+# Kubeconfigs. sync-kubeconfig.sh writes to ~/.kube/config; anything matching
+# these names inside the repository is a copy that carries cluster credentials.
+kubeconfig
+*.kubeconfig
+k3s.yaml
+
+# TLS material. postgres-tls.yaml has cert-manager mint these into Secrets, and
+# the Transit certificate belongs in /opt/vault/tls.
+*.crt
+*.pem
+*.p12
+*.pfx
+
+# Rendered manifests. These carry substituted values and are outputs, not sources.
+*.rendered.yaml
+manifests/**/rendered/
+
+# Machine-specific overrides. cluster.env is committed; cluster.env.local is not.
+cluster.env.local
+.env
+.env.*
+
+# Database dumps used with the restoration steps in README Step 8.
+*.sql
+*.dump
+*.backup
+
+# Python tooling
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+.ruff_cache/
+
+# Editor and OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
