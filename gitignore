@@ -1,7 +1,6 @@
 # Vault unseal material. The GPG keyfile lives at ~/.vault-keys.gpg by design,
 # outside the repository, but a stray copy made during setup must never land here.
 *.gpg
-*.key
 vault-keys*
 *-unseal*
 *recovery-keys*
@@ -12,9 +11,10 @@ kubeconfig
 *.kubeconfig
 k3s.yaml
 
-# TLS material. postgres-tls.yaml has cert-manager mint these into Secrets, and
-# the Transit certificate belongs in /opt/vault/tls.
-*.crt
+# Private key material. postgres-tls.yaml has cert-manager mint these into
+# Secrets, and the Transit key belongs in /opt/vault/tls. Certificates are
+# public and are deliberately not listed -- a committed CA bundle is legitimate.
+*.key
 *.pem
 *.p12
 *.pfx
@@ -28,10 +28,15 @@ cluster.env.local
 .env
 .env.*
 
-# Database dumps used with the restoration steps in README Step 8.
-*.sql
+# Database dumps used with the restoration steps in README Step 8. Matched by
+# extension and directory rather than by `*.sql`, which would silently swallow
+# dbt models once the ETL services on the roadmap land.
 *.dump
 *.backup
+*.sql.gz
+*.sql.bz2
+dumps/
+backups/
 
 # Python tooling
 .venv/
