@@ -62,6 +62,8 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 
 ## First-Time Setup Instructions
 
+These detailed instructions are the product of repeated experimentation with cluster design, shell scripting, and best practices for cluster security. This process was produced with the assistance of artificial intelligence.
+
 This setup workflow is designed to be completed sequentially. Deviating from this order may result in initialization failures.
 
 ### 1. Install k3s
@@ -101,6 +103,18 @@ chmod +x /tmp/get-helm-3
 /tmp/get-helm-3
 rm /tmp/get-helm-3
 ```
+
+### Headlamp Desktop (Optional)
+
+While not mandatory, Headlamp is a lightweight GUI that can help you manage your cluster. Install the desktop application on Ubuntu via Flatpak:
+
+```bash
+flatpak install flathub dev.headlamp.Headlamp
+```
+
+*(Alternatively, download the latest `.deb` or `AppImage` from the [Headlamp GitHub Releases page](https://github.com/headlamp-k8s/headlamp/releases)).*
+
+Launch Headlamp from your application menu (or `flatpak run dev.headlamp.Headlamp` in the terminal) — it detects your synced `~/.kube/config` and connects immediately.
 
 #### 2a. Install the Gateway API CRDs
 
@@ -145,20 +159,6 @@ kubectl get nodes
 cilium status --wait
 kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep KubeProxyReplacement
 ```
-
-### Headlamp Desktop (Optional)
-
-While not mandatory, Headlamp is a lightweight GUI that can help you manage your cluster. Install the desktop application on Ubuntu via Flatpak:
-
-```bash
-flatpak install flathub dev.headlamp.Headlamp
-```
-
-*(Alternatively, download the latest `.deb` or `AppImage` from the [Headlamp GitHub Releases page](https://github.com/headlamp-k8s/headlamp/releases)).*
-
-You can launch Headlamp at any time, but I recommend waiting until Cilium is stabilized first.
-
-Launch Headlamp from your application menu (or `flatpak run dev.headlamp.Headlamp` in the terminal) — it detects your synced `~/.kube/config` and connects immediately.
 
 ### 3. Deploy the Host-Level Transit Vault
 
@@ -556,7 +556,7 @@ kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -
 
 An issued role reads and writes the `public` schema — SELECT, INSERT, UPDATE and DELETE on tables, USAGE and SELECT on sequences — and reaches nothing beyond it. Those grants sit on the group rather than on each lease, so adjusting them is a change to `app_readwrite` alone and applies to the next lease issued. Once real ETL/ML workloads exist, give each one its own group role scoped to what it needs rather than sharing this one.
 
-### 11. Restoring from a SeaweedFS backup:** 
+## **Restoring the Database from SeaweedFS**
 
 Recovery with the Barman Cloud Plugin is not in place. It bootstraps a *new* cluster from the object store and replays WAL to a chosen point, leaving the original untouched. Define the backup as an external cluster and name it as the bootstrap source:
 
@@ -628,14 +628,97 @@ Rehearse this once while the setup is fresh. A restore path that has never been 
 
 ## Troubleshooting Guide
 
-* **Pod Initialization Failure:** Run `kubectl describe pod <pod_name> -n databases` and review the "Events" stream for exact scheduler or image pull errors.
-* **Vault Permission Denied:** Verify the `postgis-policy` policy and the `postgis-role` Kubernetes auth role created in Step 5 via the Vault CLI.
-* **Secrets Failing to Mount:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for the dynamic application credential). Resource status conditions will report the specific API failure.
-* **Transit Vault Prompts Every Run, or GPG Decryption Fails:** `start-cluster.sh` only prompts for the GPG passphrase if the Transit Vault is actually sealed — if it's prompting on every run despite no host reboot, check whether the `vault` systemd service is being restarted independently (`systemctl status vault`). If decryption itself fails, confirm `~/.vault-keys.gpg` exists and is readable (`ls -l ~/.vault-keys.gpg`, expect `600` permissions) and that the passphrase matches what was set during the one-time GPG setup in Step 3. `sudo chmod o+x /opt/vault/tls` allows both vaults access to the location of the tls certificate. `sudo stat -c "%a %U:%G %n" /opt/vault/tls` will confirm the correct permissions.
-* **Password Authentication Fails on Valid Password:** Ensure `enableSuperuserAccess: true` and `superuserSecret` are both present in `postgis-cluster.yaml`. Without both, CNPG actively nullifies or rotates the passwords during reconciliation.
-* **Credentials Unresponsive Post-Rotation:** Database credentials silently stop working after a Vault password rotation. The credentials Secret must carry the `cnpg.io/reload: "true"` label for CNPG to notice the change. VSO's `destination.labels` field for setting this via `VaultStaticSecret`/`VaultDynamicSecret` has open reliability issues (hashicorp/vault-secrets-operator #472, #1045) where the label fails to apply reliably. Manually force the refresh by labeling the secret directly: `kubectl label secret postgis-app-credentials -n databases cnpg.io/reload=true` (or `postgis-app-dynamic-credentials` for the dynamic one).
-* **Dynamic credential never goes Ready:** Confirm Step 9 was actually run against a live `postgis-cluster-rw` service (Step 8 must already be applied), and that the policy from Step 5 actually includes `database/creds/postgis-app-role`, not just the KV paths. `kubectl describe vaultdynamicsecret postgis-app-dynamic-secret -n databases` will show Vault's own error text if the role or connection config is missing.
-* **`sslmode=verify-full` fails with a hostname mismatch:** Confirm you're connecting to a name actually present in `manifests/postgres-tls.yaml`'s `dnsNames`/`ipAddresses` — `localhost` and `127.0.0.1` are covered, but a raw LAN IP or a different hostname isn't unless you add it and let cert-manager reissue.
-* **Barman Cloud Plugin backups failing right after migration:** Check `kubectl cnpg status postgis-cluster -n databases` for the plugin's own status block, and confirm the `ObjectStore` resource's `s3Credentials` secret refs match what's actually in `seaweedfs-credentials` — a typo here fails silently until the first WAL archive attempt.
-* **k3s Port Conflicts:** If k3s logs show bind errors on port 6443, the systemd process is likely active. Run `systemctl is-enabled k3s` to verify it is disabled.
-* **Stale Cilium Endpoints:** If network conditions change on the host machine, long-running pods may retain stale IP records. Delete the affected pods; the deployment controller will recreate them with fresh network identities.
+### Startup and Shutdown
+
+* **`start-cluster.sh` refuses to start**
+  * **What's happening:** The system's background k3s service (`k3s.service`) is already active. Running two k3s instances against the same data directory will corrupt your cluster.
+  * **How to fix it:** You need to hand lifecycle management over to your scripts. Run `sudo systemctl disable --now k3s`. You can run `systemctl is-enabled k3s` to confirm which supervisor owns it. *(Note: `stop-cluster.sh` is designed to disable this automatically the first time it finds it).*
+
+* **Scripts finish with an "exit 1" error, but everything looks healthy**
+  * **What's happening:** Both the start and stop scripts are designed to flag non-fatal warnings without swallowing the errors.
+  * **How to fix it:** If the summary says "review warnings," it means the process finished but encountered some bumps along the way—it didn't completely abort. Scroll up in your terminal and look for the ❌ or ⚠️ icons to see what triggered the warning.
+
+* **`stop-cluster.sh` halts before k3s actually stops**
+  * **What's happening:** This is intentional. The script requires the database to hibernate safely before shutting down the cluster. If k3s stops while PostgreSQL is still running, the database will be killed ungracefully.
+  * **How to fix it:** Read the halt message to see what is holding up the process. If you absolutely must shut down immediately and are willing to risk a crash recovery on your next boot, you can use the `--force` flag.
+
+* **Hibernation shows as "not confirmed" when stopping**
+  * **What's happening:** The system couldn't verify that the database shut down cleanly.
+  * **How to check if it actually failed:** On your next start, run `kubectl logs -n databases postgis-cluster-1 -c postgres | grep -i "cluster state"`. If you see `Database cluster state: shut down` with a timestamp, the shutdown *was* clean, and the script just didn't wait long enough to see it.
+  * **If it genuinely failed, it's usually one of three things:**
+    1. **Idle database connections:** By default, PostgreSQL waits up to 180 seconds (`smartShutdownTimeout`) for existing connections to close. An idle DBeaver session or a lingering application connection will keep this window open. *Fix:* Check for active connections before stopping (`kubectl exec -n databases postgis-cluster-1 -c postgres -- psql -U postgres -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`) or lower the timeout in `postgis-cluster.yaml` by setting `spec.smartShutdownTimeout: 15`.
+    2. **CloudNativePG (CNPG) operator isn't available:** The shutdown command was sent, but the operator wasn't awake to process it. The stop script usually catches this first and halts with a specific warning.
+    3. **The cluster isn't healthy:** A cluster won't hibernate if it's already in a broken state, such as a pod stuck in a CrashLoop or midway through booting. Check status with `kubectl cnpg status postgis-cluster -n databases`.
+
+* **Port 6443 is still bound/in-use after running `stop-cluster.sh`**
+  * **What's happening:** The API server stopped, but some container background processes (containerd shims) are still clinging to life.
+  * **How to fix it:** Once you've confirmed hibernation was successful, run `sudo k3s-killall.sh`. This safely cleans up leftover processes and unmounts directories. It's especially important to run this before restarting if your previous stop was forced.
+
+---
+
+### Vault
+
+* **Vault reports as "sealed" when it isn't (or prompts for a GPG password on every run)**
+  * **What's happening:** When you check Vault's status, it returns a code: `0` for unsealed, `2` for sealed, and something else if the command entirely failed (like a bad certificate or dead service). If your script only looks for the word "false" in the output, a completely broken connection will trick the script into thinking Vault is sealed, sending it on a wild goose chase for unseal keys.
+  * **How to fix it:** Diagnose using the exit code rather than the text output:
+
+    ```bash
+    VAULT_ADDR=https://127.0.0.1:8200 VAULT_CACERT=/opt/vault/tls/tls.crt vault status; echo "exit=$?"
+    ```
+
+    Ensure the certificate path (`/opt/vault/tls/tls.crt`) is correct and readable (`sudo stat -c "%a %U:%G %n" /opt/vault/tls`). The certificate must also include an `IP:127.0.0.1` SAN. If Vault is *genuinely* re-sealing without a reboot, check `systemctl status vault` to see if the service is crashing and restarting on its own.
+
+* **GPG decryption fails**
+  * **What's happening:** The script can't read or decrypt your unseal keys.
+  * **How to fix it:**
+    1. Confirm `~/.vault-keys.gpg` exists and has strict permissions (run `ls -l ~/.vault-keys.gpg`, it should be `600`).
+    2. Ensure your passphrase matches the one you set up in Step 3.
+    3. *Technical note:* `vault operator unseal` does not accept piped inputs, so the script securely passes the key via `vault write sys/unseal key=-` instead. To test this mechanism safely without altering the seal state, run: `printf 'SENTINEL\n' | vault write -output-curl-string sys/unseal key=-` (it should display `SENTINEL` in the output).
+
+* **Vault throws a "permission denied" error**
+  * **How to fix it:** Double-check your Vault policies. Use the Vault CLI (`vault policy read postgis-policy`) to verify that the `postgis-policy` and the `postgis-role` Kubernetes auth role from Step 5 were applied correctly.
+
+* **Secrets are failing to mount into Kubernetes**
+  * **How to fix it:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for dynamic credentials). The status conditions at the bottom of the output will tell you exactly why the Vault Secrets Operator (VSO) is failing to pull the secret.
+
+* **Dynamic credentials never reach a "Ready" state**
+  * **How to fix it:** Confirm that Step 9 was run against a live `postgis-cluster-rw` service (Step 8 must be applied first). Also, verify that your Step 5 Vault policy includes permissions for `database/creds/postgis-app-role`, not just the standard KV paths. You can check Vault's specific error message by running `kubectl describe vaultdynamicsecret postgis-app-dynamic-secret -n databases`.
+
+---
+
+### Database
+
+* **Database pod fails to initialize**
+  * **How to fix it:** Run `kubectl describe pod <pod_name> -n databases` and check the "Events" stream at the very bottom. This will tell you if it's a scheduling issue, a lack of resources, or a failure to pull the container image.
+
+* **Password authentication fails even though the password is correct**
+  * **What's happening:** You might be missing a configuration requirement.
+  * **How to fix it:** Ensure that both `enableSuperuserAccess: true` **and** `superuserSecret` are declared in your `postgis-cluster.yaml`. If either is missing, CNPG will silently nullify your password every time it reconciles the cluster state.
+
+* **Application credentials stop working after a password rotation**
+  * **What's happening:** The Vault Secrets Operator (VSO) updated the secret, but CNPG didn't notice the change. There are known bugs with VSO reliably passing update labels.
+  * **How to fix it:** You need to manually poke the secret so CNPG reloads it. Run: `kubectl label secret postgis-app-credentials -n databases cnpg.io/reload=true` (swap the secret name if you are using dynamic credentials).
+
+* **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
+  * **What's happening:** The TLS certificate presented by the database doesn't match the hostname you are using to connect.
+  * **How to fix it:** Ensure the hostname or IP you are connecting to is listed in the `dnsNames` or `ipAddresses` section of `manifests/postgres-tls.yaml`. (`localhost` and `127.0.0.1` are covered by default). If you add a new LAN IP or hostname, cert-manager will need to reissue the certificate.
+
+* **Barman Cloud Plugin backups start failing after a migration**
+  * **What's happening:** The database can't talk to your backup storage.
+  * **How to fix it:** Run `kubectl cnpg status postgis-cluster -n databases` and look at the plugin's status block. Double-check that the `s3Credentials` in your `ObjectStore` resource exactly match your `seaweedfs-credentials`. A typo here won't throw an error until the database actually tries to archive a file.
+
+---
+
+### Tooling
+
+* **Pods are stuck in `ContainerCreating` indefinitely**
+  * **What's happening:** Cilium (your network plugin) is likely still initializing. Without the network plugin, Kubernetes won't finish creating the container sandbox.
+  * **How to fix it:** Run `cilium status --wait`. If the problem persists after Cilium is running, check if the BPF filesystem is mounted (`mount | grep bpf`). A hard shutdown can sometimes unmount this. *(Note: `/var/run/cilium/cgroupv2` is an active mount that must be unmounted before you ever attempt to run `rm -rf /var/run/cilium`)*.
+
+* **Pods are running but completely unreachable (Stale Cilium Endpoints)**
+  * **What's happening:** After a forced stop or an agent restart, pods can sometimes hold onto ghost network endpoints that no longer route properly.
+  * **How to fix it:** Run `kubectl exec -n kube-system ds/cilium -- cilium endpoint list` to view the active endpoints. If you find broken ones, simply delete the affected application pods (`kubectl delete pod <pod_name>`). The controller will immediately recreate them with fresh, working network identities.
+
+* **Headlamp shows a stale or failed connection**
+  * **What's happening:** Headlamp reads the connection file (`~/.kube/config`) generated by `sync-kubeconfig.sh`. If you ran that sync script while the cluster was powered down, it generated a bad connection profile.
+  * **How to fix it:** Start the cluster, run `sync-kubeconfig.sh` again to generate a fresh profile, and then reconnect Headlamp.
