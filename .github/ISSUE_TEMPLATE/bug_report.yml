@@ -1,0 +1,23 @@
+name: Bug report
+about: Create a report to help us fix bugs
+title: "[BUG] ${{short_summary}}"
+labels: ["bug"]
+body:
+  - type: input
+    id: short_summary
+    attributes:
+      label: Short summary
+      description: One-line summary of the problem
+      placeholder: "e.g. Crash when clicking Save"
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps to reproduce the bug
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen
