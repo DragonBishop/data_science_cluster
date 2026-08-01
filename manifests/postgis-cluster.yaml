@@ -87,10 +87,9 @@ metadata:
   namespace: databases
 spec:
   instances: 1
-
-  # CloudNativePG's official PostGIS image, built specifically for the
-  # operator's bootstrap and lifecycle management. The image version matches
-  # the PostgreSQL and PostGIS versions of the source database.
+  # The default if not set here is 180 seconds.
+  smartShutdownTimeout: 15
+  # CloudNativePG's official PostGIS image.
   imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
 
   # Both fields below are required together — superuserSecret alone is
