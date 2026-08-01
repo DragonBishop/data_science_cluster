@@ -1,6 +1,6 @@
-name: Bug report
+name: Bug report (form)
 about: Create a report to help us fix bugs
-title: "[BUG] ${{short_summary}}"
+title: "[BUG] ${{inputs.short_summary}}"
 labels: ["bug"]
 body:
   - type: input
