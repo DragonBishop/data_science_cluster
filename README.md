@@ -93,7 +93,7 @@ k3s writes its kubeconfig to `/etc/rancher/k3s/k3s.yaml`, not `~/.kube/config` �
 ./scripts/sync-kubeconfig.sh
 ```
 
-Helm isn't bundled by anything above and is needed starting in Step 4, so install it now too:
+Helm is the package manager for Kubernetes. It automates deploying, upgrading, and managing complex Kubernetes applications using pre-configured template packages called "charts".
 
 ```bash
 curl -fsSL -o /tmp/get-helm-3 https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
@@ -102,43 +102,63 @@ chmod +x /tmp/get-helm-3
 rm /tmp/get-helm-3
 ```
 
-### 2. Install Cilium
-
-**Prerequisites:** `k3s` must be installed with the `--disable-kube-proxy` boolean flag and `--flannel-backend=none` per Step 1. Cilium's `kubeProxyReplacement` only fully assumes L4 routing if the native `kube-proxy` is genuinely disabled.
-
 #### 2a. Install the Gateway API CRDs
 
-Gateway API Custom Resource Definitions (CRDs) must be installed prior to Cilium. The CRD version must strictly align with the requirements of the deployed Cilium release (e.g., Cilium 1.19.x requires Gateway API v1.4.1). A version mismatch results in silent failures, leaving the GatewayClass in an `ACCEPTED: Unknown` state. This deployment utilizes the standard (GA) release channel.
+Gateway API Custom Resource Definitions (CRDs) must be installed prior to Cilium. The CRD version must strictly align with the requirements of the deployed Cilium release (Cilium 1.20.x requires Gateway API v1.6.1). A version mismatch results in silent failures, leaving the GatewayClass in an `ACCEPTED: Unknown` state. This deployment uses the standard (GA) release channel.
 
 ```bash
-kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml
 ```
 
-The `--server-side` flag is mandatory because these manifests exceed the annotation size limit utilized by client-side apply operations.
+`--server-side` is used so that field ownership is recorded against a named manager, which allows Argo CD to adopt these objects later without conflict. (The size limit that makes server-side apply strictly mandatory applies to the Experimental channel CRDs, not the standard channel used here.)
 
 #### 2b. Install the Cilium CLI
 
-Retrieve the latest stable CLI release and install the executable to `/usr/local/bin` for system-wide access.
+Retrieve the latest stable CLI release, verify its checksum, and install the executable to `/usr/local/bin` for system-wide access. The CLI is used for status and connectivity checks, not for the install itself.
 
 ```bash
 CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
-sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-rm cilium-linux-amd64.tar.gz
+CLI_ARCH=amd64
+curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
+sha256sum --check cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
+sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
+rm cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
 ```
 
-Deploy Cilium and wait for daemonsets to report healthy:
+The devcontainer image installs its own copy of the Cilium CLI. The two are independent and can drift.
+
+#### 2c. Deploy Cilium
+
+Chart values live in `cilium-values.yaml` so the inputs are versioned in git and can be handed to Argo CD unchanged.
 
 ```bash
-cilium install --set gatewayAPI.enabled=true --set kubeProxyReplacement=true
-cilium status --wait
+helm install cilium oci://quay.io/cilium/charts/cilium --version 1.20.0 \
+  --namespace kube-system -f cilium-values.yaml
 ```
 
-Verify the node is ready:
+`cilium` is the release name; `oci://quay.io/cilium/charts/cilium` is the chart. An OCI address resolves straight from the registry, and is also the mechanism Argo CD will use.
+
+Verify the node leaves `NotReady` and that kube-proxy replacement is actually active:
 
 ```bash
 kubectl get nodes
+cilium status --wait
+kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep KubeProxyReplacement
 ```
+
+### Headlamp Desktop (Optional)
+
+While not mandatory, Headlamp is a lightweight GUI that can help you manage your cluster. Install the desktop application on Ubuntu via Flatpak:
+
+```bash
+flatpak install flathub dev.headlamp.Headlamp
+```
+
+*(Alternatively, download the latest `.deb` or `AppImage` from the [Headlamp GitHub Releases page](https://github.com/headlamp-k8s/headlamp/releases)).*
+
+You can launch Headlamp at any time, but I recommend waiting until Cilium is stabilized first.
+
+Launch Headlamp from your application menu (or `flatpak run dev.headlamp.Headlamp` in the terminal) — it detects your synced `~/.kube/config` and connects immediately.
 
 ### 3. Deploy the Host-Level Transit Vault
 
@@ -146,7 +166,9 @@ This Vault instance runs directly on the host and serves to unlock the cluster's
 
 ```bash
 wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
 echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+
 sudo apt update && sudo apt install -y vault
 ```
 
@@ -154,11 +176,13 @@ Generate a local TLS certificate allowing secure communication from within the c
 
 ```bash
 sudo openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
-  -keyout /opt/vault/tls/transit.key \
-  -out /opt/vault/tls/transit.crt \
+  -keyout /opt/vault/tls/tls.key \
+  -out /opt/vault/tls/tls.crt \
   -subj "/CN=vault.local" \
   -addext "subjectAltName=DNS:vault.local,DNS:localhost,IP:127.0.0.1"
-sudo chown vault:vault /opt/vault/tls/transit.key /opt/vault/tls/transit.crt
+sudo chown vault:vault /opt/vault/tls/tls.key /opt/vault/tls/tls.crt
+sudo chmod 640 /opt/vault/tls/tls.key
+sudo chmod 644 /opt/vault/tls/tls.crt
 sudo chmod o+x /opt/vault/tls
 ```
 
@@ -171,8 +195,8 @@ api_addr = "https://vault.local:8200"
 
 listener "tcp" {
   address       = "0.0.0.0:8200"
-  tls_cert_file = "/opt/vault/tls/transit.crt"
-  tls_key_file  = "/opt/vault/tls/transit.key"
+  tls_cert_file = "/opt/vault/tls/tls.crt"
+  tls_key_file  = "/opt/vault/tls/tls.key"
 }
 ```
 
@@ -180,8 +204,9 @@ Enable the service, initialize Vault, and configure the transit secret engine:
 
 ```bash
 sudo systemctl enable --now vault
+
 export VAULT_ADDR="https://127.0.0.1:8200"
-export VAULT_CACERT="/opt/vault/tls/transit.crt"
+export VAULT_CACERT="/opt/vault/tls/tls.crt"
 vault operator init
 ```
 
@@ -190,6 +215,10 @@ CRITICAL: Store the generated 5 Unseal Keys and 1 Initial Root Token in a secure
 Unseal the Transit Vault by providing three different unseal keys:
 
 `vault operator unseal`
+
+Then use the initial root token given to you by the vault to login:
+
+`vault login`
 
 Configure the auto-unseal policy and generate the authentication token:
 
@@ -205,7 +234,8 @@ EOF
 vault token create -policy=autounseal-policy -period=768h -orphan
 ```
 
-Securely store this token. (Note: This token requires periodic renewal prior to its 768h/32-day expiration to maintain auto-unseal capabilities).
+Securely store this token. The in-cluster Vault's transit seal client renews it automatically on use (`disable_renewal` defaults to `"false"`), so no scheduled manual renewal is required. It expires only if
+the cluster is left down for more than 32 days, in which case issue a new one with the same command and update `vault-transit-secret`.
 
 **Automating future unseals (one-time setup):**
 
@@ -216,7 +246,9 @@ Generate the keyfile once, from a RAM-backed tmpfs so the plaintext keys never t
 ```bash
 mkdir -p /dev/shm/vault-setup && cd /dev/shm/vault-setup
 
-# paste the same 3 keys used above into keys.txt, one per line
+# There's a few ways to paste the same 3 keys used above into keys.txt
+# But Nano allows double checking your work:
+sudo nano keys.txt
 
 gpg --batch --yes --cipher-algo AES256 --symmetric keys.txt
 mv keys.txt.gpg ~/.vault-keys.gpg
@@ -249,10 +281,12 @@ Create the namespace and inject connection credentials:
 
 ```bash
 kubectl create namespace vault
+
 kubectl create secret generic vault-transit-secret \
   --from-literal=token='<token from step 3>' -n vault
+
 kubectl create configmap vault-transit-ca \
-  --from-file=ca.crt=/opt/vault/tls/transit.crt -n vault
+  --from-file=ca.crt=/opt/vault/tls/tls.crt -n vault
 ```
 
 Deploy the Main Vault using manifests/vault-values.yaml.
@@ -273,32 +307,37 @@ kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault o
 
 If successful, the output will report Sealed: false, verifying the auto-unseal mechanism.
 
-### 5. Configure Vault Kubernetes Authentication
+### 5. Configure Vault Kubernetes Authentication and Seed Application Credentials
 
-Establish the trust boundary allowing the Vault Secrets Operator to fetch credentials. This includes policies for applications that will be deployed later in setup.
+Establish the trust boundary allowing the Vault Secrets Operator (VSO) to fetch credentials, write access policies for applications deployed later in setup, and seed initial bootstrap credentials into the KV engine.
 
-Launch an interactive shell inside the Vault pod — empty, with no token on the command line, since anything passed to `kubectl exec` as an argument is visible to other processes on the host via `/proc/<pid>/cmdline`:
+To prevent leaking sensitive passwords or tokens into host process arguments (`/proc/<pid>/cmdline`), perform all configuration inside a single interactive pod session:
 
 ```bash
 kubectl exec -it vault-0 -n vault -- sh
 ```
 
-Once inside, set the token and address first:
+Once inside, set the VAULT_ADDR environment variable, and use vault login and your root token to authenticate:
 
 ```bash
-export VAULT_TOKEN="<main Vault root token>"
 export VAULT_ADDR=http://127.0.0.1:8200
+unset VAULT_TOKEN
+vault login
 ```
 
-Then enable the KV store and Kubernetes auth method:
+#### A. Enable Engines and Configure Kubernetes Auth
+
+Enable the KV-v2 secrets engine and Kubernetes authentication backend, pointing Vault to the internal cluster API endpoint:
 
 ```bash
 vault secrets enable -path=secret kv-v2
+
 vault auth enable kubernetes
+
 vault write auth/kubernetes/config kubernetes_host="https://kubernetes.default.svc"
 ```
 
-This policy includes a `database/creds/postgis-app-role` path up front, even though that secrets engine isn't configured until Step 9 below — Vault policies are just ACL rules and don't require the target backend to already be mounted, so it's simpler to define the complete policy once here. Heredocs like this one work the same interactively as they do piped in: type or paste the whole block, and the shell waits for the closing `EOF` before running it.
+#### B. Define ACL Policies and Auth Roles
 
 ```bash
 vault policy write postgis-policy - <<EOF
@@ -320,42 +359,49 @@ vault write auth/kubernetes/role/postgis-role \
   ttl=24h
 ```
 
-`exit` the pod shell once these complete.
+> **Note:** Vault will throw a warning during role configuration stating that `postgis-role` does not have an audience bound. This is expected and safe to ignore.
 
-### 6. Seed Application Credentials
+#### C. Seed Application Credentials
 
-Inject required credentials into the Vault KV store. The `postgis` path is the bootstrap/superuser credential CNPG uses at initdb time — it stays static and KV-backed deliberately, since Vault's database secrets engine (Step 9) needs a standing privileged user to create and drop the dynamic application roles it hands out, and that credential can't itself be one of the leases it manages.
+Inject required credentials into the Vault KV store directly within your active shell session:
 
-The `seaweedfs` path stores the same access/secret key pair twice: once as flat fields (`ACCESS_KEY_ID`/`ACCESS_SECRET_KEY`, consumed by the Barman Cloud Plugin's `s3Credentials` references), and once pre-rendered into the JSON shape SeaweedFS's own S3 gateway expects for its identity file (`config.json`, mounted directly into the SeaweedFS pod).
-
-Run this inside the pod shell for the same reason as Step 5: an `sh -c '...'` wrapper places the root token, the database password and the S3 secret key on the `kubectl exec` command line, where any process on the host can read them from `/proc/<pid>/cmdline`.
-
-```bash
-kubectl exec -it vault-0 -n vault -- sh
-```
-
-Once inside, set the token and address first:
-
-```bash
-export VAULT_TOKEN="<main Vault root token>"
-export VAULT_ADDR=http://127.0.0.1:8200
-```
-
-Then write both paths. Single-quoting `config.json` keeps the JSON readable, since no outer shell layer is consuming the double quotes:
+* **`secret/postgis`**: Stores the static bootstrap/superuser credential CNPG uses at initdb time. This remains static and KV-backed deliberately, as Vault's dynamic database secrets engine (Step 9) requires a standing privileged user to manage dynamic leases, and that credential cannot manage itself.
+* **`secret/seaweedfs`**: Stores the access/secret key pair twice: once as flat fields (`ACCESS_KEY_ID`/`ACCESS_SECRET_KEY`, consumed by the Barman Cloud Plugin's `s3Credentials` references), and once pre-rendered into the JSON structure expected by SeaweedFS's S3 gateway identity file (`config.json`, mounted directly into the SeaweedFS pod).
+* **Note:** Generate or retrieve these S3 credentials and store them securely before injecting them into Vault.
+Single-quote `config.json` so the raw JSON structure is preserved cleanly without shell interpolation:
 
 ```bash
 vault kv put secret/postgis username="postgres" password="<your password>"
-
-vault kv put secret/seaweedfs \
-  ACCESS_KEY_ID="<your access key>" ACCESS_SECRET_KEY="<your secret key>" \
-  config.json='{"identities":[{"name":"cnpg","credentials":[{"accessKey":"<your access key>","secretKey":"<your secret key>"}],"actions":["Read","Write","List","Tagging","Admin"]}]}'
 ```
 
-`exit` the pod shell once these complete.
+To make the seaweed secret easier to enter, first create environment variables within the shell:
 
-### 7. Install Software Operators
+```bash
+S3_ACCESS_KEY="<your access key>"
+S3_SECRET_KEY="<your secret key>"
+```
 
-cert-manager is a hard prerequisite for both the PostGIS server certificate (Step 8) and the Barman Cloud Plugin — install and confirm it's healthy first.
+Add the secret using the envs:
+
+```bash
+vault kv put secret/seaweedfs \
+  ACCESS_KEY_ID="$S3_ACCESS_KEY" \
+  ACCESS_SECRET_KEY="$S3_SECRET_KEY" \
+  config.json="{\"identities\":[{\"name\":\"cnpg\",\"credentials\":[{\"accessKey\":\"${S3_ACCESS_KEY}\",\"secretKey\":\"${S3_SECRET_KEY}\"}],\"actions\":[\"Read\",\"Write\",\"List\",\"Tagging\",\"Admin\"]}]}"
+```
+
+Verify it landed: `vault kv get secret/seaweedfs`
+
+Remove your environment variables and exit the shell:
+
+```bash
+unset S3_ACCESS_KEY S3_SECRET_KEY
+exit
+```
+
+### 6. Install Software Operators
+
+cert-manager is a hard prerequisite for both the PostGIS server certificate (Step 7) and the Barman Cloud Plugin — install and confirm it's healthy first.
 
 ```bash
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
@@ -394,11 +440,11 @@ curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/instal
 kubectl cnpg version
 ```
 
-### 8. Deploy the Database and Storage Infrastructure
+### 7. Deploy the Database and Storage Infrastructure
 
-The `database:` and `owner:` values in `manifests/postgis-cluster.yaml` are both `postgres`, and the username seeded into Vault in Step 6 must match. CNPG hardcodes `postgres` as the superuser name and compares it against the `username` field of the Secret, rejecting any mismatch with `wrong username '<x>' in secret, expected 'postgres'`. That comparison happens before the password is applied, so a mismatch presents as failed password authentication against a password that reads back correctly from Vault.
+The `database:` and `owner:` values in `manifests/postgis-cluster.yaml` are both `postgres`, and the username seeded into Vault must match. CNPG hardcodes `postgres` as the superuser name and compares it against the `username` field of the Secret, rejecting any mismatch with `wrong username '<x>' in secret, expected 'postgres'`. That comparison happens before the password is applied, so a mismatch presents as failed password authentication against a password that reads back correctly from Vault.
 
-Furthermore, verify both `enableSuperuserAccess:` true and `superuserSecret` are explicitly set in the Cluster spec:
+Furthermore, verify both `enableSuperuserAccess: true` and `superuserSecret` are explicitly set in the Cluster spec:
 
 ```yaml
 enableSuperuserAccess: true
@@ -406,7 +452,7 @@ superuserSecret:
   name: postgis-app-credentials
 ```
 
-Without `enableSuperuserAccess: true`, CNPG actively blanks the role's password to NULL on every reconciliation cycle by design. If `enableSuperuserAccess: true` is set without a superuserSecret, CNPG auto-generates its own random `<cluster-name>-superuser` password, completely bypassing your Vault setup silently.
+Without `enableSuperuserAccess: true`, CNPG actively blanks the role's password to NULL on every reconciliation cycle by design. If `enableSuperuserAccess: true` is set without a `superuserSecret`, CNPG auto-generates its own random `<cluster-name>-superuser` password, completely bypassing your Vault setup silently.
 
 Apply in this order — `vso-setup.yaml` creates the namespace everything else lives in, and `postgres-tls.yaml` must exist before `postgis-cluster.yaml` references the Secret it produces:
 
@@ -418,7 +464,7 @@ kubectl apply -f manifests/postgis-cluster.yaml
 kubectl get pods -n databases -w
 ```
 
-Monitor until both the `seaweedfs` and `postgis-cluster-1` pods report Running.
+Monitor until both the `seaweedfs` and `postgis-cluster-1` pods report `Running`.
 
 **Connecting with verified TLS:** now that Postgres has a certificate covering `localhost`, any client connecting through the `postgres-proxy` bridge can use `sslmode=verify-full`. Trust the cluster's local CA once:
 
@@ -427,21 +473,7 @@ mkdir -p ~/.postgresql
 kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
 ```
 
-libpq checks `~/.postgresql/root.crt` automatically, so `psql "host=localhost port=5432 dbname=postgres user=postgres sslmode=verify-full"` will now verify the certificate rather than just encrypting the connection.
-
-**Database Restoration**: When transferring an existing database into the CNPG cluster, use the following commands to restore the database:
-
-For standard plaintext SQL dumps (.sql), stream the file via stdin:
-
-```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -f - < /path/to/backup.sql
-```
-
-For binary or custom-format dumps (`.dump`), utilize `pg_restore` via stdin the same way. Append `--no-owner` and `--no-privileges` to bypass permission mapping constraints:
-
-```bash
-kubectl exec -i postgis-cluster-1 -n databases -- pg_restore -U postgres -d postgres --no-owner --no-privileges < /path/to/backup.dump
-```
+`libpq` checks `~/.postgresql/root.crt` automatically, so `psql "host=localhost port=5432 dbname=postgres user=postgres sslmode=verify-full"` will now verify the certificate rather than just encrypting the connection.
 
 **Enabling PostGIS and the application privilege set:** the image ships the PostGIS libraries, but the extension is not installed into the database until `CREATE EXTENSION` runs. `manifests/postgis-cluster.yaml` carries these statements in `bootstrap.initdb.postInitSQL`, which executes only at initdb time on a freshly created cluster. Apply them directly to a cluster that is already running:
 
@@ -467,7 +499,66 @@ Verify the extension is installed:
 kubectl cnpg psql postgis-cluster -n databases -- postgres -c 'SELECT postgis_full_version()'
 ```
 
-**Restoring from a SeaweedFS backup:** recovery with the Barman Cloud Plugin is not in place. It bootstraps a *new* cluster from the object store and replays WAL to a chosen point, leaving the original untouched. Define the backup as an external cluster and name it as the bootstrap source:
+### 8. Configure Dynamic Application Credentials
+
+With the PostgreSQL cluster online and the app_readwrite privilege group initialized, re-enter the Vault pod shell to configure Vault's dynamic database secrets engine. This configuration establishes the direct network connection between Vault and the postgis-cluster-rw service, enabling Vault to execute SQL DDL on demand to issue, rotate, and revoke short-lived application database credentials.
+
+As you did for Step 5, create an interactive shell in the vault:
+
+```bash
+kubectl exec -it vault-0 -n vault -- sh
+```
+
+Once inside, set the token and address first:
+
+```bash
+export VAULT_TOKEN="<main Vault root token>"
+export VAULT_ADDR=http://127.0.0.1:8200
+```
+
+Enable the database secrets engine and register the connection Vault uses to create and drop roles:
+
+```bash
+vault secrets enable database
+
+vault write database/config/postgis-cluster \
+  plugin_name=postgresql-database-plugin \
+  allowed_roles="postgis-app-role" \
+  connection_url="postgresql://{{username}}:{{password}}@postgis-cluster-rw.databases.svc.cluster.local:5432/postgres?sslmode=require" \
+  username="postgres" \
+  password="<the same password you seeded into secret/postgis in Step 6>"
+```
+
+Define the role leases are issued from. Each lease creates a login role that expires with it and draws its privileges from the `app_readwrite` group provisioned in Step 8:
+
+```bash
+vault write database/roles/postgis-app-role \
+  db_name=postgis-cluster \
+  creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; GRANT app_readwrite TO \"{{name}}\";" \
+  default_ttl="3h" \
+  max_ttl="24h"
+```
+
+`exit` the pod shell once these complete.
+
+Confirm it worked:
+
+```bash
+kubectl get vaultdynamicsecret postgis-app-dynamic-secret -n databases
+kubectl get secret postgis-app-dynamic-credentials -n databases -o jsonpath='{.data.username}' | base64 -d
+```
+
+Confirm the issued role carries the privileges — `app_readwrite` appears in its "Member of" column:
+
+```bash
+kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c '\du'
+```
+
+An issued role reads and writes the `public` schema — SELECT, INSERT, UPDATE and DELETE on tables, USAGE and SELECT on sequences — and reaches nothing beyond it. Those grants sit on the group rather than on each lease, so adjusting them is a change to `app_readwrite` alone and applies to the next lease issued. Once real ETL/ML workloads exist, give each one its own group role scoped to what it needs rather than sharing this one.
+
+### 11. Restoring from a SeaweedFS backup:** 
+
+Recovery with the Barman Cloud Plugin is not in place. It bootstraps a *new* cluster from the object store and replays WAL to a chosen point, leaving the original untouched. Define the backup as an external cluster and name it as the bootstrap source:
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -519,90 +610,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 ```
 
 Rehearse this once while the setup is fresh. A restore path that has never been executed is not known to work, and the moment you need it is the worst moment to discover a missing bucket or an unreadable WAL segment.
-
-### 9. Configure Dynamic Application Credentials
-
-This step runs inside the pod shell, as in Step 5, so the Vault root token is exported within the container rather than passed to `kubectl exec` as an argument, where `/proc/<pid>/cmdline` exposes it to every other process on the host. Working interactively also removes the outer quoting layer, so the literal single quotes the SQL in `creation_statements` requires need no escaping.
-
-```bash
-kubectl exec -it vault-0 -n vault -- sh
-```
-
-Once inside, set the token and address first:
-
-```bash
-export VAULT_TOKEN="<main Vault root token>"
-export VAULT_ADDR=http://127.0.0.1:8200
-```
-
-Enable the database secrets engine and register the connection Vault uses to create and drop roles:
-
-```bash
-vault secrets enable database
-
-vault write database/config/postgis-cluster \
-  plugin_name=postgresql-database-plugin \
-  allowed_roles="postgis-app-role" \
-  connection_url="postgresql://{{username}}:{{password}}@postgis-cluster-rw.databases.svc.cluster.local:5432/postgres?sslmode=require" \
-  username="postgres" \
-  password="<the same password you seeded into secret/postgis in Step 6>"
-```
-
-Define the role leases are issued from. Each lease creates a login role that expires with it and draws its privileges from the `app_readwrite` group provisioned in Step 8:
-
-```bash
-vault write database/roles/postgis-app-role \
-  db_name=postgis-cluster \
-  creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; GRANT app_readwrite TO \"{{name}}\";" \
-  default_ttl="1h" \
-  max_ttl="24h"
-```
-
-`exit` the pod shell once these complete.
-
-Confirm it worked:
-
-```bash
-kubectl get vaultdynamicsecret postgis-app-dynamic-secret -n databases
-kubectl get secret postgis-app-dynamic-credentials -n databases -o jsonpath='{.data.username}' | base64 -d
-```
-
-Confirm the issued role carries the privileges — `app_readwrite` appears in its "Member of" column:
-
-```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c '\du'
-```
-
-An issued role reads and writes the `public` schema — SELECT, INSERT, UPDATE and DELETE on tables, USAGE and SELECT on sequences — and reaches nothing beyond it. Those grants sit on the group rather than on each lease, so adjusting them is a change to `app_readwrite` alone and applies to the next lease issued. Once real ETL/ML workloads exist, give each one its own group role scoped to what it needs rather than sharing this one.
-
-### 10. Install Headlamp Desktop (Optional)
-
-Install the desktop application on Ubuntu via Flatpak:
-
-```bash
-flatpak install flathub dev.headlamp.Headlamp
-```
-
-*(Alternatively, download the latest `.deb` or `AppImage` from the [Headlamp GitHub Releases page](https://github.com/headlamp-k8s/headlamp/releases)).*
-
-Launch Headlamp from your application menu (or `flatpak run dev.headlamp.Headlamp` in the terminal) — it detects your synced `~/.kube/config` and connects immediately. No token to generate, no port-forward, no browser step: that whole flow only exists on the WSL2 branch, where Headlamp runs as an in-cluster web service accessed from a separate Windows browser.
-
-## Pre-flight Validation
-
-Everything below runs without touching a cluster, and catches the class of error that otherwise surfaces halfway through a boot:
-
-```bash
-bash -n scripts/*.sh
-./tests/lifecycle-test.sh
-kubectl apply --dry-run=client -f manifests/vso-setup.yaml \
-                              -f manifests/postgres-tls.yaml \
-                              -f manifests/seaweedfs-backups.yaml \
-                              -f manifests/postgis-cluster.yaml
-```
-
-`lifecycle-test.sh` drives `start-cluster.sh` and `stop-cluster.sh` through stubbed `kubectl`, `vault`, `systemctl`, and `ss`, covering the happy path and each failure branch. The stubs accept only the flags the real binaries accept and log anything else, so a scenario fails on a nonexistent flag even when the script exits as expected — a command called with a flag that does not exist returns non-zero, which is otherwise indistinguishable from a command that ran and reported failure. `sleep` returns immediately, so the retry ceilings are exercised without waiting them out.
-
-`--dry-run=client` validates YAML structure and required fields locally. Swapping it for `--dry-run=server` additionally runs the CNPG and cert-manager admission webhooks, which catches schema errors the client cannot see — but requires a running cluster with those operators installed.
 
 ## Cluster Operations
 
