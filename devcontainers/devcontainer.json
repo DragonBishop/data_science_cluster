@@ -1,113 +1,61 @@
 // ==============================================================================
-// Devcontainer Configuration
+// Kubernetes & Data Science Foundation - Devcontainer
 // ==============================================================================
-//   This configuration bridges the host UI and the containerized execution 
-//   environment. It mounts the decentralized workspace, enforces rootless security
-//   boundaries, and provisions the IDE extensions needed for data science execution.
+//   This configuration provides a standardized, engine-agnostic environment 
+//   for managing Kubernetes clusters and executing data science workloads.
+//
+//   Users: Customize the "settings" and "extensions" blocks below to add 
+//   your preferred themes, formatters, and AI assistants.
 // ==============================================================================
 {
-  "name": "python-datasci",
+  "name": "datasci-k8s-foundation",
   "build": { "dockerfile": "Dockerfile" },
 
   // ----------------------------------------------------------------------------
   // Workspace & User Mapping
   // ----------------------------------------------------------------------------
-  // Mounts the workspace directory (~/coding) rather than requiring a separate 
-  // container per repository.
-  "workspaceMount": "source=${localEnv:HOME}/coding,target=/home/vscode/coding,type=bind,consistency=cached",
-  "workspaceFolder": "/home/vscode/coding",
+  // Utilizes a managed volume for maximum cross-platform compatibility and 
+  // disk I/O performance. 
+  "workspaceMount": "source=datasci-workspace-vol,target=/workspaces/coding,type=volume",
+  "workspaceFolder": "/workspaces/coding",
   
-  // Non-root execution context (matches Layer 3 Dockerfile)
+  // The official devcontainer base image pre-configures the 'vscode' user
   "containerUser": "vscode",
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
 
   // ----------------------------------------------------------------------------
-  // Execution Context & Security Boundaries (Podman specific)
+  // Execution Context & Security Boundaries
   // ----------------------------------------------------------------------------
   "runArgs": [
     // Bypasses container network isolation so the environment natively 
-    // reaches the local k3s cluster and its persistent services (Vault, PostgreSQL).
-    "--network=host",
-    
-    // Critical for rootless Podman: ensures files created in the container 
-    // map correctly to host user UID/GID rather than root.
-    "--userns=keep-id"
+    // reaches Kubernetes and host-local services (like localhost:5432) 
+    // when supported by the container runtime (Linux/WSL2).
+    "--network=host"
   ],
 
   // ----------------------------------------------------------------------------
   // Credential & Config Injection
   // ----------------------------------------------------------------------------
-  // Read-only injection of host Git, Kubernetes and Helm contexts.
+  // Read-only injection of host Kubernetes and Helm contexts.
   "mounts": [
-    "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached,readonly",
     "source=${localEnv:HOME}/.config/helm,target=/home/vscode/.config/helm,type=bind,consistency=cached,readonly",
     "source=${localEnv:HOME}/.kube/config,target=/home/vscode/.kube/config,type=bind,consistency=cached,readonly"
   ],
 
   // ----------------------------------------------------------------------------
-  // Dashboard Access (Headlamp)
-  // ----------------------------------------------------------------------------
-  // Forwards the Headlamp port and suppresses the auto-forward notification since
-  // the VS Code task (tasks.json) opens Simple Browser deterministically instead.
-  "forwardPorts": [8080],
-  "portsAttributes": {
-    "8080": {
-      "label": "Headlamp UI",
-      "onAutoForward": "silent"
-    }
-  },
-
-  // ----------------------------------------------------------------------------
   // IDE Execution Tooling
   // ----------------------------------------------------------------------------
-  // Installs the actual execution engines, formatters, data wranglers, and 
-  // database connections.
   "customizations": {
     "vscode": {
       "settings": {
-        // Disable copilot in-line code suggestions
-        "github.copilot.enable": { "*": false },
-        "github.copilot.nextEditSuggestions.enabled": false
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
       },
       "extensions": [
-        // Core Python & Linting
-        "charliermarsh.ruff",
-        "ms-python.debugpy",
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-
-        // Jupyter Notebooks & Data Profiling
-        "ms-toolsai.datawrangler",
-        "ms-toolsai.jupyter",
-        "ms-toolsai.jupyter-keymap",
-        "ms-toolsai.jupyter-renderers",
-        "ms-toolsai.vscode-jupyter-cell-tags",
-        "ms-toolsai.vscode-jupyter-slideshow",
-
-        // Copilot
-        "github.copilot",
-        "github.copilot-chat",
-
-        // Data & Infrastructure Access
-        "mechatroner.rainbow-csv",
-
-        // Git Workflow & Publishing
-        "mhutchie.git-graph",
-        "github.vscode-github-actions",
-        "quarto.quarto",
-
-        // Utilities & Markup
-        "aaron-bond.better-comments",
-        "christian-kohler.path-intellisense",
-        "davidanson.vscode-markdownlint",
-        "jasew.anki",
-        "ms-vscode.powershell",
-        "mushan.vscode-paste-image",
         "redhat.vscode-yaml",
-        "streetsidesoftware.code-spell-checker",
-        "tamasfe.even-better-toml",
-        "usernamehw.errorlens"
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-toolsai.jupyter"
       ]
     }
   }

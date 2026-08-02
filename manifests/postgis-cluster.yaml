@@ -1,10 +1,22 @@
 # postgis-cluster.yaml
 #
+# Apply manifests/postgres-tls.yaml first -- this Cluster references the
+# Secret it produces.
+#
 # Deploys a CloudNativePG-managed PostGIS cluster, synchronizes credentials
-# from Vault, configures continuous WAL archiving to the in-cluster MinIO
-# object store, and bridges the database to the WSL host via a socat
-# Deployment (bound to hostPort 5432) rather than a LoadBalancer or NodePort.
-
+# from Vault, issues short-lived application credentials on demand via Vault's
+# database secrets engine, configures continuous WAL archiving to the in-cluster
+# SeaweedFS object store through the Barman Cloud Plugin, and bridges the 
+# database to the host via a socat Deployment (bound to hostPort 5432).
+#
+# ---------------------------------------------------------------------------
+# Bootstrap / superuser credential (static).
+#
+# Bootstrapper with superuser credential CNPG needs at initdb time.
+# Vault's database secrets engine authenticates to Postgres AS this user in
+# order to create and drop the short-lived application roles it hands out,
+# so it can't itself be a lease Vault revokes out from under it.
+# ---------------------------------------------------------------------------
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultStaticSecret
 metadata:
@@ -23,21 +35,50 @@ spec:
   refreshAfter: 1h
   vaultAuthRef: vault-auth
 ---
+# ---------------------------------------------------------------------------
+# Dynamic PostgreSQL credential
+# Pulls a freshly-generated pgsql role and password from Vault's database
+# secrets engine on a lease. VSO renews it automatically, and re-sync the secret
+# each time, and the Vault revokes the underlying role when the lease expires or is
+# revoked. Follow README for one-time setup through Vault's API/CLI.
+# ---------------------------------------------------------------------------
 apiVersion: secrets.hashicorp.com/v1beta1
-kind: VaultStaticSecret
+kind: VaultDynamicSecret
 metadata:
-  name: postgis-app-user-vault-secret
+  name: postgis-app-dynamic-secret
   namespace: databases
 spec:
-  type: kv-v2
-  mount: secret
-  path: postgis-app-user
-  destination:
-    name: postgis-app-user-credentials
-    create: true
-    type: kubernetes.io/basic-auth
-  refreshAfter: 1h
   vaultAuthRef: vault-auth
+  mount: database
+  path: creds/postgis-app-role
+  destination:
+    name: postgis-app-dynamic-credentials
+    create: true
+    labels:
+      cnpg.io/reload: "true"
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: postgis-backups
+  namespace: databases
+spec:
+  # Barman prunes base backups and the WAL segments they depend on past this
+  # window. Without it the store grows without bound, and the first symptom is
+  # a full volume server refusing the next WAL archive.
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: s3://cnpg-backups/
+    endpointURL: http://seaweedfs-service.databases.svc:9000
+    s3Credentials:
+      accessKeyId:
+        name: seaweedfs-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: seaweedfs-credentials
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
@@ -46,10 +87,9 @@ metadata:
   namespace: databases
 spec:
   instances: 1
-
-  # CloudNativePG's official PostGIS image, built specifically for the
-  # operator's bootstrap and lifecycle management. The image version matches
-  # the PostgreSQL and PostGIS versions of the source database.
+  # The default if not set here is 180 seconds.
+  smartShutdownTimeout: 15
+  # CloudNativePG's official PostGIS image.
   imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
 
   # Both fields below are required together — superuserSecret alone is
@@ -64,23 +104,48 @@ spec:
       secret:
         name: postgis-app-credentials
 
+      # Runs against the postgres database once, at initdb time. The application
+      # database here IS the postgres database, so postInitApplicationSQL never
+      # fires -- CNPG skips it when the database already exists -- and this is
+      # the hook that reaches the right target.
+      #
+      # The image ships the PostGIS libraries but leaves the extension
+      # uninstalled; CREATE EXTENSION is what makes it available to queries.
+      #
+      # app_readwrite carries the privileges the Vault database secrets engine
+      # hands out (see README Step 9). Dynamic roles are granted membership
+      # rather than privileges directly, so the privilege set is defined in one
+      # place and every lease inherits it. The ALTER DEFAULT PRIVILEGES lines
+      # extend the same rights to tables and sequences created later by
+      # postgres, which the ON ALL TABLES grants above cannot cover.
+      postInitSQL:
+        - CREATE EXTENSION IF NOT EXISTS postgis
+        - CREATE ROLE app_readwrite NOLOGIN
+        - GRANT CONNECT ON DATABASE postgres TO app_readwrite
+        - GRANT USAGE ON SCHEMA public TO app_readwrite
+        - GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_readwrite
+        - GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_readwrite
+        - ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_readwrite
+        - ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_readwrite
+
   storage:
     size: 100Gi
     storageClass: local-path
 
-  backup:
-    barmanObjectStore:
-      destinationPath: s3://cnpg-backups/
-      endpointURL: http://minio-service.databases.svc:9000
-      s3Credentials:
-        accessKeyId:
-          name: minio-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: minio-credentials
-          key: ACCESS_SECRET_KEY
-      wal:
-        compression: gzip
+  # Uses a custom cert-manager Secret (manifests/postgres-tls.yaml) to provide
+  # a certificate that includes "localhost" in its SANs, allowing clients
+  # connecting via the socat proxy to use sslmode=verify-full. Both fields point
+  # to the same Secret because cert-manager bundles the CA and TLS keys together.
+
+  certificates:
+    serverTLSSecret: postgis-server-cert
+    serverCASecret: postgis-server-cert
+
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: postgis-backups
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
@@ -92,6 +157,9 @@ spec:
   cluster:
     name: postgis-cluster
   backupOwnerReference: cluster
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -100,6 +168,10 @@ metadata:
   namespace: databases
 spec:
   replicas: 1
+  # Uses Recreate strategy so the replacement pod binds 127.0.0.1:5432 only
+  # after the outgoing one has released it.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: postgres-proxy
@@ -112,7 +184,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
       - name: socat-bridge
-        image: alpine/socat:latest
+        image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
         command:
           - socat
           - TCP-LISTEN:5432,bind=127.0.0.1,fork,reuseaddr
