@@ -70,6 +70,7 @@ spec:
     - localhost
   ipAddresses:
     - 127.0.0.1
+    - 192.0.2.240   # must match the LB pool's pinned IP for postgis-external
   issuerRef:
     name: postgis-ca-issuer
     kind: Issuer
