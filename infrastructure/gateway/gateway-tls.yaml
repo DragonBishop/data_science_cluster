@@ -1,0 +1,70 @@
+# gateway-tls.yaml
+#
+# ClusterIssuer chain for the shared Gateway's edge TLS — the certificate a
+# browser or psql client actually sees when connecting to *.internal. This is
+# a separate trust domain from hubble-ca-issuer (infrastructure/hubble/):
+# that one is cilium-agent/hubble-relay/hubble-ui backend mTLS, invisible to
+# any client; this one is what every future tool's users trust once, in their
+# own browser or client.
+#
+# Same bootstrap -> local CA -> issuing-ClusterIssuer shape used for
+# postgis-ca-issuer and hubble-ca-issuer.
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: gateway-selfsigned-bootstrap
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gateway-local-ca
+  # ClusterIssuer.spec.ca.secretName resolves in cert-manager's configured
+  # cluster-resource-namespace — confirmed live as `cert-manager`
+  # (--cluster-resource-namespace=$(POD_NAMESPACE) on the controller
+  # Deployment, same fact already confirmed for hubble-tls.yaml).
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: gateway-local-ca
+  secretName: gateway-local-ca-secret
+  duration: 87600h # 10 years
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: gateway-selfsigned-bootstrap
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: gateway-ca-issuer
+spec:
+  ca:
+    secretName: gateway-local-ca-secret
+---
+# Wildcard cert covering every *.internal hostname a future HTTPRoute names.
+# A self-signed private CA can issue a wildcard SAN with no domain-validation
+# concern (unlike a public CA) — this means adding a new tool later only ever
+# needs a new HTTPRoute, never a new Certificate.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gateway-edge-cert
+  namespace: gateway
+spec:
+  secretName: gateway-edge-cert
+  dnsNames:
+    - "*.internal"
+    - "internal"
+  duration: 2160h # 90 days, matches postgis-server-cert's rotation cadence
+  renewBefore: 360h # 15 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: gateway-ca-issuer
+    kind: ClusterIssuer
