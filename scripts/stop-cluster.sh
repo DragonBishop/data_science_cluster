@@ -76,25 +76,11 @@ if ! kubectl get --raw='/readyz' &>/dev/null; then
 elif ! kubectl get cluster "$CLUSTER_NAME" -n "$CLUSTER_NS" &>/dev/null; then
     echo "ℹ️  $CLUSTER_NAME not found — skipping."
 else
-    # Confirms the operator Deployment exists and is Available. Writing the
-    # annotation without a running operator succeeds at the API and is never
-    # acted on, so the wait below would run to its full timeout.
-    echo "🔎 Verifying the CNPG operator is Available..."
-    if ! kubectl get deployment -n "$CNPG_NS" -l app.kubernetes.io/name=cloudnative-pg \
-            -o name 2>/dev/null | grep -q .; then
-        halt "No CloudNativePG operator Deployment in namespace $CNPG_NS, but a
-   Cluster resource exists. Hibernation cannot be performed."
-    elif ! kubectl wait --for=condition=Available deployment \
-            -l app.kubernetes.io/name=cloudnative-pg \
-            -n "$CNPG_NS" --timeout=60s &>/dev/null; then
-        echo ""
-        kubectl get deployment -n "$CNPG_NS" -l app.kubernetes.io/name=cloudnative-pg
-        halt "The CNPG operator is not Available. The hibernation annotation would
-   be written and never acted on.
-   Check: kubectl get pods -n $CNPG_NS"
-    fi
-    echo "  ✅ Operator is Available."
-
+    # No separate operator-readiness pre-check here: if the operator isn't
+    # Available, the hibernation-confirmation poll below surfaces that same
+    # failure directly, with a clear message, instead of spending up to 60s
+    # confirming it first. Headlamp/`kubectl get pods -n cnpg-system` show
+    # operator health live if you want to check before running this at all.
     echo "💤 Hibernating $CLUSTER_NAME..."
     if ! kubectl annotate cluster "$CLUSTER_NAME" -n "$CLUSTER_NS" \
             --overwrite cnpg.io/hibernation=on; then
