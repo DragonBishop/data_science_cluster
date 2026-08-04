@@ -1,17 +1,17 @@
 #!/bin/bash
 #
-# start-cluster.sh — Brings up the local k3s cluster, unseals the host Transit Vault,
-# waits for Vault Secrets Operator (VSO) credential sync, and rehydrates CNPG databases.
+# start-cluster.sh — Starts k3s, unseals the host Transit Vault, waits for the
+# in-cluster Vault and VSO credential sync, and un-hibernates the CNPG cluster.
 #
-# Non-fatal startup errors are tracked as warnings to allow independent services
-# to continue initializing, returning an exit status of 1 at the end if issues occurred.
+# Failures after the k3s startup phase set had_warnings and the script
+# continues. It exits 1 at the end if any were set.
 #
 set -eu
 had_warnings=false
 
 # --- Step 1: Prevent duplicate execution ----------------------------------
-# Abort immediately if systemd's k3s service is active. Running two k3s instances
-# against the same data directory and ports will corrupt cluster state.
+# Exits if systemd's k3s service is active. Two k3s instances against the same
+# data directory and ports corrupt cluster state.
 if systemctl is-active --quiet k3s 2>/dev/null; then
     echo "⚠️  systemd's k3s.service is already active. Refusing to start a second instance."
     echo "   To adopt a script-managed lifecycle, run: sudo systemctl disable --now k3s"
@@ -21,9 +21,8 @@ fi
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
 # --- Step 2: Launch k3s Server ---------------------------------------------
-# Launch k3s server as a background process via nohup. Default networking components
-# (traefik, servicelb, kube-proxy, flannel) are disabled so Cilium can handle CNI,
-# proxying, ingress, and network policy enforcement.
+# Starts k3s in the background under nohup and captures its PID. The flags
+# match those used at install time.
 echo "🚀 Starting k3s cluster..."
 K3S_PID=$(sudo bash -c 'nohup k3s server \
   --write-kubeconfig-mode 644 \
@@ -36,8 +35,9 @@ K3S_PID=$(sudo bash -c 'nohup k3s server \
   echo $!')
 
 # --- Step 3: Wait for API Server -------------------------------------------
-# Poll `kubectl get nodes` every 5 seconds until the API server responds (60s timeout).
-# Monitors the k3s process PID on each iteration to catch early process crashes immediately.
+# Polls `kubectl get nodes` every 5s for up to 60s. Each iteration also signals
+# the k3s PID, so a process that exits early fails the step immediately rather
+# than at the timeout.
 echo "⏳ Waiting for Kubernetes API to become available (pid $K3S_PID)..."
 retries=0
 until kubectl get nodes &> /dev/null; do
@@ -57,8 +57,9 @@ done
 echo "✅ Kubernetes API is up."
 
 # --- Step 4: Wait for Node Readiness ---------------------------------------
-# Poll node status until reported as 'Ready' (5 min timeout to allow image pulls/CNI init).
-# Nodes remain NotReady until Cilium is active. Continues tracking k3s PID health.
+# Polls node status every 5s for up to 5 minutes. The node reports NotReady
+# until a CNI is running, so this step is what surfaces a missing or unhealthy
+# Cilium. Continues signalling the k3s PID.
 retries=0
 until kubectl get nodes | grep -q " Ready"; do
     if ! sudo kill -0 "$K3S_PID" 2>/dev/null; then
@@ -71,8 +72,9 @@ until kubectl get nodes | grep -q " Ready"; do
         echo "❌ ERROR: Node did not reach Ready within 5 minutes."
         echo "💡 TROUBLESHOOTING: A node with no CNI stays NotReady indefinitely."
         echo "   1. Is Cilium installed?  cilium status --wait"
-        echo "   2. On a first-time build, install it now (README Step 2):"
-        echo "      cilium install --set gatewayAPI.enabled=true --set kubeProxyReplacement=true"
+        echo "   2. On a first-time build, install it now (README Step 2c):"
+        echo "      helm upgrade --install cilium oci://quay.io/cilium/charts/cilium \\"
+        echo "        --version 1.20.0 --namespace kube-system -f manifests/cilium-values.yaml"
         exit 1
     fi
     echo "   ...still waiting for node... ($((retries * 5))s elapsed)"
@@ -81,12 +83,13 @@ echo "✅ Node is Ready."
 echo ""
 
 # --- Step 5: Unseal Host Transit Vault ------------------------------------
-# Check state of the host Transit Vault. If sealed, decrypt local Shamir unseal keys via GPG.
-# Stream keys via standard input using `key=-` to avoid process-list exposure in `/proc/<pid>/cmdline`.
+# Reads the host Transit Vault's seal state. If sealed, decrypts the Shamir
+# keys from the GPG keyfile and submits them one per line.
 export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_CACERT="/opt/vault/tls/tls.crt"
 
-# Query state: 0 = unsealed, 2 = sealed, non-zero/non-two = TLS or connectivity issue.
+# Maps `vault status` exit codes: 0 unsealed, 2 sealed, anything else a
+# connection or certificate failure.
 transit_seal_state() {
     local rc=0
     vault status -format=json > /dev/null 2>&1 || rc=$?
@@ -116,11 +119,12 @@ else
     KEYFILE="$HOME/.vault-keys.gpg"
     if [ ! -f "$KEYFILE" ]; then
         echo "❌ ERROR: $KEYFILE not found. Cannot unseal Transit Vault."
-        echo "💡 TROUBLESHOOTING: Did you create the GPG keyfile setup (README Step 5)?. Continuing..."
+        echo "💡 TROUBLESHOOTING: Did you create the GPG keyfile (README Step 3)?. Continuing..."
         had_warnings=true
     else
-        # Decrypt keys and stream via stdin (key=-) to maintain command-line confidentiality.
-        # Captures stderr on failure to ensure rejected keys are reported, while hiding JSON stdout on success.
+        # Submits each key on stdin via `key=-`, keeping it out of
+        # /proc/<pid>/cmdline. Returns the exit status of gpg, so a failed or
+        # cancelled decryption is distinguishable from a rejected key.
         decrypt_and_unseal() {
             gpg --quiet --decrypt "$KEYFILE" | while IFS= read -r key; do
                 [ -n "$key" ] || continue
@@ -153,8 +157,8 @@ fi
 echo ""
 
 # --- Step 6: Renew Transit Auto-Unseal Token -------------------------------
-# Renew the periodic token presented by the in-cluster Vault to the Host Transit Vault (resets 768h window).
-# Token is passed via VAULT_TOKEN environment variable rather than positional argument.
+# Reads the token from vault-transit-secret and renews it, restarting its 768h
+# period. The token is passed in VAULT_TOKEN rather than as an argument.
 echo "⏳ Rolling the Transit auto-unseal token forward..."
 transit_token=$(kubectl get secret vault-transit-secret -n vault \
     -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null) || transit_token=""
@@ -180,7 +184,8 @@ fi
 echo ""
 
 # --- Step 7: Wait for In-Cluster Vault & VSO Secret Sync --------------------
-# Poll vault-0 pod status until auto-unseal completes against the host Transit Vault.
+# Polls `vault status` inside vault-0 every 5s for up to 45s, until it reports
+# Sealed false.
 echo "⏳ Waiting for Vault to unseal..."
 retries=0
 until kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault status" 2>/dev/null | grep -q "Sealed.*false"; do
@@ -203,7 +208,8 @@ if [ "$retries" -lt 9 ]; then
     echo "✅ Vault is unsealed."
 fi
 
-# Verify Vault Secrets Operator (VSO) synchronizes VaultStaticSecret CRDs into Kubernetes Secrets.
+# Polls each VaultStaticSecret's Ready condition every 5s for up to 30s. A
+# secret that never becomes Ready sets a warning and the loop moves to the next.
 echo "⏳ Waiting for Vault Secrets Operator to sync credentials..."
 for vss in postgis-vault-secret seaweedfs-vault-secret; do
     retries=0
@@ -223,7 +229,9 @@ for vss in postgis-vault-secret seaweedfs-vault-secret; do
     fi
 done
 
-# Check VaultDynamicSecret status (non-fatal; pending is expected if database secrets engine is unconfigured).
+# Polls the VaultDynamicSecret's Ready condition on the same schedule. This one
+# is not Ready until Vault's database secrets engine is configured (README
+# Step 8), so a warning here is expected before that step is complete.
 retries=0
 until [ "$(kubectl get vaultdynamicsecret postgis-app-dynamic-secret -n databases -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" == "True" ]; do
     sleep 5
@@ -239,7 +247,8 @@ done
 echo ""
 
 # --- Step 8: CNPG Operator Verification & PostGIS Rehydration -------------
-# Ensure CloudNativePG (CNPG) operator pod is ready before sending commands to database CRDs.
+# Polls the CNPG operator pod's Ready condition every 5s for up to 60s. The
+# hibernation annotation below is only acted on while the operator is running.
 echo "⏳ Verifying CNPG operator status..."
 retries=0
 until [ "$(kubectl get pods -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" == "True" ]; do
@@ -254,8 +263,9 @@ until [ "$(kubectl get pods -n cnpg-system -l app.kubernetes.io/name=cloudnative
 done
 [ "$retries" -lt 12 ] && echo "✅ CNPG operator pod is Ready"
 
-# Remove hibernation annotation on postgis-cluster to trigger database pod startup.
-# Retries annotation command to account for transient admission webhook readiness delays.
+# Sets cnpg.io/hibernation=off when the annotation currently reads "on".
+# Retries up to 6 times at 5s intervals; the admission webhook rejects the
+# write until it is serving.
 if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
   hib=$(kubectl get cluster postgis-cluster -n databases \
     -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null) || hib=""
@@ -284,12 +294,25 @@ if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
     fi
   fi
 fi
+
+# --- ADDED: Resume ScheduledBackups unconditionally ---
+sbs=$(kubectl get scheduledbackup -n databases -o name 2>/dev/null) || sbs=""
+if [ -n "$sbs" ]; then
+    echo "▶️  Resuming scheduled backups..."
+    for sb in $sbs; do
+        kubectl patch "$sb" -n databases --type merge -p '{"spec":{"suspend":false}}' 2>/dev/null || true
+    done
+fi
+# ------------------------------------------------------
 echo ""
 
 # --- Step 9: Final Workload Health Checks ---------------------------------
-# Perform non-blocking summary checks on key workloads and set overall script exit code.
+# Reports on SeaweedFS and the CNPG cluster. These checks run after
+# un-hibernation and do not gate it. cert-manager and the barman-cloud plugin
+# Deployment are not checked here; WAL archiving depends on both.
 echo "🔎 Final workload health check..."
 
+# Polls a pod's phase until it reads Running or the timeout elapses.
 check_pod_ready() {
   local timeout=$1 ns=$2 label=$3 desc=$4
   local waited=0 status=""
@@ -311,7 +334,7 @@ check_pod_ready() {
 
 check_pod_ready 60 databases "app=seaweedfs" "SeaweedFS running" || had_warnings=true
 
-# Evaluate CNPG database cluster status phase.
+# Reads the CNPG cluster's status phase.
 phase=$(kubectl get cluster postgis-cluster -n databases -o jsonpath='{.status.phase}' 2>/dev/null) || phase=""
 if [[ "$phase" == "Cluster in healthy state" ]]; then
   echo "  ✅ postgis-cluster: $phase"

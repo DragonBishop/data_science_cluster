@@ -67,7 +67,7 @@ spec:
           # claim below. The default of 8 stops accepting writes at roughly 8GB
           # regardless of how much space the claim actually holds, which surfaces
           # as failed WAL archiving rather than as a storage error.
-          - -volume.max=100
+          - -volume.max=90
         # The S3 gateway is the only listener consumers use, so readiness gates
         # the Service on that port. Liveness watches the master port, which the
         # process holds for its entire life.

@@ -1,12 +1,11 @@
 #!/bin/bash
 #
 # sync-kubeconfig.sh
-# Copies the live k3s kubeconfig to ~/.kube/config, owned by and readable
-# only by the invoking user. k3s writes its kubeconfig to a system path
-# (mode 644, but root-owned); most kubectl/Helm/devcontainer tooling expects
-# ~/.kube/config instead, so this keeps the two in sync.
+# Copies /etc/rancher/k3s/k3s.yaml to ~/.kube/config, owned by the invoking
+# user and mode 600. The source file is root-owned; kubectl, Helm and the
+# devcontainer read ~/.kube/config.
 #
-# Requires re-execution after any cluster rebuild to maintain synchronization.
+# The copy is a snapshot. Re-run after a cluster rebuild.
 
 set -euo pipefail
 
@@ -23,8 +22,8 @@ if [ ! -f "$SOURCE_CONFIG" ]; then
 fi
 
 # --- Step 2: Validate destination is a regular file --------------------------
-# Prevents silent failures caused by symlinks or erroneous directory creation
-# from container engine bind mounts.
+# A symlink or directory at $DEST is rejected rather than written through or
+# into. Container engine bind mounts can create a directory at this path.
 if [ -L "$DEST" ]; then
     echo -e "❌ Error: $DEST is a symlink."
     echo -e "   Destination must be a regular file. Execute: rm \"$DEST\""
@@ -40,9 +39,9 @@ fi
 mkdir -p "$(dirname "$DEST")"
 
 # --- Step 4: Write the copy ---------------------------------------------------
-# Modifies ownership to the executing user to allow unprivileged access.
-# Leaves 127.0.0.1 intact — the devcontainer runs with --network=host, so it
-# shares the host's loopback interface with the k3s API server directly.
+# The server address in the copied file is left as written by k3s
+# (https://127.0.0.1:6443). The devcontainer runs with --network=host and
+# reaches the API server on that address.
 echo "📋 Copying config to $DEST..."
 sudo cp "$SOURCE_CONFIG" "$DEST"
 sudo chown "$(id -u):$(id -g)" "$DEST"
