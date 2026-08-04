@@ -1,0 +1,216 @@
+# postgis-cluster.yaml
+#
+# Deploys the CloudNativePG PostGIS cluster, the Vault-sourced Secrets it
+# consumes, the object store and schedule used for backups, and a socat
+# Deployment that accepts Postgres connections on the node's loopback address.
+#
+# Apply manifests/postgres-tls.yaml first; the Cluster references the Secret
+# it produces.
+
+# ---------------------------------------------------------------------------
+# Superuser credential, read from the secret/postgis KV path and rewritten
+# every hour. Vault's database secrets engine authenticates to Postgres as
+# this user to create and drop the roles it issues.
+# ---------------------------------------------------------------------------
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: postgis-vault-secret
+  namespace: databases
+spec:
+  type: kv-v2
+  mount: secret
+  path: postgis
+  destination:
+    name: postgis-app-credentials
+    create: true
+    type: kubernetes.io/basic-auth
+    labels:
+      cnpg.io/reload: "true"
+  refreshAfter: 1h
+  vaultAuthRef: vault-auth
+---
+# ---------------------------------------------------------------------------
+# Application credential, issued on a lease by Vault's database secrets engine
+# from the postgis-app-role role. VSO renews the lease and rewrites the Secret
+# on each renewal. Vault drops the underlying Postgres role when the lease
+# ends. The mount and role are configured through Vault directly; see README.
+# ---------------------------------------------------------------------------
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: postgis-app-dynamic-secret
+  namespace: databases
+spec:
+  vaultAuthRef: vault-auth
+  mount: database
+  path: creds/postgis-app-role
+  destination:
+    name: postgis-app-dynamic-credentials
+    create: true
+    labels:
+      cnpg.io/reload: "true"
+---
+# S3 target for WAL archiving and base backups, addressed through the
+# in-cluster SeaweedFS Service.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: postgis-backups
+  namespace: databases
+spec:
+  # Barman deletes base backups and their dependent WAL segments older than
+  # this window.
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: s3://cnpg-backups/
+    endpointURL: http://seaweedfs-service.databases.svc:9000
+    s3Credentials:
+      accessKeyId:
+        name: seaweedfs-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: seaweedfs-credentials
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgis-cluster
+  namespace: databases
+spec:
+  instances: 1
+  # Postgres escalates from a smart to a fast shutdown after 15s. The default
+  # is 180.
+  smartShutdownTimeout: 15
+  imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
+
+  # superuserSecret is read only when enableSuperuserAccess is true.
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: postgis-app-credentials
+  bootstrap:
+    initdb:
+      database: postgres
+      owner: postgres
+      secret:
+        name: postgis-app-credentials
+
+      # postInitSQL runs against the postgres database, once, at initdb. It
+      # does not run on subsequent applies, on the running cluster, or on a
+      # cluster bootstrapped from a backup.
+      #
+      # The image ships the PostGIS libraries; CREATE EXTENSION registers them
+      # in the database.
+      #
+      # app_readwrite is granted to each role the Vault database secrets
+      # engine issues. pg_read_all_data and pg_write_all_data are evaluated at
+      # access time, so they cover tables, views and sequences in every schema
+      # in this database, including schemas created after this runs. They do
+      # not cover TRUNCATE, DDL, or objects owned by another role.
+      #
+      # CREATE ON DATABASE permits CREATE SCHEMA. The event trigger grants
+      # USAGE and CREATE on each schema created from here on, so a lease can
+      # create tables in schemas owned by postgres as well as its own.
+      #
+      # Neither grant makes app_readwrite the owner of anything. Ownership is
+      # set by the Vault role's creation_statements, which issue
+      # `ALTER ROLE "{{name}}" SET role = app_readwrite` so objects a lease
+      # creates are owned by the group and outlive the lease.
+      postInitSQL:
+        - CREATE EXTENSION IF NOT EXISTS postgis
+        - CREATE ROLE app_readwrite NOLOGIN
+        - GRANT CONNECT ON DATABASE postgres TO app_readwrite
+        - GRANT pg_read_all_data, pg_write_all_data TO app_readwrite
+        - GRANT CREATE ON DATABASE postgres TO app_readwrite
+        - GRANT USAGE, CREATE ON SCHEMA public TO app_readwrite
+        - |
+          CREATE FUNCTION grant_app_readwrite_on_new_schema()
+            RETURNS event_trigger LANGUAGE plpgsql SECURITY DEFINER AS $fn$
+          DECLARE r record;
+          BEGIN
+            FOR r IN SELECT object_identity FROM pg_event_trigger_ddl_commands()
+                     WHERE command_tag = 'CREATE SCHEMA'
+            LOOP
+              EXECUTE format('GRANT USAGE, CREATE ON SCHEMA %s TO app_readwrite', r.object_identity);
+            END LOOP;
+          END $fn$
+        - |
+          CREATE EVENT TRIGGER app_readwrite_new_schema ON ddl_command_end
+            WHEN TAG IN ('CREATE SCHEMA')
+            EXECUTE FUNCTION grant_app_readwrite_on_new_schema()
+
+  storage:
+    size: 100Gi
+    storageClass: local-path
+
+  # Server certificate and CA presented to clients, both read from the
+  # cert-manager Secret created by postgres-tls.yaml. Client certificates and
+  # replication use CNPG's own generated CA, which these fields do not change.
+  certificates:
+    serverTLSSecret: postgis-server-cert
+    serverCASecret: postgis-server-cert
+
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: postgis-backups
+---
+# Creates a Backup at midnight daily. The first Backup is taken at the next
+# occurrence of the schedule.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgis-cluster-daily-backup
+  namespace: databases
+spec:
+  schedule: "0 0 0 * * *"
+  immediate: true
+  cluster:
+    name: postgis-cluster
+  backupOwnerReference: cluster
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+---
+# Runs socat in the host network namespace, listening on 127.0.0.1:5432 and
+# forwarding each connection to the cluster's read-write Service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-proxy
+  namespace: databases
+spec:
+  replicas: 1
+  # Terminates the existing pod before creating its replacement, so only one
+  # holds the listening socket.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres-proxy
+  template:
+    metadata:
+      labels:
+        app: postgres-proxy
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: socat-bridge
+        image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
+        # Binding to an IPv4 literal listens on IPv4 only.
+        command:
+          - socat
+          - TCP-LISTEN:5432,bind=127.0.0.1,fork,reuseaddr
+          - TCP:postgis-cluster-rw.databases.svc.cluster.local:5432
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "50m"
+            memory: "32Mi"
