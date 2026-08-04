@@ -1,10 +1,10 @@
 #!/bin/bash
 #
-# stop-cluster.sh — Orchestrates graceful CloudNativePG hibernation and k3s teardown.
+# stop-cluster.sh — Hibernates the CloudNativePG cluster, then stops k3s.
 #
-# Determines if k3s is systemd-managed or script-launched to apply the correct stop mechanism.
-# Hibernation strictly gates the stop process to ensure PostgreSQL checkpoints gracefully before
-# API shutdown, preventing WAL replays on subsequent boots. Use --force to bypass this gate.
+# Detects whether k3s is systemd-managed or script-launched and stops it
+# accordingly. k3s is not stopped unless hibernation is confirmed; --force
+# bypasses that gate and PostgreSQL crash-recovers on the next start.
 #
 set -uo pipefail
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -26,7 +26,8 @@ for arg in "$@"; do
     esac
 done
 
-# Aborts execution and preserves cluster state if a prerequisite fails, unless --force is passed.
+# Prints the failure and exits 1, leaving k3s running. With --force, prints and
+# returns so the caller continues.
 halt() {
     echo ""
     echo "❌ ERROR: $*"
@@ -42,16 +43,17 @@ halt() {
 }
 
 # --- Step 1: Acquire sudo ---------------------------------------------------
-# Pre-authenticates sudo to prevent password prompts from interrupting or 
-# timing out the subsequent hibernation polling loops.
+# Caches sudo credentials up front so no password prompt appears part-way
+# through the hibernation polling loop.
 if ! sudo -v; then
     echo "❌ ERROR: sudo authentication failed. Cannot inspect or stop k3s."
     exit 1
 fi
 
 # --- Step 2: Identify k3s and its supervisor --------------------------------
-# Identifies the active k3s process via the API port (6443) and determines its supervisor 
-# (systemd vs. standalone). These independent checks inform the teardown mechanism in Step 4.
+# Reads the PID listening on 6443 and whether the k3s systemd unit is active or
+# enabled. Step 4 chooses its stop mechanism from these two values. Exits 0 if
+# neither is present.
 K3S_PID=$(sudo ss -tlnp 2>/dev/null | grep ':6443 ' | grep -oP 'pid=\K[0-9]+' | head -1)
 
 systemd_owned=false
@@ -65,17 +67,18 @@ if [ -z "$K3S_PID" ] && [ "$systemd_owned" = false ]; then
 fi
 
 # --- Step 3: Hibernate Postgres --------------------------------------------
-# Triggers CloudNativePG (CNPG) cluster hibernation via the Kubernetes API. The CNPG operator 
-# safely shuts down PostgreSQL and removes the pods while preserving the PVC. Differentiates 
-# between an unreachable API (fatal) and an absent database cluster (benign skip).
+# Sets the CNPG hibernation annotation and waits for it to take effect. The
+# operator shuts PostgreSQL down and deletes the instance pods, keeping the PVC.
+# An unreachable API halts; an absent Cluster is skipped.
 if ! kubectl get --raw='/readyz' &>/dev/null; then
     halt "Kubernetes API is unreachable, so $CLUSTER_NAME cannot be hibernated.
    Check: sudo tail -n 50 /var/log/k3s.log   (or: journalctl -u k3s -n 50)"
 elif ! kubectl get cluster "$CLUSTER_NAME" -n "$CLUSTER_NS" &>/dev/null; then
     echo "ℹ️  $CLUSTER_NAME not found — skipping."
 else
-    # Verifies the CNPG operator deployment is available. Writing the hibernation 
-    # annotation to an unmonitored cluster succeeds at the API level but hangs indefinitely.
+    # Confirms the operator Deployment exists and is Available. Writing the
+    # annotation without a running operator succeeds at the API and is never
+    # acted on, so the wait below would run to its full timeout.
     echo "🔎 Verifying the CNPG operator is Available..."
     if ! kubectl get deployment -n "$CNPG_NS" -l app.kubernetes.io/name=cloudnative-pg \
             -o name 2>/dev/null | grep -q .; then
@@ -97,10 +100,26 @@ else
             --overwrite cnpg.io/hibernation=on; then
         halt "Failed to set the hibernation annotation on $CLUSTER_NAME."
     fi
-
-    # Polls for asynchronous hibernation completion up to 300s (accounting for CNPG's default 
-    # 180s .spec.smartShutdownTimeout). Succeeds if the operator reports the condition as 'True' 
-    # OR if all instance pods are successfully removed. Captures detailed conditions for timeouts.
+    
+    # Captures the list of backups first, avoiding false "none found" messages on command failure.
+    sbs=$(kubectl get scheduledbackup -n "$CLUSTER_NS" -o name 2>/dev/null) || sbs=""
+    if [ -n "$sbs" ]; then
+        echo "⏸️  Pausing scheduled backups..."
+        for sb in $sbs; do
+            if ! kubectl patch "$sb" -n "$CLUSTER_NS" --type merge -p '{"spec":{"suspend":true}}'; then
+                echo "   ⚠️  Failed to pause $sb"
+            fi
+        done
+    fi
+    
+    # Polls every 5s for up to 300s. Treats either signal as done: the operator
+    # writing the cnpg.io/hibernation condition as True, or all instance pods
+    # being gone. Retains the last condition status, reason and message for the
+    # timeout report.
+    #
+    # postgis-cluster.yaml sets spec.smartShutdownTimeout to 15s, after which
+    # Postgres escalates to a fast shutdown; the remainder of this window covers
+    # pod deletion and the operator's own reconciliation.
     hib_status=""; hib_reason=""; hib_message=""
     hibernated=false
     retries=0
@@ -145,9 +164,9 @@ fi
 echo ""
 
 # --- Step 4: Stop k3s -------------------------------------------------------
-# Terminates k3s based on its supervisor. Disables the systemd unit to prevent 
-# Restart=always loops and removes boot-time enablement, or sends SIGTERM directly 
-# to the standalone process PID.
+# For a systemd-owned k3s, disables and stops the unit: `stop` alone would be
+# undone by Restart=always, and disabling also removes it from boot. Otherwise
+# sends SIGTERM to the PID found in Step 2.
 if [ "$systemd_owned" = true ]; then
     echo "🔻 systemd owns k3s.service — stopping and disabling the unit."
     echo "   k3s will no longer start automatically at boot; use start-cluster.sh."
@@ -165,15 +184,14 @@ elif [ -n "$K3S_PID" ]; then
 fi
 
 # --- Step 5: Confirm the API server is down ---------------------------------
-# Polls port 6443 to ensure the API server fully relinquishes the socket. If it fails 
-# to close within 30s, falls back to manual administrator intervention or automated 
-# k3s-killall.sh reaping if --force is active.
+# Polls port 6443 once a second for 30s. Exits 0 once the socket is released.
+# If it is still bound, --force runs k3s-killall.sh; otherwise the script exits
+# 1 with the commands to investigate or force the stop.
 for i in $(seq 1 30); do
     if ! sudo ss -tlnp 2>/dev/null | grep -q ':6443 '; then
         echo "💤 k3s stopped cleanly."
-        # Container processes safely outlive the API server. Leftover containerd-shim 
-        # trees and mounts remain harmless until the next start since the database 
-        # PVC is already safely hibernated.
+        # containerd-shim trees and their mounts can outlive the API server.
+        # The database PVC is already hibernated at this point.
         exit 0
     fi
     sleep 1
