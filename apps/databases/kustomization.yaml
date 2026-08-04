@@ -4,6 +4,7 @@ resources:
   - vso-setup.yaml
   - postgres-tls.yaml
   - postgis-cluster.yaml
+  - postgis-external-service.yaml
   - postgis-database.yaml
   - seaweedfs-release.yaml
   - seaweedfs-credentials.yaml
