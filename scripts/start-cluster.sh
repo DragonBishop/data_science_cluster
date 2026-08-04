@@ -1,7 +1,14 @@
 #!/bin/bash
 #
-# start-cluster.sh — Starts k3s, unseals the host Transit Vault, waits for the
-# in-cluster Vault and VSO credential sync, and un-hibernates the CNPG cluster.
+# start-cluster.sh — Starts k3s, unseals the host Transit Vault, and
+# un-hibernates the CNPG cluster.
+#
+# Everything else (in-cluster Vault unseal, VSO secret sync, CNPG operator
+# health, workload health) is reconciled continuously by Flux and visible
+# live in Headlamp or `flux get kustomizations` / `kubectl cnpg status` —
+# this script only does what nothing else can do: host-level actions and
+# the hibernation flip, which is deliberately excluded from Flux's declared
+# state (see WORKFLOW.md Phase 12's note on SSA field ownership).
 #
 # Failures after the k3s startup phase set had_warnings and the script
 # continues. It exits 1 at the end if any were set.
@@ -10,8 +17,8 @@ set -eu
 had_warnings=false
 
 # --- Step 1: Prevent duplicate execution ----------------------------------
-# Exits if systemd's k3s service is active. Two k3s instances against the same
-# data directory and ports corrupt cluster state.
+# Exits if systemd's k3s service is already active. Two k3s instances
+# against the same data directory and ports corrupt cluster state.
 if systemctl is-active --quiet k3s 2>/dev/null; then
     echo "⚠️  systemd's k3s.service is already active. Refusing to start a second instance."
     echo "   To adopt a script-managed lifecycle, run: sudo systemctl disable --now k3s"
@@ -134,7 +141,7 @@ else
             done
             return "${PIPESTATUS[0]}"
         }
-        
+
         echo "🔑 Enter GPG passphrase to decrypt unseal keys:"
         if ! decrypt_and_unseal; then
             echo "❌ ERROR: GPG decryption failed or was cancelled. Transit Vault remains sealed. Continuing..."
@@ -185,96 +192,20 @@ else
 fi
 echo ""
 
-# --- Step 7: Wait for In-Cluster Vault & VSO Secret Sync --------------------
-# Polls `vault status` inside vault-0 every 5s for up to 45s, until it reports
-# Sealed false.
-echo "⏳ Waiting for Vault to unseal..."
-retries=0
-until kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault status" 2>/dev/null | grep -q "Sealed.*false"; do
-    sleep 5
-    retries=$((retries+1))
-    if [ $retries -ge 9 ]; then
-        echo "❌ ERROR: In-cluster Vault failed to unseal after 45 seconds. Continuing — VSO sync below will report its own status."
-        echo "💡 TROUBLESHOOTING:"
-        echo "   1. Is the host Transit Vault sealed? vault status -address=https://vault.local:8200"
-        echo "   2. Cert/name mismatch? The seal verifies against 'vault.local' (tls_server_name),"
-        echo "      which must be in the Transit cert's SANs and in /etc/hosts."
-        echo "   3. Transit token expired? It renews while running, but >32d downtime kills it."
-        echo "   4. Check logs: kubectl logs -n vault vault-0"
-        had_warnings=true
-        break
-    fi
-    echo "   ...still waiting for Cluster Vault... ($((retries * 5))s elapsed)"
-done
-if [ "$retries" -lt 9 ]; then
-    echo "✅ Vault is unsealed."
-fi
-
-# Polls each VaultStaticSecret's Ready condition every 5s for up to 30s. A
-# secret that never becomes Ready sets a warning and the loop moves to the next.
-echo "⏳ Waiting for Vault Secrets Operator to sync credentials..."
-for vss in postgis-vault-secret seaweedfs-vault-secret; do
-    retries=0
-    until [ "$(kubectl get vaultstaticsecret "$vss" -n databases -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" == "True" ]; do
-        sleep 5
-        retries=$((retries+1))
-        if [ $retries -ge 6 ]; then
-            echo "❌ ERROR: VSO failed to sync $vss after 30 seconds. Continuing to check the remaining secrets/workloads."
-            echo "💡 TROUBLESHOOTING: Run 'kubectl describe vaultstaticsecret $vss -n databases' and check the Events."
-            had_warnings=true
-            break
-        fi
-        echo "   ...still waiting on $vss ... ($((retries * 5))s elapsed)"
-    done
-    if [ "$retries" -lt 6 ]; then
-        echo "✅ $vss synced."
-    fi
-done
-
-# Polls the VaultDynamicSecret's Ready condition on the same schedule. This one
-# is not Ready until Vault's database secrets engine is configured (README
-# Step 8), so a warning here is expected before that step is complete.
-retries=0
-until [ "$(kubectl get vaultdynamicsecret postgis-app-dynamic-secret -n databases -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" == "True" ]; do
-    sleep 5
-    retries=$((retries+1))
-    if [ $retries -ge 6 ]; then
-        echo "⚠️  postgis-app-dynamic-secret not Ready after 30 seconds — expected if Vault's database secrets engine hasn't been configured yet."
-        had_warnings=true
-        break
-    fi
-    echo "   ...still waiting on postgis-app-dynamic-secret ... ($((retries * 5))s elapsed)"
-done
-[ "$retries" -lt 6 ] && echo "✅ postgis-app-dynamic-secret synced."
-echo ""
-
-# --- Step 8: CNPG Operator Verification & PostGIS Rehydration -------------
-# Polls the CNPG operator pod's Ready condition every 5s for up to 60s. The
-# hibernation annotation below is only acted on while the operator is running.
-echo "⏳ Verifying CNPG operator status..."
-retries=0
-until [ "$(kubectl get pods -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" == "True" ]; do
-    sleep 5
-    retries=$((retries+1))
-    if [ $retries -ge 12 ]; then
-        echo "⚠️  CNPG operator not Ready within 60s. Hibernation recovery may fail."
-        had_warnings=true
-        break
-    fi
-    echo "   ...still waiting for CNPG operator... ($((retries * 5))s elapsed)"
-done
-[ "$retries" -lt 12 ] && echo "✅ CNPG operator pod is Ready"
-
-# Sets cnpg.io/hibernation=off when the annotation currently reads "on".
-# Retries up to 6 times at 5s intervals; the admission webhook rejects the
-# write until it is serving.
+# --- Step 7: Un-hibernate PostGIS and resume backups ------------------------
+# Flips cnpg.io/hibernation off when it currently reads "on". Retries the
+# annotate call itself, not a separate readiness check first — CNPG's
+# admission webhook can transiently reject requests while it's still
+# initializing, but there's no need to poll operator health separately
+# before finding that out; the retry loop surfaces the same failure with a
+# clear message if the operator genuinely isn't there.
 if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
   hib=$(kubectl get cluster postgis-cluster -n databases \
     -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null) || hib=""
-    
+
   if [ "$hib" == "on" ]; then
     echo "⏳ Rehydrating postgis-cluster from hibernation..."
-    
+
     retries=0
     success=false
     until [ $retries -ge 6 ]; do
@@ -297,7 +228,6 @@ if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
   fi
 fi
 
-# --- ADDED: Resume ScheduledBackups unconditionally ---
 sbs=$(kubectl get scheduledbackup -n databases -o name 2>/dev/null) || sbs=""
 if [ -n "$sbs" ]; then
     echo "▶️  Resuming scheduled backups..."
@@ -305,51 +235,13 @@ if [ -n "$sbs" ]; then
         kubectl patch "$sb" -n databases --type merge -p '{"spec":{"suspend":false}}' 2>/dev/null || true
     done
 fi
-# ------------------------------------------------------
 echo ""
 
-# --- Step 9: Final Workload Health Checks ---------------------------------
-# Reports on SeaweedFS and the CNPG cluster. These checks run after
-# un-hibernation and do not gate it. cert-manager and the barman-cloud plugin
-# Deployment are not checked here; WAL archiving depends on both.
-echo "🔎 Final workload health check..."
-
-# Polls a pod's phase until it reads Running or the timeout elapses.
-check_pod_ready() {
-  local timeout=$1 ns=$2 label=$3 desc=$4
-  local waited=0 status=""
-  while (( waited < timeout )); do
-    status=$(kubectl get pods -n "$ns" -l "$label" -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
-    if [ "$status" == "Running" ]; then
-      echo "  ✅ $desc"
-      return 0
-    fi
-    sleep 5
-    waited=$((waited + 5))
-    if (( waited < timeout )); then
-      echo "   ...still waiting on $desc (${waited}s elapsed)"
-    fi
-  done
-  echo "  ⚠️  $desc — not Running after ${timeout}s (last status:${status:-not found})"
-  return 1
-}
-
-check_pod_ready 60 databases "app=seaweedfs" "SeaweedFS running" || had_warnings=true
-
-# Reads the CNPG cluster's status phase.
-phase=$(kubectl get cluster postgis-cluster -n databases -o jsonpath='{.status.phase}' 2>/dev/null) || phase=""
-if [[ "$phase" == "Cluster in healthy state" ]]; then
-  echo "  ✅ postgis-cluster: $phase"
-else
-  echo "  ⚠️  postgis-cluster: ${phase:-not found}"
-  echo "💡 TROUBLESHOOTING: Run 'kubectl get cluster postgis-cluster -n databases' to check cluster health."
-  had_warnings=true
-fi
-
-echo ""
 if [ "$had_warnings" = true ]; then
-    echo "⚠️  Cluster startup sequence complete, review warnings."
+    echo "⚠️  Cluster startup sequence complete, review warnings above."
+    echo "   Check Headlamp, 'flux get kustomizations', or 'kubectl cnpg status postgis-cluster -n databases' for full health."
     exit 1
 else
     echo "✅ Cluster startup sequence complete."
+    echo "   Check Headlamp or 'flux get kustomizations' as everything else settles."
 fi
