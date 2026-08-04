@@ -174,10 +174,12 @@ else
     echo "⚠️  Transit token renewal failed. Auto-unseal keeps working until the"
     echo "   token's window closes; after that the in-cluster Vault cannot unseal."
     echo "💡 TROUBLESHOOTING: Issue a replacement from the host Transit Vault and"
-    echo "   replace the Secret (README Steps 3 and 4):"
-    echo "   vault token create -policy=autounseal-policy -period=768h -orphan"
-    echo "   kubectl create secret generic vault-transit-secret -n vault \\"
-    echo "     --from-literal=token='<new token>' --dry-run=client -o yaml | kubectl apply -f -"
+    echo "   replace the Secret (README Steps 3 and 4). Capture the token into a"
+    echo "   variable rather than pasting it as a --from-literal argument:"
+    echo "   kubectl delete secret vault-transit-secret -n vault"
+    echo "   NEWTOK=\$(vault token create -policy=autounseal-policy -period=768h -orphan -field=token) && \\"
+    echo "     printf '%s' \"\$NEWTOK\" | kubectl create secret generic vault-transit-secret --from-file=token=/dev/stdin -n vault"
+    echo "   unset NEWTOK"
     echo "   kubectl delete pod -n vault vault-0"
     had_warnings=true
 fi
