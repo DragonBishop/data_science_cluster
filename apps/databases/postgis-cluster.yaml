@@ -87,6 +87,13 @@ spec:
   smartShutdownTimeout: 15
   imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
 
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      memory: "2Gi"
+
   # superuserSecret is read only when enableSuperuserAccess is true.
   enableSuperuserAccess: true
   superuserSecret:
@@ -102,45 +109,19 @@ spec:
       # does not run on subsequent applies, on the running cluster, or on a
       # cluster bootstrapped from a backup.
       #
-      # The image ships the PostGIS libraries; CREATE EXTENSION registers them
-      # in the database.
+      # app_readwrite is granted to each role Vault's database secrets engine
+      # issues. pg_read_all_data and pg_write_all_data are evaluated at access
+      # time, so they cover tables, views and sequences in every schema in
+      # every database, including ones created later. They do not cover
+      # TRUNCATE, DDL, or objects owned by another role.
       #
-      # app_readwrite is granted to each role the Vault database secrets
-      # engine issues. pg_read_all_data and pg_write_all_data are evaluated at
-      # access time, so they cover tables, views and sequences in every schema
-      # in this database, including schemas created after this runs. They do
-      # not cover TRUNCATE, DDL, or objects owned by another role.
-      #
-      # CREATE ON DATABASE permits CREATE SCHEMA. The event trigger grants
-      # USAGE and CREATE on each schema created from here on, so a lease can
-      # create tables in schemas owned by postgres as well as its own.
-      #
-      # Neither grant makes app_readwrite the owner of anything. Ownership is
-      # set by the Vault role's creation_statements, which issue
-      # `ALTER ROLE "{{name}}" SET role = app_readwrite` so objects a lease
-      # creates are owned by the group and outlive the lease.
+      # Ownership of the data_science database and anything created in it
+      # comes from postgis-database.yaml's Database CRD (owner: app_readwrite)
+      # and from each Vault lease's own `SET role = app_readwrite` — not from
+      # a grant here.
       postInitSQL:
-        - CREATE EXTENSION IF NOT EXISTS postgis
         - CREATE ROLE app_readwrite NOLOGIN
-        - GRANT CONNECT ON DATABASE postgres TO app_readwrite
         - GRANT pg_read_all_data, pg_write_all_data TO app_readwrite
-        - GRANT CREATE ON DATABASE postgres TO app_readwrite
-        - GRANT USAGE, CREATE ON SCHEMA public TO app_readwrite
-        - |
-          CREATE FUNCTION grant_app_readwrite_on_new_schema()
-            RETURNS event_trigger LANGUAGE plpgsql SECURITY DEFINER AS $fn$
-          DECLARE r record;
-          BEGIN
-            FOR r IN SELECT object_identity FROM pg_event_trigger_ddl_commands()
-                     WHERE command_tag = 'CREATE SCHEMA'
-            LOOP
-              EXECUTE format('GRANT USAGE, CREATE ON SCHEMA %s TO app_readwrite', r.object_identity);
-            END LOOP;
-          END $fn$
-        - |
-          CREATE EVENT TRIGGER app_readwrite_new_schema ON ddl_command_end
-            WHEN TAG IN ('CREATE SCHEMA')
-            EXECUTE FUNCTION grant_app_readwrite_on_new_schema()
 
   storage:
     size: 100Gi

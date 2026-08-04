@@ -1,5 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - vso-setup.yaml
+  - postgres-tls.yaml
+  - postgis-cluster.yaml
+  - postgis-database.yaml
   - seaweedfs-release.yaml
   - seaweedfs-credentials.yaml
+  - seaweedfs-networkpolicy.yaml
