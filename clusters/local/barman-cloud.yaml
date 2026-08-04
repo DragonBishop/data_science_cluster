@@ -1,0 +1,22 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: barman-cloud
+  namespace: flux-system
+spec:
+  interval: 1h
+  dependsOn:
+    - name: cnpg-operator
+    - name: cert-manager
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./infrastructure/barman-cloud
+  prune: true
+  wait: true
+  timeout: 3m
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: plugin-barman-cloud
+      namespace: cnpg-system
