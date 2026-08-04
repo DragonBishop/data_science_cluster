@@ -1,0 +1,19 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: data-science
+  namespace: databases
+spec:
+  name: data_science
+  owner: app_readwrite
+  cluster:
+    name: postgis-cluster
+  extensions:
+    - name: fuzzystrmatch
+      schema: public
+    - name: postgis
+      schema: public
+    - name: postgis_topology
+      schema: topology
+    - name: postgis_tiger_geocoder
+      schema: tiger
