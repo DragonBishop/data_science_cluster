@@ -21,26 +21,137 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 
 ## Repository Structure
 
+Cluster state is managed by Flux (GitOps) rather than applied by hand, except
+for the one-time imperative bootstrap Cilium requires before Flux's own
+controllers have pod networking to run at all — see `README.md`'s setup
+instructions and `infrastructure/cilium/` below.
+
 * `README.md`: architecture, setup, and operations reference.
 * `ROADMAP.md`: Planned future services and technical debt remediation.
-* `.archive/` - A collection of manifests and scripts that are no longer in use for the project, but kept as a reference.
+* `pyproject.toml`, `.python-version`, `uv.lock`: uv-managed Python project
+  scaffold for the ETL/ML tooling planned in `ROADMAP.md` — no dependencies
+  yet.
+* `.github/ISSUE_TEMPLATE/`: Issue templates for bug reports, documentation
+  updates, feature proposals, and technical-debt resolution.
 * `devcontainers/` - Provision a VSCode Dev Container to manage the cluster. Customize to suit your own needs!
   * `devcontainer.json`: Configuration file for a devcontainer designed to be platform and engine agnostic.
   * `Dockerfile` contains build instructions to provision a Data Science focused Dev Container.
-* `tests/`
-  * `lifecycle-test.sh`: Runs both lifecycle scripts against stubbed system commands, with no cluster required.
 * `scripts/`
   * `start-cluster.sh`: Sequential boot script enforcing API, Transit Vault unseal, Secret, and Database readiness state checks.
   * `stop-cluster.sh`: Graceful shutdown script utilizing CNPG declarative hibernation.
   * `sync-kubeconfig.sh`: Copies the live k3s kubeconfig into `~/.kube/config`.
-* `manifests/`
-  * `cilium-values.yaml`: Helm chart values for Cilium.
-  * `vault-values.yaml`: Helm chart values for the in-cluster Vault, including the transit seal block.
-  * `vault-networkpolicy.yaml`: CiliumNetworkPolicy restricting ingress to the in-cluster Vault API.
-  * `vso-setup.yaml`: Creates the `databases` namespace, the VSO service account, and the `VaultConnection`/`VaultAuth` resources.
-  * `postgres-tls.yaml`: cert-manager Issuers and Certificates producing the Postgres server certificate.
-  * `seaweedfs-backups.yaml`: SeaweedFS Deployment, PVC, Service, credential sync, and the bucket-creation Job.
-  * `postgis-cluster.yaml`: The CNPG `Cluster`, its static and dynamic Vault secrets, the `ObjectStore` and `ScheduledBackup` used for backups, and the `postgres-proxy` Deployment.
+* `clusters/local/` — Flux's own root, pointed at by `flux bootstrap
+  --path=clusters/local`. One Kustomization per directory under
+  `infrastructure/`/`apps/` below, `dependsOn`-chained into the install
+  order the cluster actually needs: `gateway-api-crds` + `namespaces` →
+  `cilium` → `cert-manager` + `vault` → `vault-secrets-operator` →
+  `cnpg-operator` → `barman-cloud` → `databases`.
+  * `flux-system/` (`gotk-components.yaml`, `gotk-sync.yaml`,
+    `kustomization.yaml`): Flux's own controllers and `GitRepository`
+    source, written by `flux bootstrap` — not hand-authored, don't edit
+    directly.
+  * `gateway-api-crds.yaml`, `namespaces.yaml`, `cilium.yaml`,
+    `cert-manager.yaml`, `vault.yaml`, `vault-secrets-operator.yaml`,
+    `cnpg-operator.yaml`, `barman-cloud.yaml`, `databases.yaml`: one Flux
+    `Kustomization` per matching directory below, each declaring its own
+    `dependsOn`/`healthChecks`.
+* `infrastructure/` — cluster-wide platform components, in the order Flux
+  installs them.
+  * `gateway-api-crds/`
+    * `standard-install.yaml`: Vendored Gateway API v1.6.1 CRDs
+      (upstream release manifest, pinned rather than floated) — Cilium's
+      Gateway API support depends on these existing first.
+    * `kustomization.yaml`
+  * `namespaces/`
+    * `namespaces.yaml`: Creates every namespace Flux needs a home for up
+      front (`vault`, `vault-secrets-operator-system`, `cnpg-system`,
+      `databases`, `cert-manager`) — a `HelmRelease` doesn't auto-create
+      its own namespace the way `helm install --create-namespace` does.
+    * `kustomization.yaml`
+  * `cilium/`
+    * `cilium-release.yaml`: `HelmRepository` (OCI, `quay.io/cilium/charts`)
+      and `HelmRelease` for Cilium 1.20.0, with `releaseName`/namespace
+      matching the imperative bootstrap install so Flux adopts the
+      existing release instead of installing a second one.
+    * `cilium-values.yaml`: Helm values — kube-proxy replacement, the k3s
+      API server override (`--disable-kube-proxy` means nothing resolves
+      the in-cluster API otherwise), single-replica operator, pod CIDR,
+      Gateway API support, and L2 announcements for the external PostGIS
+      `LoadBalancer`.
+    * `cilium-lb-pool.yaml`: `CiliumLoadBalancerIPPool` handing a single
+      static LAN IP to `postgis-cluster-external`.
+    * `cilium-l2-policy.yaml`: `CiliumL2AnnouncementPolicy` making the
+      node answer ARP for that IP on `enp9s0`.
+    * `kustomization.yaml`: Bundles the release and both LB/L2 objects,
+      plus a `configMapGenerator` turning `cilium-values.yaml` into the
+      `ConfigMap` the `HelmRelease`'s `valuesFrom` reads.
+  * `cert-manager/`
+    * `cert-manager-release.yaml`: `HelmRepository`/`HelmRelease` for
+      cert-manager 1.21.1; CRDs are managed by the chart itself
+      (`crds.enabled: true`), not vendored separately.
+    * `kustomization.yaml`
+  * `vault/`
+    * `vault-release.yaml`: `HelmRepository`/`HelmRelease` for the
+      in-cluster Vault (chart `0.34.0`).
+    * `vault-values.yaml`: Helm values — transit auto-unseal against the
+      host-level Vault, the Agent Injector disabled (VSO syncs secrets
+      instead of sidecar injection), TLS disabled on the client listener
+      (access is restricted by cluster networking instead).
+    * `kustomization.yaml`: Same release-plus-values-ConfigMap pattern as
+      Cilium's.
+  * `vault-secrets-operator/`
+    * `vso-release.yaml`: `HelmRepository`/`HelmRelease` for the Vault
+      Secrets Operator (chart `1.5.0`).
+    * `kustomization.yaml`
+  * `cnpg-operator/`
+    * `cnpg-release.yaml`: `HelmRepository`/`HelmRelease` for the
+      CloudNativePG operator (chart `0.29.0`).
+    * `kustomization.yaml`
+  * `barman-cloud/`
+    * `barman-cloud-release.yaml`: `HelmRelease` for the Barman Cloud
+      Plugin (chart `0.7.1`) — reuses the `cnpg-operator/` directory's own
+      `HelmRepository` rather than declaring a second one for the same
+      chart index.
+    * `kustomization.yaml`
+* `apps/databases/` — the PostGIS cluster and everything it depends on,
+  reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
+  * `kustomization.yaml`: every resource this Kustomization builds, in one
+    pass.
+  * `vso-setup.yaml`: Creates the `databases` namespace and the
+    `VaultConnection`/`VaultAuth`/`ServiceAccount` VSO uses to authenticate
+    to Vault.
+  * `postgres-tls.yaml`: cert-manager `Issuer`s and `Certificate` producing
+    the Postgres server certificate — SANs cover `localhost`/`127.0.0.1`
+    (the socat proxy) and the static LAN IP (the `LoadBalancer` Service).
+  * `postgis-cluster.yaml`: The CNPG `Cluster`, its static and dynamic
+    Vault secrets, the `ObjectStore` and `ScheduledBackup` used for
+    backups, and the `postgres-proxy` Deployment.
+  * `postgis-external-service.yaml`: `LoadBalancer` Service exposing the
+    CNPG primary on the LAN via Cilium L2 announcement — carries the label
+    the LB pool and L2 policy in `infrastructure/cilium/` select on.
+  * `postgis-database.yaml`: CNPG `Database` CRD — declares `data_science`,
+    its owner, schemas, and PostGIS extensions (reconciles on every
+    generation change, unlike `postInitSQL`, which runs once at initdb).
+  * `seaweedfs-release.yaml`: `HelmRepository`/`HelmRelease` for SeaweedFS
+    (chart `4.40.0`) — master/filer data on the external HDD via
+    `hostPath`, S3 gateway on port 9000 with the `cnpg-backups` bucket
+    created at install.
+  * `seaweedfs-credentials.yaml`: `VaultStaticSecret` syncing S3
+    credentials from `secret/seaweedfs`.
+  * `seaweedfs-networkpolicy.yaml`: Restricts SeaweedFS ingress to the
+    `databases` namespace.
+* `terraform/` — OpenTofu modules configuring Vault's internals (KV
+  secrets, the Kubernetes auth backend, the database secrets engine).
+  State is local, gitignored, and encrypted at rest via OpenTofu's own
+  `encryption` block; these modules are applied by hand from the host, not
+  reconciled by Flux.
+  * `vault-bootstrap/`: KV mounts and secrets (`secret/postgis`,
+    `secret/seaweedfs`), the Kubernetes auth backend, and the
+    `postgis-policy`/`postgis-role` Vault uses to authorize the cluster's
+    ServiceAccount.
+  * `vault-database/`: The database secrets engine connection to
+    `postgis-cluster` and the `postgis-app-role` issuing leased
+    application credentials.
 
 ## Official Documentation
 

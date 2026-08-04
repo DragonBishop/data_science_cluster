@@ -68,9 +68,11 @@ spec:
     - postgis-cluster-r
     - postgis-cluster-r.databases.svc.cluster.local
     - localhost
+    - postgres.internal   # resolves via infrastructure/dns/ to the Gateway's IP below
   ipAddresses:
     - 127.0.0.1
-    - 192.0.2.240   # must match the LB pool's pinned IP for postgis-external
+    - 192.0.2.240   # the shared Gateway's IP (infrastructure/gateway/) — unchanged
+                       # from when this was postgis-external's own dedicated LB IP
   issuerRef:
     name: postgis-ca-issuer
     kind: Issuer
