@@ -8,6 +8,9 @@ spec:
   owner: app_readwrite
   cluster:
     name: postgis-cluster
+  schemas:
+    - name: topology
+    - name: tiger
   extensions:
     - name: fuzzystrmatch
       schema: public
