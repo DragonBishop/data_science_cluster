@@ -13,6 +13,9 @@ operator:
   # rule leaves the second replica permanently Pending.
   replicas: 1
 
+l2announcements:
+  enabled: true
+
 ipam:
   operator:
     # Must match k3s --cluster-cidr.

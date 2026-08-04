@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgis-cluster-external
+  namespace: databases
+  labels:
+    app.kubernetes.io/name: postgis-external
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Cluster
+  selector:
+    cnpg.io/cluster: postgis-cluster
+    cnpg.io/instanceRole: primary
+  ports:
+    - port: 5432
+      targetPort: 5432
