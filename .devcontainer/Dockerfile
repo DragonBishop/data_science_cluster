@@ -4,19 +4,25 @@
 # Base tools pre-installed for infrastructure management and analytics:
 # - Python
 # - uv (Modern Python package manager)
+# - just (runs this repo's justfile — the primary interface: install, setup,
+#   hubble, vault-shell, vault-login, etc.)
 # - kubectl & Helm (Cluster management)
 # - cnpg plugin (CloudNativePG status, backups, and psql access)
 # - Cilium CLI & Hubble CLI (Network visibility)
 # - Flux CLI (GitOps reconciliation)
 # - PostgreSQL Client (Database access)
-# - DuckDB CLI & Quarto (Data analytics & publishing)
 #
 # OpenTofu is not installed here. terraform/vault-bootstrap and
 # terraform/vault-database are applied by hand from the host. The Vault CLI
 # is not installed here either; in-cluster Vault work runs the pod's own
 # binary via `just vault-shell` / `just vault-login` (see justfile).
 #
-# NOTE: Project-specific Python libraries do not belong here. 
+# This is a lightweight, platform-agnostic foundation scoped to what this
+# repo's own tooling (justfile, docs) actually exercises — not a general
+# data-science workstation. Add your own extensions/settings below rather
+# than growing this file with personal preferences.
+#
+# NOTE: Project-specific Python libraries do not belong here.
 # Manage them via `uv init`, `uv add`, and `uv sync` in your pyproject.toml.
 # ==============================================================================
 
@@ -29,10 +35,10 @@ FROM mcr.microsoft.com/devcontainers/python:3
 # 1. System Utilities
 # ------------------------------------------------------------------------------
 # postgresql-client: Native interaction with local DB bridges.
-# unzip: Required by the DuckDB CLI install below, which ships as a zip archive.
+# just: runs this repo's justfile (see header note above).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
-    unzip \
+    just \
  && rm -rf /var/lib/apt/lists/*
 
 # ------------------------------------------------------------------------------
@@ -88,16 +94,3 @@ RUN HUBBLE_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/hubble/
 # ------------------------------------------------------------------------------
 RUN curl -s https://fluxcd.io/install.sh | bash \
  && flux version --client
-
-# ------------------------------------------------------------------------------
-# 6. Data Analytics & Publishing Tools (DuckDB & Quarto)
-# ------------------------------------------------------------------------------
-RUN curl -LsSfo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip \
- && unzip -q /tmp/duckdb.zip -d /usr/local/bin \
- && rm /tmp/duckdb.zip
-
-ARG QUARTO_VERSION=1.4.555
-RUN curl -LsSfo /tmp/quarto.deb https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.deb \
- && apt-get update \
- && apt-get install -y /tmp/quarto.deb \
- && rm /tmp/quarto.deb
