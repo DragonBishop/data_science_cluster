@@ -6,7 +6,7 @@ default:
 
 # install the packages
 install:
-  {{if path_exists("uv.lock") != "true" {"uv sync --all-groups --all-extras --inexact"} else {"uv sync --all-groups --all-extras --locked --inexact"} }}
+  {{ if path_exists("uv.lock") == "true" { "uv sync --all-groups --all-extras --locked --inexact" } else { "uv sync --all-groups --all-extras --inexact" } }}
 
 # setup for development
 setup: install git-setup
@@ -21,7 +21,7 @@ update:
 
 # set up the nbwipers git filter so notebooks stay clean on commit
 git-setup: install
-  @if [ ! -d .git ]; then git init; fi
+  @[ -d .git ] || git init
   uv run nbwipers install local
 
 # start a long-lived port-forward to hubble-relay on localhost:4245; run this once in its own terminal and `just hubble ...` will reuse it
@@ -37,13 +37,11 @@ hubble *ARGS='status':
   [ -f ~/.hubble/tls/tls.crt ] || kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath='{.data.tls\.crt}' | base64 -d > ~/.hubble/tls/tls.crt
   [ -f ~/.hubble/tls/tls.key ] || kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath='{.data.tls\.key}' | base64 -d > ~/.hubble/tls/tls.key
 
-  pf_pid=""
-  logf=""
   if ! (exec 3<>/dev/tcp/127.0.0.1/4245) 2>/dev/null; then
     logf=$(mktemp)
     kubectl port-forward -n kube-system svc/hubble-relay 4245:443 >"$logf" 2>&1 &
     pf_pid=$!
-    trap 'ec=$?; [ -n "$pf_pid" ] && kill "$pf_pid" 2>/dev/null; [ -n "$logf" ] && rm -f "$logf"; exit $ec' EXIT
+    trap 'ec=$?; kill "$pf_pid" 2>/dev/null; rm -f "$logf"; exit $ec' EXIT
     for _ in $(seq 1 50); do grep -q "Forwarding from" "$logf" && break; sleep 0.1; done
   else
     exec 3<&- 3>&-
@@ -70,12 +68,14 @@ hubble-ui:
   fi
   echo "Hubble UI: http://localhost:12000"
   command -v xdg-open >/dev/null 2>&1 && xdg-open http://localhost:12000 >/dev/null 2>&1 &
-  disown 2>/dev/null || true
+  disown
+
+vault_env := "export VAULT_ADDR=http://127.0.0.1:8200; unset VAULT_TOKEN"
 
 # open an interactive shell in vault-0 with VAULT_ADDR set and the inherited transit-unseal VAULT_TOKEN unset, ready for `vault login` or any other vault command
 vault-shell:
-  kubectl exec -it vault-0 -n vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200; unset VAULT_TOKEN; exec sh'
+  kubectl exec -it vault-0 -n vault -- sh -c '{{vault_env}}; exec sh'
 
 # same setup as `just vault-shell`, then runs `vault login`; the token prompt is vault's own masked stdin read, never a command argument or echoed value; drops into the shell already authenticated
 vault-login:
-  kubectl exec -it vault-0 -n vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200; unset VAULT_TOKEN; vault login && exec sh'
+  kubectl exec -it vault-0 -n vault -- sh -c '{{vault_env}}; vault login && exec sh'

@@ -52,8 +52,8 @@ body:
     attributes:
       label: Are you willing to work on implementing this change?
       options:
-        - Yes
-        - No
+        - "Yes"
+        - "No"
     validations:
       required: true
 # Additional Notes
