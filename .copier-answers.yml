@@ -1,0 +1,9 @@
+# Changes here will be overwritten by Copier
+_commit: v1.0.2
+_src_path: /home/dragon-bishop/coding/projects/python-copier-template-ds
+github_actions: true
+include_module: true
+module_name: clusterpgis
+project_name: data_science_cluster
+project_type: data_science
+python_version: 3.14.4

@@ -1,7 +1,53 @@
 [project]
-name = "k3s-mgmt"
-version = "0.1.0"
+name = "data_science_cluster"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = []
+requires-python = ">=3.14.4"
+dependencies = [
+  "ipykernel>=6.29.5",
+]
+dynamic = ["version"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=7.0.0",
+  "nbwipers>=0.6.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.coverage.report]
+exclude_also = [
+  "def __repr__",
+  "if self.debug:",
+  "if settings.DEBUG",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if 0:",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  'class .*\bProtocol\):',
+  '@(abc\.)?abstractmethod',
+]
+
+[tool.hatch.version]
+path = "src/clusterpgis/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clusterpgis"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "*.ipynb",
+  ".venv",
+  "uv.lock",
+]
+
+[tool.nbwipers]
+strip-kernel-info = true
+
+[tool.uv]
+default-groups = ["dev"]

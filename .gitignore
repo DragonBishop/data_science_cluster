@@ -19,18 +19,16 @@ k3s.yaml
 *.p12
 *.pfx
 
-# Rendered manifests. These carry substituted values and are outputs, not sources.
+# Machine rendered manifests.
 *.rendered.yaml
 manifests/**/rendered/
 
-# Machine-specific overrides. cluster.env is committed; cluster.env.local is not.
+# Machine-specific overrides.
 cluster.env.local
 .env
 .env.*
 
-# Database dumps used with the restoration steps in README Step 8. Matched by
-# extension and directory rather than by `*.sql`, which would silently swallow
-# dbt models once the ETL services on the roadmap land.
+# Database backups
 *.dump
 *.backup
 *.sql.gz
@@ -43,6 +41,21 @@ backups/
 __pycache__/
 .ipynb_checkpoints/
 .ruff_cache/
+
+# pytest/coverage output from `just test-cov`, and hatchling build artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+lcov.info
+build/
+dist/
+*.egg-info/
+
+# Stray default Jupyter notebook filenames under notebooks/
+[Uu]ntitled*
+scratch*
 
 # Editor and OS noise
 .DS_Store
