@@ -48,9 +48,9 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 
 | Operation | Command | When |
 | --- | --- | --- |
-| Start the cluster | `./scripts/start-cluster.sh` | Each work session |
-| Stop the cluster | `./scripts/stop-cluster.sh` | Each work session |
-| Sync API Context | `./scripts/sync-kubeconfig.sh` | Only if a tool shows a stale kubeconfig directly |
+| Start the cluster | `./src/bash/start-cluster.sh` | Each work session |
+| Stop the cluster | `./src/bash/stop-cluster.sh` | Each work session |
+| Sync API Context | `./src/bash/sync-kubeconfig.sh` | Only if a tool shows a stale kubeconfig directly |
 | Trigger Manual DB Backup | `kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io` | Before a risky schema change, outside the nightly automated backup |
 | Check Scheduled Backups Aren't Suspended | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Confirming nightly backups are actually running |
 | Connect via psql | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
@@ -218,11 +218,11 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 ├── .python-version
 ├── README.md                            # Architecture, setup, and operations reference
 ├── ROADMAP.md                           # Planned future services and technical debt remediation
-├── scripts/
-│   ├── start-cluster.sh                 # Boot sequence: API, Transit Vault unseal, readiness checks
-│   ├── stop-cluster.sh                  # Graceful shutdown via CNPG declarative hibernation
-│   └── sync-kubeconfig.sh               # Copies the live k3s kubeconfig into ~/.kube/config
 ├── src/
+│   ├── bash/
+│   │   ├── start-cluster.sh             # Boot sequence: API, Transit Vault unseal, readiness checks
+│   │   ├── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
+│   │   └── sync-kubeconfig.sh           # Copies the live k3s kubeconfig into ~/.kube/config
 │   └── clusterpgis/                     # The installable clusterpgis package (src layout)
 │       ├── data/
 │       │   └── __init__.py
