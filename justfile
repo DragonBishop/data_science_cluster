@@ -71,3 +71,11 @@ hubble-ui:
   echo "Hubble UI: http://localhost:12000"
   command -v xdg-open >/dev/null 2>&1 && xdg-open http://localhost:12000 >/dev/null 2>&1 &
   disown 2>/dev/null || true
+
+# open an interactive shell in vault-0 with VAULT_ADDR set and the inherited transit-unseal VAULT_TOKEN unset, ready for `vault login` or any other vault command
+vault-shell:
+  kubectl exec -it vault-0 -n vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200; unset VAULT_TOKEN; exec sh'
+
+# same setup as `just vault-shell`, then runs `vault login`; the token prompt is vault's own masked stdin read, never a command argument or echoed value; drops into the shell already authenticated
+vault-login:
+  kubectl exec -it vault-0 -n vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200; unset VAULT_TOKEN; vault login && exec sh'

@@ -6,9 +6,15 @@
 # - uv (Modern Python package manager)
 # - kubectl & Helm (Cluster management)
 # - cnpg plugin (CloudNativePG status, backups, and psql access)
-# - Cilium CLI (Network visibility)
+# - Cilium CLI & Hubble CLI (Network visibility)
+# - Flux CLI (GitOps reconciliation)
 # - PostgreSQL Client (Database access)
 # - DuckDB CLI & Quarto (Data analytics & publishing)
+#
+# OpenTofu is not installed here. terraform/vault-bootstrap and
+# terraform/vault-database are applied by hand from the host. The Vault CLI
+# is not installed here either; in-cluster Vault work runs the pod's own
+# binary via `just vault-shell` / `just vault-login` (see justfile).
 #
 # NOTE: Project-specific Python libraries do not belong here. 
 # Manage them via `uv init`, `uv add`, and `uv sync` in your pyproject.toml.
@@ -58,7 +64,7 @@ RUN curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/in
  && kubectl cnpg version
 
 # ------------------------------------------------------------------------------
-# 4. Networking Visibility (Cilium CLI)
+# 4. Networking Visibility (Cilium CLI & Hubble CLI)
 # ------------------------------------------------------------------------------
 RUN CILIUM_CLI_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt) \
  && curl -LsSfo /tmp/cilium-linux-amd64.tar.gz \
@@ -67,8 +73,24 @@ RUN CILIUM_CLI_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/cil
  && rm /tmp/cilium-linux-amd64.tar.gz \
  && cilium version --client
 
+# Standalone client for `hubble observe`/`hubble status` against Hubble
+# Relay (see justfile's `hubble`/`hubble-pf`/`hubble-ui` recipes); a
+# separate binary from the Cilium CLI above.
+RUN HUBBLE_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/hubble/master/stable.txt) \
+ && curl -LsSfo /tmp/hubble-linux-amd64.tar.gz \
+      "https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-amd64.tar.gz" \
+ && tar -xzf /tmp/hubble-linux-amd64.tar.gz -C /usr/local/bin \
+ && rm /tmp/hubble-linux-amd64.tar.gz \
+ && hubble version
+
 # ------------------------------------------------------------------------------
-# 5. Data Analytics & Publishing Tools (DuckDB & Quarto)
+# 5. GitOps (Flux CLI)
+# ------------------------------------------------------------------------------
+RUN curl -s https://fluxcd.io/install.sh | bash \
+ && flux version --client
+
+# ------------------------------------------------------------------------------
+# 6. Data Analytics & Publishing Tools (DuckDB & Quarto)
 # ------------------------------------------------------------------------------
 RUN curl -LsSfo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip \
  && unzip -q /tmp/duckdb.zip -d /usr/local/bin \
