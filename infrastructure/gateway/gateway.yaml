@@ -1,0 +1,46 @@
+# gateway.yaml
+#
+# The one shared Gateway every internal tool attaches an HTTPRoute or
+# TCPRoute to. `allowedRoutes.namespaces.from: All` on both listeners means any
+# namespace can attach a Route here directly.
+#
+# gatewayClassName confirmed live: `kubectl get gatewayclass` -> `cilium`,
+# controller io.cilium/gateway-controller, ACCEPTED true.
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: internal-gateway
+  namespace: gateway
+spec:
+  gatewayClassName: cilium
+  listeners:
+    # Every web UI (Hubble now, Grafana/MLflow/Prefect later) attaches an
+    # HTTPRoute here. hostname: "*.internal" is an extra constraint
+    # intersected with each HTTPRoute's own hostnames — a route naming a
+    # non-*.internal hostname simply can't attach to this listener.
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.internal"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            # Secret produced by gateway-tls.yaml's gateway-edge-cert
+            # Certificate, in this same namespace — certificateRefs
+            # without a namespace only ever resolves same-namespace.
+            name: gateway-edge-cert
+      allowedRoutes:
+        namespaces:
+          from: All
+    # Raw TCP passthrough for postgis-cluster-rw (apps/databases/postgis-tcproute.yaml).
+    # No hostname/TLS here — TCPRoute has no SNI-style matching, and Postgres
+    # already does its own TLS negotiation at the application layer via
+    # postgres-tls.yaml's certificate, unrelated to this listener.
+    - name: postgres
+      protocol: TCP
+      port: 5432
+      allowedRoutes:
+        namespaces:
+          from: All

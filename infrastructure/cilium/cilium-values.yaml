@@ -1,0 +1,32 @@
+# Cilium chart values — pinned against Cilium 1.20.0 / Gateway API v1.6.1.
+# Both versions move together; see step 2a before bumping either.
+
+kubeProxyReplacement: true
+
+# Required because k3s runs with --disable-kube-proxy. Nothing exists to resolve
+# the kubernetes ClusterIP, so the agent needs the API server endpoint directly.
+k8sServiceHost: "127.0.0.1"
+k8sServicePort: 6443
+
+bpf:
+  # Without this, Cilium logs "BPF host routing requires enable-bpf-masquerade.
+  # Falling back to legacy host routing" and pod-to-hostNetwork-Service traffic
+  # on the same node (e.g. hubble-relay -> hubble-peer) can time out.
+  masquerade: true
+
+operator:
+  # Single-node cluster. The default of 2 plus the operator's anti-affinity
+  # rule leaves the second replica permanently Pending.
+  replicas: 1
+
+l2announcements:
+  enabled: true
+
+ipam:
+  operator:
+    # Must match k3s --cluster-cidr.
+    clusterPoolIPv4PodCIDRList:
+      - "10.42.0.0/16"
+
+gatewayAPI:
+  enabled: true

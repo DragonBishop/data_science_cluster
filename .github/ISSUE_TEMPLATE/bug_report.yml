@@ -1,0 +1,92 @@
+name: Bug report
+description: Report a defect or error with the project
+title: 'Bug: '
+labels: ["bug"]
+body:
+# Description of issue template
+  - type: markdown
+    attributes:
+      value: >
+        Thank you for reporting a bug! Please provide as much detail as possible in the fields provided.
+# Expected behavior
+  - type: textarea
+    id: exp-behave
+    attributes:
+      label: Expected Behavior
+      description: A concise description of what you expected to happen.
+    validations:
+      required: true
+# Describe the bug
+  - type: textarea
+    id: bug-describe
+    attributes:
+      label: Describe the Bug
+      description: A clear description of what is actually happening.
+    validations:
+      required: true
+# To Reproduce
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: To Reproduce
+      description: List the exact steps to reproduce the bug.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: checkboxes
+    id: tooling
+    attributes:
+      label: Relevant Tools
+      description: What tools were you using when the bug occurred? Check everything relevant to this report.
+      options:
+        - label: Python script
+        - label: Notebook (Jupyter, JupyterLab, Colab)
+        - label: R environment (RStudio, Rscript, R Markdown)
+        - label: Distributed compute (Spark, Dask, Ray)
+        - label: PostgreSQL
+        - label: SQLite
+        - label: DuckDB
+        - label: MySQL / MariaDB
+        - label: Cloud warehouse (BigQuery, Snowflake, Redshift)
+  - type: input
+    id: tools-other
+    attributes:
+      label: Other Tools
+      description: Add any relevant tools that were not listed above.
+      placeholder: "e.g. dbt, Airflow, Databricks"
+    validations:
+      required: false
+# Type of OS
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Android
+        - iOS
+        - Other
+    validations:
+      required: true
+# OS Version
+  - type: input
+    id: os-vers
+    attributes:
+      label: OS Version
+      description: >
+        What version of this operating system did you use? (If you chose other, specify your OS here)
+    validations:
+      required: true
+# Dependencies / Additional Context
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and Additional Context
+      description: >
+        Provide any additional context here, such as the dependencies used in a Python project. Paste uv pip list, pip freeze,
+        conda list, etc. Remember, the most common reason for Python bug reports is dependency management!
