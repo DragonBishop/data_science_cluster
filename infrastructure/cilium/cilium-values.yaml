@@ -24,21 +24,3 @@ ipam:
 
 gatewayAPI:
   enabled: true
-
-hubble:
-  relay:
-    enabled: true
-    tls:
-      server:
-        enabled: true
-        mtls: true
-  ui:
-    enabled: true
-  tls:
-    auto:
-      enabled: true
-      method: certmanager
-      certManagerIssuerRef:
-        group: cert-manager.io
-        kind: ClusterIssuer
-        name: hubble-ca-issuer
