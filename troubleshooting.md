@@ -107,3 +107,18 @@
 * **Headlamp shows a stale or failed connection**
   * **What's happening:** Headlamp reads `~/.kube/config` as written by `sync-kubeconfig.sh`. Running that script while the cluster was down produces a profile that does not connect.
   * **How to fix it:** Start the cluster, run `sync-kubeconfig.sh` again, and reconnect Headlamp.
+
+* **Hubble Relay never becomes Ready (`Startup probe failed: service unhealthy, responded with "NOT_SERVING"`)**
+  * **What's happening:** Hubble Relay is a pod, but it reaches cilium-agent's Hubble gRPC port on the **host's own IP** (cilium-agent runs `hostNetwork: true`), so that connection is pod→host traffic, not pod→pod. If `ufw` is active without the rules from `INSTALLATION.md`'s Prerequisites, its default-deny `INPUT` policy drops it silently, Relay just times out with no useful error on either side.
+  * **How to fix it:** Confirm it's actually this: `sudo iptables -L INPUT -n -v | head` a large, growing packet count against the final `DROP` policy confirms it. Apply the `ufw` rules in `INSTALLATION.md`'s Prerequisites, then see the next entry, a firewall fix alone does not retry an already-failed HelmRelease.
+
+* **`flux reconcile helmrelease cilium` reports `RetriesExceeded` / `Stalled` and does nothing**
+  * **What's happening:** After enough failed upgrade attempts (e.g. from the Hubble issue above), `helm-controller` hits its retry budget and marks the release `Stalled` with a **terminal** error. A plain reconcile re-checks that same exhausted state and fails instantly; it does not attempt a new upgrade.
+  * **How to fix it:** Clear the retry lock first, then it reconciles normally:
+
+    ```bash
+    flux suspend helmrelease cilium -n kube-system
+    flux resume helmrelease cilium -n kube-system
+    ```
+
+    `flux get helmrelease cilium -n kube-system` should show `Ready: True` after. If the underlying cause isn't actually fixed yet, this just produces a fresh failed attempt instead of a stuck one; check `helm history cilium -n kube-system` and pod events for the real error.
