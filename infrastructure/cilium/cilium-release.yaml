@@ -16,6 +16,7 @@ metadata:
 spec:
   interval: 1h
   releaseName: cilium
+  timeout: 10m
   chart:
     spec:
       chart: cilium
