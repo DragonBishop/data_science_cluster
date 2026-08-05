@@ -545,6 +545,7 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "shapely" },
     { name = "sqlalchemy" },
+    { name = "vault-secrets" },
 ]
 
 [package.dev-dependencies]
@@ -570,6 +571,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
     { name = "shapely", specifier = ">=2.1.2" },
     { name = "sqlalchemy", specifier = ">=2.0.51" },
+    { name = "vault-secrets", specifier = ">=1.0.4" },
 ]
 
 [package.metadata.requires-dev]
@@ -3116,6 +3118,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/03/18/ccce41535dee1be77735592bd19965f3972c82e07ee703d324709496b716/uvicorn-0.52.1.tar.gz", hash = "sha256:112ec661814189acbccd3f7b86460147cc065fc92c0821afa78918780e4354dd", size = 100571, upload-time = "2026-08-01T18:19:30.732Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/d5/68e6e9bca63c0badf67002890a46d3784c958de45b65e1275ec583ca1f06/uvicorn-0.52.1-py3-none-any.whl", hash = "sha256:e4403f9d93188cf9d1088e9f40e3acd12630e2df8675316704379a7fc20fff6a", size = 79859, upload-time = "2026-08-01T18:19:29.294Z" },
+]
+
+[[package]]
+name = "vault-secrets"
+version = "1.0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bf/6a/3f03bd009203260025bbaf5ab33411dd6faa684db8467e3b12151667fcdd/vault_secrets-1.0.4.tar.gz", hash = "sha256:4ffae87f9f172351abeeed28e6cefbb8c80eb976662bcab798d1d5b15064fd03", size = 2512, upload-time = "2024-02-09T10:02:53.252Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/51/45e353b53905b7f04b25df0ccec98f873730708fb3344b2c170a89c202de/vault_secrets-1.0.4-py3-none-any.whl", hash = "sha256:4639fe819d095712d0a905b718f1848808e79016d0211c5091e01e29a6493271", size = 3519, upload-time = "2024-02-09T10:02:51.362Z" },
 ]
 
 [[package]]

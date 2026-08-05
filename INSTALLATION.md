@@ -147,7 +147,7 @@ Store this token. The in-cluster Vault's transit seal client renews it on use (`
 
 **Automating future unseals (one-time setup):**
 
-The Transit Vault re-seals on every host reboot, which would otherwise mean re-running the three `vault operator unseal` calls by hand each time. `scripts/start-cluster.sh` decrypts the three keys from a GPG-encrypted keyfile behind a single passphrase.
+The Transit Vault re-seals on every host reboot, which would otherwise mean re-running the three `vault operator unseal` calls by hand each time. `src/bash/start-cluster.sh` decrypts the three keys from a GPG-encrypted keyfile behind a single passphrase.
 
 Generate the keyfile once, from a RAM-backed tmpfs so the plaintext keys never touch disk:
 
@@ -174,7 +174,7 @@ EOF
 gpgconf --reload gpg-agent
 ```
 
-From this point on, `scripts/start-cluster.sh` checks whether the Transit Vault is sealed and prompts for this passphrase when it is.
+From this point on, `src/bash/start-cluster.sh` checks whether the Transit Vault is sealed and prompts for this passphrase when it is.
 
 ## 3. Cilium
 
@@ -255,7 +255,7 @@ export VAULT_CACERT="/opt/vault/tls/tls.crt"
 vault status   # Sealed: true means unseal it first
 ```
 
-If sealed, decrypt three of the five Shamir keys from the GPG keyfile (the same mechanism `scripts/start-cluster.sh` uses). This needs your GPG passphrase at an interactive `pinentry` prompt. Run it in your own terminal:
+If sealed, decrypt three of the five Shamir keys from the GPG keyfile (the same mechanism `src/bash/start-cluster.sh` uses). This needs your GPG passphrase at an interactive `pinentry` prompt. Run it in your own terminal:
 
 ```bash
 gpg --quiet --decrypt "$HOME/.vault-keys.gpg" | while IFS= read -r key; do
