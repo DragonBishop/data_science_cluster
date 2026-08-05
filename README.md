@@ -55,6 +55,8 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 | Check Scheduled Backups Aren't Suspended | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Confirming nightly backups are actually running |
 | Connect via psql | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
 | Verify Vault State | `kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault status"` | Troubleshooting only |
+| Open a Vault Shell | `just vault-shell` | Interactive Vault work; `VAULT_ADDR` set and the inherited transit-unseal `VAULT_TOKEN` unset, ready for `vault login` or any other command |
+| Log Into Vault | `just vault-login` | Same as `just vault-shell`, then runs `vault login`; drops into the shell already authenticated |
 | Verify CNPG State | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
 | Check Flux Sync State | `flux get kustomizations -A` | Confirming the GitOps install graph is Ready end to end |
 | Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8200:8200` | Ad hoc token/policy management |
@@ -212,7 +214,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   └── vault-secrets-operator/
 │       ├── kustomization.yaml
 │       └── vso-release.yaml
-├── justfile                             # `just setup` (uv sync + nbwipers filter), `just test-cov`, `just hubble`/`hubble-ui` (Hubble CLI/UI access)
+├── justfile                             # `just setup` (uv sync + nbwipers filter), `just test-cov`, `just hubble`/`hubble-ui` (Hubble CLI/UI access), `just vault-shell`/`vault-login` (Vault pod shell access)
 ├── notebooks/
 │   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
 │   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
