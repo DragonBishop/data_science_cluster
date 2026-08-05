@@ -1,0 +1,46 @@
+name: Documentation Update
+description: Report missing, unclear, outdated, or incorrect documentation
+title: 'Docs: '
+labels: ["documentation"]
+body:
+# Page Location
+  - type: input
+    id: page-location
+    attributes:
+      label: Page Location
+      description: Provide a URL or file path to the page needing update (e.g. `README.md`)
+    validations:
+      required: true
+# Current Problem Types
+  - type:  checkboxes
+    id: problem-type
+    attributes:
+      label: Problem Type
+      description: 'Please check all that apply:'
+      options:
+        - label: Outdated info
+        - label: Incorrect info
+        - label: Missing info
+        - label: Broken link / formatting
+        - label: Typo / Grammatical error
+# Describe the Problem
+  - type: textarea
+    id: problem-describe
+    attributes:
+      label: Problem Description
+      description: Explain what's wrong, confusing or missing to you. Copy-paste text if applicable
+    validations:
+      required: true
+# Proposed Changes
+  - type: textarea
+    id: changes
+    attributes:
+      label: Proposed Changes
+      description: >
+        What should the documentation say instead? Make your suggestions here.
+# Additional Context
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Provide any additional context about the issue below.

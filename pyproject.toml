@@ -1,7 +1,67 @@
 [project]
-name = "k3s-mgmt"
-version = "0.1.0"
-description = "Add your description here"
+name = "data_science_cluster"
+description = "Python classes intended to orchestrate Extract, Transform, & Load (ETL) Data Pipelines and Machine Learning (ML) tasks."
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = []
+requires-python = ">=3.14.4"
+dependencies = [
+  "dbt-core>=1.12.0",
+  "dbt-postgres>=1.11.0",
+  "dlt>=1.29.1",
+  "geoalchemy2>=0.20.0",
+  "geopandas>=1.1.4",
+  "hvac>=2.4.0",
+  "ipykernel>=6.29.5",
+  "matplotlib>=3.11.1",
+  "pandas>=3.0.5",
+  "plotly>=6.9.0",
+  "prefect>=3.8.1",
+  "psycopg[binary]>=3.3.4",
+  "shapely>=2.1.2",
+  "sqlalchemy>=2.0.51",
+  "vault-secrets>=1.0.4",
+]
+dynamic = ["version"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=7.0.0",
+  "nbwipers>=0.6.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.coverage.report]
+exclude_also = [
+  "def __repr__",
+  "if self.debug:",
+  "if settings.DEBUG",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if 0:",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  'class .*\bProtocol\):',
+  '@(abc\.)?abstractmethod',
+]
+
+[tool.hatch.version]
+path = "src/clusterpgis/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clusterpgis"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "*.ipynb",
+  ".venv",
+  "uv.lock",
+]
+
+[tool.nbwipers]
+strip-kernel-info = true
+
+[tool.uv]
+default-groups = ["dev"]

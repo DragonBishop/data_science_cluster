@@ -1,0 +1,17 @@
+# dns-lb-pool.yaml
+#
+# New address for the CoreDNS resolver (infrastructure/dns/) — a bare IP is
+# required here specifically because nothing can resolve a hostname for this
+# Service before it exists to do the resolving.
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: dns-lb-pool
+spec:
+  blocks:
+    - start: "192.168.1.241"
+      stop: "192.168.1.241"
+  serviceSelector:
+    matchLabels:
+      app.kubernetes.io/instance: coredns
+      app.kubernetes.io/name: coredns

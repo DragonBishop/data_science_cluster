@@ -1,0 +1,17 @@
+# dns-l2-policy.yaml
+#
+# ARP-announces .241 for the CoreDNS resolver's Service, same label basis as
+# dns-lb-pool.yaml — confirmed by local `helm template`, not guessed.
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: dns-l2-policy
+spec:
+  serviceSelector:
+    matchLabels:
+      app.kubernetes.io/instance: coredns
+      app.kubernetes.io/name: coredns
+  interfaces:
+    - ^enp9s0$
+  externalIPs: false
+  loadBalancerIPs: true

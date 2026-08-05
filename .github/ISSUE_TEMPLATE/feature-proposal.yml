@@ -1,0 +1,65 @@
+name: Feature Proposal
+description: Propose an enhancement or new feature for the project
+title: 'Proposal: '
+labels: ["enhancement"]
+body:
+# Because
+  - type: markdown
+    attributes:
+      value: >
+        Use this to propose the project do something it currently does not. Use a bug report for broken features. Please be concise!
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Because...
+      description: |
+        What is the problem you are trying to solve?
+        Describe the context of the problem.
+      placeholder: "The same setup steps get repeated by hand in every new project..."
+    validations:
+      required: true
+# I Propose
+  - type: textarea
+    id: proposal
+    attributes:
+      label: I Propose...
+      description: |
+        Describe the change in operational terms.
+        What specifically needs to happen?
+      placeholder: "A single command that runs the whole setup sequence..."
+    validations:
+      required: true
+# So That
+  - type: textarea
+    id: outcome
+    attributes:
+      label: So That...
+      description: |
+        Who benefits from this proposal?
+        What would show that it worked?
+      placeholder: "A new contributor can get moving on a project without being slowed down by..."
+    validations:
+      required: true
+# Alternatives
+  - type: textarea
+    id: alternative
+    attributes:
+      label: Alternatives
+      description: Describe workarounds or alternatives you've tried, if any.
+# Implementing
+  - type: dropdown
+    id: implement
+    attributes:
+      label: Are you willing to work on implementing this change?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+# Additional Notes
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes
+      description: >
+        Provide relevant file paths, scripts, documentation, or any other additional notes about this proposal.

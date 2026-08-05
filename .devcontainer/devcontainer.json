@@ -1,0 +1,58 @@
+// ==============================================================================
+// Kubernetes & Data Science Foundation - Devcontainer
+// ==============================================================================
+//   This configuration provides a standardized, engine-agnostic environment 
+//   for managing Kubernetes clusters and executing data science workloads.
+//
+//   Users: Customize the "settings" and "extensions" blocks below to add 
+//   your preferred themes, formatters, aetc.
+// ==============================================================================
+{
+  "name": "datasci-k8s-foundation",
+  "build": { "dockerfile": "Dockerfile" },
+
+  // ----------------------------------------------------------------------------
+  // Workspace & User Mapping
+  // ----------------------------------------------------------------------------
+  //
+
+  // The official devcontainer base image pre-configures the 'vscode' user
+  "containerUser": "vscode",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+
+  // ----------------------------------------------------------------------------
+  // Execution Context & Security Boundaries
+  // ----------------------------------------------------------------------------
+  "runArgs": [
+    // Bypasses container network isolation so the environment natively 
+    // reaches Kubernetes and host-local services.
+    "--network=host"
+  ],
+
+  // ----------------------------------------------------------------------------
+  // Credential & Config Injection
+  // ----------------------------------------------------------------------------
+  // Read-only injection of host Kubernetes and Helm contexts.
+  "mounts": [
+    "source=${localEnv:HOME}/.config/helm,target=/home/vscode/.config/helm,type=bind,consistency=cached,readonly",
+    "source=${localEnv:HOME}/.kube/config,target=/home/vscode/.kube/config,type=bind,consistency=cached,readonly"
+  ],
+
+  // ----------------------------------------------------------------------------
+  // IDE Execution Tooling
+  // ----------------------------------------------------------------------------
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
+      },
+      "extensions": [
+        "redhat.vscode-yaml",
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-toolsai.jupyter"
+      ]
+    }
+  }
+}
