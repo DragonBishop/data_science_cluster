@@ -27,6 +27,10 @@ spec:
     - kind: ConfigMap
       name: cilium-values
       valuesKey: values.yaml
+    - kind: ConfigMap
+      name: cilium-values-hubble
+      valuesKey: values.yaml
+      optional: true
   upgrade:
     remediation:
       remediateLastFailure: true
