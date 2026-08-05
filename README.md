@@ -58,6 +58,8 @@ This cluster's architecture relies on a system-installed HashiCorp Vault to act 
 | Verify CNPG State | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
 | Check Flux Sync State | `flux get kustomizations -A` | Confirming the GitOps install graph is Ready end to end |
 | Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8200:8200` | Ad hoc token/policy management |
+| View Hubble Flows (CLI) | `just hubble observe --follow` | Ad hoc network observability, independent of `hubble.internal` DNS |
+| Open Hubble UI | `just hubble-ui` | Quick local access; starts its own port-forward and opens the browser |
 
 * **Scheduled Backups:** the `ScheduledBackup` in `postgis-cluster.yaml` runs at midnight daily. It carries no `immediate` flag, so the first base backup after a rebuild is taken at the next midnight; until one exists, archived WAL has no base to be applied to. The `ObjectStore` prunes backups and their WAL older than 30 days. SeaweedFS is configured for up to 100 volumes of 1024MB. That store and the database share one physical disk and one `local-path` provisioner, which enforces no size limit on either claim, so neither the 100Gi figures nor the volume cap bound growth before the disk itself does. These backups cover operator error and corruption, not loss of the drive.
 * **Lifecycle Management:** `start-cluster.sh` proceeds in order: refuse if `k3s.service` is active → launch k3s → API responding → node Ready → host Transit Vault unsealed → transit token renewed → in-cluster Vault unsealed → VSO secrets synced → CNPG operator Ready → un-hibernate → final health checks. Only the first four steps exit on failure; from the Transit Vault onward a failure records a warning and the script continues, exiting 1 at the end. The final checks cover the SeaweedFS pod and the CNPG cluster phase, and run after un-hibernation rather than gating it. cert-manager and the `barman-cloud` Deployment are not checked at all, so the run can report success while WAL archiving is not functional.
@@ -210,7 +212,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   └── vault-secrets-operator/
 │       ├── kustomization.yaml
 │       └── vso-release.yaml
-├── justfile                             # `just setup` (uv sync + nbwipers filter), `just test-cov`
+├── justfile                             # `just setup` (uv sync + nbwipers filter), `just test-cov`, `just hubble`/`hubble-ui` (Hubble CLI/UI access)
 ├── notebooks/
 │   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
 │   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks

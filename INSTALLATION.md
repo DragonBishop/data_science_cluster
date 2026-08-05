@@ -21,6 +21,27 @@ rm install-opentofu.sh
 tofu version
 ```
 
+**Host firewall (`ufw`):** If `ufw` is active, its default-deny `INPUT`/`FORWARD` policies block Cilium outright, no CNI misconfiguration involved, the packets are just dropped by the host firewall before Cilium ever sees them. This surfaces later as pod-to-host timeouts, or Hubble Relay's startup probe failing with `NOT_SERVING`, which looks like a Cilium/TLS problem but isn't. Fix this now rather than debugging Cilium later:
+
+```bash
+sudo ufw allow in on cilium_host
+sudo ufw allow in on cilium_net
+sudo ufw allow in on cilium_vxlan
+sudo ufw allow in on lxc+
+sudo sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
+sudo ufw reload
+```
+
+These interfaces don't exist yet at this point in the install; the rules sit inactive until Cilium creates them in Step 3. `ufw`'s SSH/host-perimeter rules are untouched, this only opens traffic on Cilium's own virtual interfaces.
+
+**Check:**
+
+```bash
+sudo ufw status verbose
+# Default: ... allow (routed)
+# cilium_host, cilium_net, cilium_vxlan, lxc+ all ALLOW IN
+```
+
 ---
 
 ## 1. Clone repo and install k3s
@@ -415,7 +436,9 @@ If the Hubble block hasn't shown up in `helm get values` yet, the watch can take
 flux reconcile helmrelease cilium -n kube-system --timeout 5m
 ```
 
-This does not restart the Cilium agent DaemonSet. only Relay/UI get created and Hubble's certs issued via cert-manager.
+This does not restart the Cilium agent DaemonSet. only Relay/UI get created and Hubble's certs issued via cert-manager. If this instead reports `RetriesExceeded`/`Stalled` and returns immediately, a plain reconcile won't retry it, see `troubleshooting.md`.
+
+**Direct CLI/UI access, independent of DNS:** `just hubble-ui` port-forwards straight to `localhost:12000` and opens a browser, useful before `hubble.internal` resolves anywhere. `just hubble status` / `just hubble observe --follow` talk to Relay directly over its mTLS port (4245), separate from the HTTPRoute above: the Gateway carries the web UI's HTTP(S) traffic, not Relay's own gRPC port. See the `justfile`.
 
 ---
 
