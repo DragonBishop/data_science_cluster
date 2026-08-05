@@ -91,11 +91,8 @@ body:
         Provide any additional context here, such as the dependencies used in a Python project. Paste uv pip list, pip freeze,
         conda list, etc. Remember, the most common reason for Python bug reports is dependency management!
 # Uploaded files
-  - type: upload
+  - type: textarea
     id: uploads
     attributes:
       label: Upload relevant files
       description: 'Drag and drop any relevant screenshots or log files.'
-    validations:
-      required: false
-      accept: ".png,.jpg,.gif,.log,.tar.gz,.txt,.zip"

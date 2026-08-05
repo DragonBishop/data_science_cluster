@@ -45,10 +45,8 @@ body:
       label: Additional Context
       description: Provide any additional context about the issue below.
 # Uploads
-  - type: upload
+  - type: textarea
     id: uploads
     attributes:
       label: Upload relevant files
       description: 'Drag and drop any relevant screenshots or log files.'
-    validations:
-      accept: ".png,.jpg,.gif,.log,.tar.gz,.txt,.zip"
