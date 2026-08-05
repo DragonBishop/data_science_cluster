@@ -5,7 +5,7 @@
 //   for managing Kubernetes clusters and executing data science workloads.
 //
 //   Users: Customize the "settings" and "extensions" blocks below to add 
-//   your preferred themes, formatters, and AI assistants.
+//   your preferred themes, formatters, aetc.
 // ==============================================================================
 {
   "name": "datasci-k8s-foundation",
@@ -14,11 +14,8 @@
   // ----------------------------------------------------------------------------
   // Workspace & User Mapping
   // ----------------------------------------------------------------------------
-  // Utilizes a managed volume for maximum cross-platform compatibility and 
-  // disk I/O performance. 
-  "workspaceMount": "source=datasci-workspace-vol,target=/workspaces/coding,type=volume",
-  "workspaceFolder": "/workspaces/coding",
-  
+  //
+
   // The official devcontainer base image pre-configures the 'vscode' user
   "containerUser": "vscode",
   "remoteUser": "vscode",
@@ -29,8 +26,7 @@
   // ----------------------------------------------------------------------------
   "runArgs": [
     // Bypasses container network isolation so the environment natively 
-    // reaches Kubernetes and host-local services (like localhost:5432) 
-    // when supported by the container runtime (Linux/WSL2).
+    // reaches Kubernetes and host-local services.
     "--network=host"
   ],
 
