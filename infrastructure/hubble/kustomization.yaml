@@ -3,3 +3,10 @@ kind: Kustomization
 resources:
   - hubble-tls.yaml
   - hubble-httproute.yaml
+configMapGenerator:
+  - name: cilium-values-hubble
+    namespace: kube-system
+    files:
+      - values.yaml=cilium-values-hubble.yaml
+generatorOptions:
+  disableNameSuffixHash: true
