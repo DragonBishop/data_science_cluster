@@ -55,8 +55,7 @@
         "redhat.vscode-yaml",
         "charliermarsh.ruff",
         "ms-python.python",
-        "ms-toolsai.jupyter",
-        "innoverio.vscode-dbt-power-user"
+        "ms-toolsai.jupyter"
       ]
     }
   }

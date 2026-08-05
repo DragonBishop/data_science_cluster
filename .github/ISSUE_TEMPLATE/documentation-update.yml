@@ -44,9 +44,3 @@ body:
     attributes:
       label: Additional Context
       description: Provide any additional context about the issue below.
-# Uploads
-  - type: textarea
-    id: uploads
-    attributes:
-      label: Upload relevant files
-      description: 'Drag and drop any relevant screenshots or log files.'

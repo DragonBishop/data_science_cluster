@@ -207,8 +207,11 @@ kubectl apply --server-side -f infrastructure/gateway-api-crds/standard-install.
 
 `--server-side` records field ownership under a named manager, so Flux can reconcile these CRDs later without a conflict.
 
+Version comes from `infrastructure/cilium/cilium-release.yaml` — the same version the Flux `HelmRelease` adopts later, so this bootstrap install and the in-git release never disagree:
+
 ```bash
-helm upgrade --install cilium oci://quay.io/cilium/charts/cilium --version 1.20.0 \
+CILIUM_VERSION=$(grep 'version:' infrastructure/cilium/cilium-release.yaml | tr -d ' "' | cut -d: -f2)
+helm upgrade --install cilium oci://quay.io/cilium/charts/cilium --version "$CILIUM_VERSION" \
   --namespace kube-system --create-namespace \
   -f infrastructure/cilium/cilium-values.yaml \
   --atomic --timeout 5m
@@ -359,8 +362,6 @@ The first two return what you just wrote. The third should be opaque/binary. Rea
 ```bash
 unset VAULT_TOKEN TF_VAR_state_encryption_passphrase TF_VAR_postgres_superuser_password TF_VAR_s3_access_key TF_VAR_s3_secret_key
 ```
-
-**Vault is done:** fully initialized, fully configured, `secret/postgis` and `secret/seaweedfs` both populated.
 
 ---
 
