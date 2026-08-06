@@ -51,7 +51,10 @@
         "redhat.vscode-yaml",
         "charliermarsh.ruff",
         "ms-python.python",
-        "ms-toolsai.jupyter"
+        "ms-toolsai.jupyter",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "opentofu.vscode-opentofu",
+        "ckolkman.vscode-postgres"
       ]
     }
   }
