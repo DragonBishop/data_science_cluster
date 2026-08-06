@@ -4,6 +4,7 @@ description = "Python classes intended to orchestrate Extract, Transform, & Load
 readme = "README.md"
 requires-python = ">=3.14.4"
 dependencies = [
+  "bentoml>=1.4.39",
   "dbt-core>=1.12.0",
   "dbt-postgres>=1.11.0",
   "dlt>=1.29.1",
@@ -12,6 +13,7 @@ dependencies = [
   "hvac>=2.4.0",
   "ipykernel>=6.29.5",
   "matplotlib>=3.11.1",
+  "mlflow>=1.27.0",
   "pandas>=3.0.5",
   "plotly>=6.9.0",
   "prefect>=3.8.1",
