@@ -12,4 +12,4 @@ spec:
       stop: "192.0.2.240"
   serviceSelector:
     matchLabels:
-      gateway.networking.k8s.io/gateway-name: internal-gateway # confirm before use — see above
+      gateway.networking.k8s.io/gateway-name: internal-gateway
