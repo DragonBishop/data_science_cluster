@@ -2,9 +2,17 @@
 
 This repository provisions a self-contained local Kubernetes cluster tailored for Data Science development using a PostgreSQL server with the PostGIS extension enabled. It is intended to be scalable for data science projects, such as Extract, Transform, and Load (ETL) pipelines, Machine Learning (ML), and data analytics.
 
+This repository, and the cluster's design itself, benefits from the alignment between three key services: `FluxCD`, Helm, and `Kustomization`.
+
+* Flux provides the GitOps controller that monitors the cluster for any state drift, using git as the source of truth and running periodic reconciliation checks.
+* Helm offers a trusted repository of resources for Kubernetes that allow Secrets and ConfigMaps to pass specific values to public, professionally maintained Kubernetes manifests, allowing for complex, custom resources to be easily deployed, moved between different production environments, and still allow most of their maintenance to be handled by the developers.
+* `Kustomization`* Breaks the complex resources of Kubernetes down into manageable microservices, organizing them according to a consistent, hierarchical structure. Allows for deliberate management of dependency chains using the `dependsOn` option, which `FluxCD` automatically follows in its reconciliations.
+
 This cluster's architecture relies on a system-installed HashiCorp Vault to act as a transit to unseal a cluster-situated Vault. This cluster Vault is the primary store for all secrets in the cluster. Secure provisioning of environment variables from this vault allows users to combine ease of use and best practices for Secrets Management, intended for local use but scalable for enterprises if necessary.
 
-The services that make up the cluster are divided into different modules of services, intended to be deployed as needed and then torn down to minimize compute fooprint in edge computing development environments. The Core Database Architecture has been implemented, and the cluster monitoring services only become necessary to roll out when completing either ETL pipelines, or ML workflows.
+The resources that make up the cluster are modularized to allow for easy pivoting between tasks and managing compute efficiently. The Core Database Architecture has been implemented, and the cluster monitoring services only become necessary to roll out when completing either ETL pipelines, or ML workflows.
+
+*Note* A DevContainer template for managing the cluster through VSCode is provided, as a bare-bones skeleton for you customize as you wish.
 
 **This branch targets native Linux (developed and tested on Ubuntu)**. If you're running under WSL2 on Windows, the WSL2 branch is still in development.
 
@@ -22,9 +30,7 @@ The services that make up the cluster are divided into different modules of serv
 
 ## Core Database Architecture
 
-Version is what's actually running right now — checked against the live cluster, host, or devcontainer — not the Helm chart version floated in each release manifest. Where the two diverge, the chart's own pin is called out in the Description. Nowhere else in this README restates these versions.
-
-Rows below are ordered to match this repo's directory listing (`apps/` → `clusters/` → `infrastructure/`, alphabetically within each), the same order GitHub's file browser renders them in; items with no repo path (`k3s`, `Headlamp`) bookend the table.
+These are the controllers, operators, workloads, services, etc. that make up the fundamental foundation of the cluster. It is engineered to scale into demanding and complex workloads, and relies on open source software that is efficient, organized, and works well together. The version numbers here serve as a reference for those in the manifests intended to be deployed live.
 
 | Component | Version | Description |
 | --- | --- | --- |
@@ -47,7 +53,7 @@ Rows below are ordered to match this repo's directory listing (`apps/` → `clus
 
 ### Cluster Monitoring Services
 
-Both ETL and ML workloads rely on a shared operational baseline, beyond what's already running above. Not yet in the repo directory; ordered alphabetically by component name.
+Both ETL and ML workloads rely on a shared operational baseline, beyond what's already running above. These resources are not currently deployed in the project cluster, as they are not needed until one of the two data science workflows is chosen, but can easily be deployed onto an existing k3s cluster.
 
 | Component | Version | Description |
 | --- | --- | --- |
@@ -57,9 +63,7 @@ Both ETL and ML workloads rely on a shared operational baseline, beyond what's a
 
 ### ETL Pipeline Services
 
-The ETL pipeline rollout focuses on data ingestion, declarative orchestration, and in-database transformation. Python classes, organized into libraries and published to allow impact, offer an open-source, lightweight way to punch well above weight here.
-
-Not yet in the repo directory; ordered alphabetically by component name.
+The ETL pipeline rollout focuses on data ingestion, declarative orchestration, and in-database transformation. Python classes, organized into open source libraries, can orchestrate the entirety of the process, punching well above their weight. Industry standards with with heavier footprints are mentioned as alternatives as well.
 
 | Component | Version | Description | Alternatives |
 | --- | --- | --- | --- |
@@ -117,7 +121,7 @@ Same order as Core Database Architecture above, then the three sections below it
 | Check Scheduled Backups Aren't Suspended | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Confirming nightly backups are actually running |
 | Connect via psql | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
 | Verify Vault State | `kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault status"` | Troubleshooting only |
-| Open a Vault Shell | `just vault-shell` | Interactive Vault work; `VAULT_ADDR` set and the inherited transit-unseal `VAULT_TOKEN` unset, ready for `vault login` or any other command |
+| Open a Vault Shell | `just vault-shell` | Interactive Vault work; `VAULT_ADDR` set and the inherited transit-unseal `VAULT_TOKEN` unset, ready for secure validation through `vault login` |
 | Log Into Vault | `just vault-login` | Same as `just vault-shell`, then runs `vault login`; drops into the shell already authenticated |
 | Verify CNPG State | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
 | Check Flux Sync State | `flux get kustomizations -A` | Confirming the GitOps install graph is Ready end to end |
@@ -129,7 +133,7 @@ Same order as Core Database Architecture above, then the three sections below it
 
 ## **Restoring the Database from SeaweedFS**
 
-Recovery with the Barman Cloud Plugin requires the user to roll out this workflow. It bootstraps a *new* cluster from the object store and replays WAL to a chosen point, leaving the original untouched. Define the backup as an external cluster and name it as the bootstrap source:
+Recovery with the Barman Cloud Plugin requires the user to roll out this `.yaml` manifest. It bootstraps a *new* cluster from the object store and replays WAL to a chosen point, leaving the original untouched. Define the backup as an external cluster and name it as the bootstrap source:
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -352,7 +356,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * `cilium/`
     * `cilium-release.yaml`: `HelmRepository` (OCI, `quay.io/cilium/charts`) and `HelmRelease` for Cilium, with `releaseName`/namespace matching the bootstrap install so Flux adopts the existing release instead of installing a second one. `valuesFrom` has two entries: `cilium-values` (required) and `cilium-values-hubble` (`optional: true`). `optional: true` lets the HelmRelease install cleanly without it; `helm-controller` watches the ConfigMap and re-reconciles the moment it appears, merging Hubble's values in automatically.
     * `cilium-values.yaml`: Helm values for kube-proxy replacement, the k3s API server override, single-replica operator, pod CIDR, Gateway API support, and L2 announcements for the shared Gateway and DNS resolver `LoadBalancer`s below.
-    * `gateway-lb-pool.yaml` / `gateway-l2-policy.yaml`: `CiliumLoadBalancerIPPool` / `CiliumL2AnnouncementPolicy` handing a single static LAN IP to the shared Gateway's generated Service (`gateway.networking.k8s.io/gateway-name: internal-gateway`, the label Cilium's Gateway controller stamps on it, confirmed live). Replaces this repo's earlier `postgis-lb-pool`/`postgis-l2-policy`, which gave Postgres its own dedicated `LoadBalancer` before it moved onto this shared Gateway via a `TCPRoute`.
+    * `gateway-lb-pool.yaml` / `gateway-l2-policy.yaml`: `CiliumLoadBalancerIPPool` / `CiliumL2AnnouncementPolicy` handing a single static LAN IP to the shared Gateway's generated Service (`gateway.networking.k8s.io/gateway-name: internal-gateway`, the label Cilium's Gateway controller stamps on it, confirmed live).
     * `dns-lb-pool.yaml` / `dns-l2-policy.yaml`: Same pattern, a second static LAN IP for the CoreDNS resolver's Service (`dns/` below).
     * `kustomization.yaml`: Bundles the release and all four LB/L2 objects, plus a `configMapGenerator` turning `cilium-values.yaml` into the `ConfigMap` the `HelmRelease`'s `valuesFrom` reads.
   * `cnpg-operator/`
@@ -369,20 +373,20 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * `standard-install.yaml`: Vendored Gateway API CRDs (upstream release manifest, pinned rather than floated). Cilium's Gateway API support depends on these existing first.
     * `kustomization.yaml`
   * `hubble/`
-    * `hubble-tls.yaml`: A second, separate self-signed local CA and `ClusterIssuer` chain (`hubble-ca-issuer`) Hubble's internal mTLS trust domain (cilium-agent ↔ hubble-relay ↔ hubble-ui), kept apart from anything a browser trusts.
+    * `hubble-tls.yaml`: A second, separate self-signed local CA and `ClusterIssuer` chain (`hubble-ca-issuer`) Hubble's internal mTLS trust domain (cilium-agent ↔ hubble-relay ↔ hubble-ui).
     * `hubble-httproute.yaml`: Attaches Hubble UI to the shared Gateway at `hubble.internal`.
     * `cilium-values-hubble.yaml`: Cilium chart values enabling Hubble Relay/UI with cert-manager-issued mTLS, referencing `hubble-ca-issuer` above. Generated as the `cilium-values-hubble` ConfigMap by this `kustomization.yaml`, which `cilium-release.yaml` reads as an optional `valuesFrom` source. This directory's own `dependsOn` (`cert-manager`, `gateway`) is what makes the ConfigMap not exist until the issuer it references is real.
     * `kustomization.yaml`
   * `namespaces/`
-    * `namespaces.yaml`: Creates every namespace Flux needs a home for up front (`vault`, `vault-secrets-operator-system`, `cnpg-system`, `databases`, `cert-manager`, `gateway`, `dns`). A `HelmRelease` doesn't auto-create its own namespace the way `helm install --create-namespace` does.
+    * `namespaces.yaml`: Creates every namespace Flux needs a home for up front (`vault`, `vault-secrets-operator-system`, `cnpg-system`, `databases`, `cert-manager`, `gateway`, `dns`). A `HelmRelease` doesn't auto-create its own namespace .
     * `kustomization.yaml`
   * `vault/`
     * `vault-release.yaml`: `HelmRepository`/`HelmRelease` for the in-cluster Vault.
-    * `vault-values.yaml`: Helm values for transit auto-unseal against the host-level Vault, the Agent Injector disabled (VSO syncs secrets instead of sidecar injection), TLS disabled on the client listener (access is restricted by cluster networking instead).
+    * `vault-values.yaml`: Helm values for transit auto-unseal against the host-level Vault, the Agent Injector disabled (VSO syncs secrets instead of sidecar injection).
     * `kustomization.yaml`: Same release-plus-values-ConfigMap pattern as Cilium's.
   * `vault-secrets-operator/`
     * `vso-release.yaml`: `HelmRepository`/`HelmRelease` for the Vault Secrets Operator.
     * `kustomization.yaml`
-* `terraform/` OpenTofu modules configuring Vault's internals (KV secrets, the Kubernetes auth backend, the database secrets engine). State is local, gitignored, and encrypted at rest via OpenTofu's own `encryption` block; these modules are applied by hand from the host, not reconciled by Flux.
+* `terraform/` OpenTofu modules configuring Vault's internals (KV secrets, the Kubernetes auth backend, the database secrets engine). State is local, gitignored, and encrypted at rest via OpenTofu's own `encryption` block; these modules are applied by hand following the instructions in `INSTALLATION.md`.
   * `vault-bootstrap/`: KV mounts and secrets (`secret/postgis`, `secret/seaweedfs`), the Kubernetes auth backend, and the `postgis-policy`/`postgis-role` Vault uses to authorize the cluster's ServiceAccount.
   * `vault-database/`: The database secrets engine connection to `postgis-cluster` and the `postgis-app-role` issuing leased application credentials.
