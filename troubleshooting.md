@@ -6,10 +6,6 @@
   * **What's happening:** The system's background k3s service (`k3s.service`) is already active. Running two k3s instances against the same data directory will corrupt your cluster.
   * **How to fix it:** Hand lifecycle management over to the scripts. Run `sudo systemctl disable --now k3s`. `systemctl is-enabled k3s` confirms which supervisor owns it. *(Note: `stop-cluster.sh` disables this automatically the first time it finds it).*
 
-* **Scripts finish with an "exit 1" error, but everything looks healthy**
-  * **What's happening:** Both scripts flag non-fatal warnings without swallowing the errors.
-  * **How to fix it:** If the summary says "review warnings," the process finished but encountered problems along the way; it did not abort. Scroll up and look for the ❌ or ⚠️ icons to see what triggered the warning.
-
 * **`stop-cluster.sh` halts before k3s actually stops**
   * **What's happening:** The script requires the database to hibernate before shutting down the cluster. If k3s stops while PostgreSQL is running, the database is killed ungracefully.
   * **How to fix it:** Read the halt message to see what is holding up the process. To shut down immediately and accept a crash recovery on the next boot, use the `--force` flag.
@@ -18,7 +14,7 @@
   * **What's happening:** The script could not verify that the database shut down cleanly.
   * **How to check if it actually failed:** On the next start, run `kubectl logs -n databases postgis-cluster-1 -c postgres | grep -i "cluster state"`. `Database cluster state: shut down` with a timestamp means the shutdown was clean and the script did not wait long enough to observe it.
   * **If it genuinely failed, it's usually one of three things:**
-    1. **Idle database connections:** `spec.smartShutdownTimeout` in `postgis-cluster.yaml` is set to 15 (the CNPG default is 180). Postgres waits that long for existing connections to close before escalating to a fast shutdown, which disconnects them. An idle DBeaver session extends the smart-shutdown phase up to that limit. Check for active connections before stopping: `kubectl exec -n databases postgis-cluster-1 -c postgres -- psql -U postgres -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`
+    1. **Idle database connections:** `spec.smartShutdownTimeout` in `postgis-cluster.yaml` is set to 15 (the CNPG default is 180). Postgres waits that long for existing connections to close before escalating to a fast shutdown, which disconnects them. Check for active connections before stopping: `kubectl exec -n databases postgis-cluster-1 -c postgres -- psql -U postgres -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`
     2. **CloudNativePG (CNPG) operator isn't available:** The shutdown command was sent, but the operator was not running to process it. The stop script usually catches this first and halts with a specific warning.
     3. **The cluster isn't healthy:** A cluster will not hibernate from a broken state, such as a pod in CrashLoop or mid-boot. Check with `kubectl cnpg status postgis-cluster -n databases`.
 
@@ -54,7 +50,7 @@
   * **How to fix it:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for dynamic credentials). The status conditions at the bottom report why VSO could not pull the secret.
 
 * **Dynamic credentials never reach a "Ready" state**
-  * **How to fix it:** Confirm Step 8 was run against a live `postgis-cluster-rw` service, which requires Step 7 to have been applied first. Confirm the Step 5 policy includes `database/creds/postgis-app-role` and not only the KV paths. `kubectl describe vaultdynamicsecret postgis-app-dynamic-secret -n databases` reports Vault's error.
+  * **How to fix it:** `kubectl describe vaultdynamicsecret postgis-app-dynamic-secret -n databases` reports Vault's error.
 
 ---
 
@@ -97,7 +93,7 @@
 ## Tooling
 
 * **Pods are stuck in `ContainerCreating` indefinitely**
-  * **What's happening:** Cilium is still initializing. Without the CNI, the container sandbox cannot be created.
+  * **What's happening:** Cilium may still initializing. Without the CNI, the container sandbox cannot be created.
   * **How to fix it:** Run `cilium status --wait`. If it persists after Cilium is running, check that the BPF filesystem is mounted (`mount | grep bpf`); a hard shutdown can leave it unmounted. *(Note: `/var/run/cilium/cgroupv2` is an active mount and must be unmounted before running `rm -rf /var/run/cilium`)*.
 
 * **Pods are running but completely unreachable (Stale Cilium Endpoints)**
@@ -122,3 +118,4 @@
     ```
 
     `flux get helmrelease cilium -n kube-system` should show `Ready: True` after. If the underlying cause isn't actually fixed yet, this just produces a fresh failed attempt instead of a stuck one; check `helm history cilium -n kube-system` and pod events for the real error.
+    

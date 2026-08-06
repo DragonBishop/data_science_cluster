@@ -32,8 +32,6 @@ sudo sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /
 sudo ufw reload
 ```
 
-These interfaces don't exist yet at this point in the install; the rules sit inactive until Cilium creates them in Step 3. `ufw`'s SSH/host-perimeter rules are untouched, this only opens traffic on Cilium's own virtual interfaces.
-
 **Check:**
 
 ```bash
@@ -90,7 +88,44 @@ kubectl get nodes
 
 ---
 
-## 2. Deploy the Host-Level Transit Vault
+## 2. Cilium
+
+The Gateway API Controller Resource Definitions (CRDs) must be installed before Cilium. Carefully review the compatibility of both resources before deploying. A mismatch leaves the GatewayClass in an `ACCEPTED: Unknown` state rather than reporting an error. This deployment uses the standard (GA) release channel. Use Flux to roll out upgrades to Cilium once the cluster is fully assembled.
+
+```bash
+kubectl apply --server-side -f infrastructure/gateway-api-crds/standard-install.yaml
+```
+
+`--server-side` records field ownership under a named manager, so Flux can reconcile these CRDs later without a conflict.
+
+Version comes from `infrastructure/cilium/cilium-release.yaml` — the same version the Flux `HelmRelease` adopts later, so this bootstrap install and the in-git release never disagree:
+
+```bash
+CILIUM_VERSION=$(grep 'version:' infrastructure/cilium/cilium-release.yaml | tr -d ' "' | cut -d: -f2)
+helm upgrade --install cilium oci://quay.io/cilium/charts/cilium --version "$CILIUM_VERSION" \
+  --namespace kube-system --create-namespace \
+  -f infrastructure/cilium/cilium-values.yaml \
+  --atomic --timeout 5m
+```
+
+`--atomic` rolls the release back automatically if it fails to become ready within the timeout.
+
+**Check:**
+
+```bash
+kubectl get nodes                          # Ready
+cilium status --wait
+kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep KubeProxyReplacement
+# KubeProxyReplacement: True
+
+kubectl -n kube-system get cm cilium-config -o yaml | grep enable-l2-announcements
+kubectl -n kube-system exec ds/cilium -- cilium-dbg status --verbose | grep -A2 l2-responder
+# enable-l2-announcements: "true", l2-responder [OK] Running
+```
+
+---
+
+## 3. Deploy the Host-Level Transit Vault
 
 This Vault instance runs directly on the host and unseals the cluster's Main Vault.
 
@@ -197,41 +232,6 @@ gpgconf --reload gpg-agent
 
 From this point on, `src/bash/start-cluster.sh` checks whether the Transit Vault is sealed and prompts for this passphrase when it is.
 
-## 3. Cilium
-
-The Gateway API Controller Resource Definitions (CRDs) must be installed before Cilium. Carefully review the compatibility of both resources before deploying. A mismatch leaves the GatewayClass in an `ACCEPTED: Unknown` state rather than reporting an error. This deployment uses the standard (GA) release channel. Use Flux to roll out upgrades to Cilium once the cluster is fully assembled.
-
-```bash
-kubectl apply --server-side -f infrastructure/gateway-api-crds/standard-install.yaml
-```
-
-`--server-side` records field ownership under a named manager, so Flux can reconcile these CRDs later without a conflict.
-
-Version comes from `infrastructure/cilium/cilium-release.yaml` — the same version the Flux `HelmRelease` adopts later, so this bootstrap install and the in-git release never disagree:
-
-```bash
-CILIUM_VERSION=$(grep 'version:' infrastructure/cilium/cilium-release.yaml | tr -d ' "' | cut -d: -f2)
-helm upgrade --install cilium oci://quay.io/cilium/charts/cilium --version "$CILIUM_VERSION" \
-  --namespace kube-system --create-namespace \
-  -f infrastructure/cilium/cilium-values.yaml \
-  --atomic --timeout 5m
-```
-
-`--atomic` rolls the release back automatically if it fails to become ready within the timeout.
-
-**Check:**
-
-```bash
-kubectl get nodes                          # Ready
-cilium status --wait
-kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep KubeProxyReplacement
-# KubeProxyReplacement: True
-
-kubectl -n kube-system get cm cilium-config -o yaml | grep enable-l2-announcements
-kubectl -n kube-system exec ds/cilium -- cilium-dbg status --verbose | grep -A2 l2-responder
-# enable-l2-announcements: "true", l2-responder [OK] Running
-```
-
 ---
 
 ## 4. Bootstrap Flux
@@ -250,12 +250,11 @@ This writes `clusters/local/flux-system/` and pushes its own commit. Every other
 ```text
 cilium ← cert-manager ← gateway ← hubble
        ← dns
-vault ← vault-secrets-operator ← cnpg-operator ← barman-cloud ← seaweedfs
-                                  (cnpg-operator also needs cert-manager
-                                   via barman-cloud's own dependsOn)
-                                  ← databases (also needs gateway, for
-                                    its TCPRoute to attach to)
+vault ← vault-secrets-operator ← cnpg-operator ← barman-cloud ← seaweedfs ← databases
 ```
+
+* `cnpg-operator` also needs `cert-manager` via `barman-cloud`'s own `dependsOn`.
+* `Databases` also needs `Gateway`, for its `TCPRoute` to attach to
 
 **Check:**
 
@@ -371,15 +370,14 @@ Thanks to flux's `dependsOn` feature, we can roll out the bulk of the cluster in
 
 ```bash
 flux reconcile kustomization flux-system --with-source
+# This rolls the majority of the cluster out in one dependency chain.
+# SeaweedFS, CNPG, and Hubble all may take some time to come online as healthy.
 ```
 
 **Check:**
 
 ```bash
 flux get kustomizations
-# everything Ready, `hubble`  depends on `cert-manager` and `gateway`,
-# so it may finish a little after the rest of this wave. If it's
-# still Reconciling, give it a minute and re-run.
 ```
 
 ```bash
@@ -412,8 +410,6 @@ kubectl rollout status deployment -n cnpg-system plugin-barman-cloud
 kubectl get svc,pods -n databases -l app.kubernetes.io/instance=seaweedfs --show-labels
 ```
 
-**Confirm the SeaweedFS Service name and pod labels against the real output** before trusting `apps/databases/postgis-cluster.yaml`'s `ObjectStore.endpointURL` or `apps/seaweedfs/seaweedfs-networkpolicy.yaml`. Both assume `seaweedfs-s3` and `app.kubernetes.io/name: seaweedfs`, per the chart's naming convention. If either differs, edit the relevant file.
-
 ```bash
 kubectl cnpg status postgis-cluster -n databases
 ```
@@ -445,8 +441,6 @@ This does not restart the Cilium agent DaemonSet. only Relay/UI get created and 
 
 ## 7. Deploy CloudNativePostgreSQL database server with postGIS extension
 
-The Cluster came up as part of Phase 5. This phase is verification and, where applicable, the dump restore.
-
 **Check, in order. Stop and debug on failures:**
 
 ```bash
@@ -467,7 +461,7 @@ kubectl get tcproute -n databases postgis-external -o jsonpath='{.status.parents
 # "Service reference is valid"
 ```
 
-A valid `TCPRoute` reference confirms Kubernetes-level wiring, not LAN reachability, which needs an actual connection test using Phase 7's lease credentials:
+A valid `TCPRoute` reference confirms Kubernetes-level wiring, not LAN reachability, which needs an actual connection test using previously generated lease credentials.
 
 ```bash
 LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
