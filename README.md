@@ -4,12 +4,14 @@ This repository provisions a self-contained local Kubernetes cluster tailored fo
 
 This cluster's architecture relies on a system-installed HashiCorp Vault to act as a transit to unseal a cluster-situated Vault. This cluster Vault is the primary store for all secrets in the cluster. Secure provisioning of environment variables from this vault allows users to combine ease of use and best practices for Secrets Management, intended for local use but scalable for enterprises if necessary.
 
+The services that make up the cluster are divided into different modules of services, intended to be deployed as needed and then torn down to minimize compute fooprint in edge computing development environments. The Core Database Architecture has been implemented, and the cluster monitoring services only become necessary to roll out when completing either ETL pipelines, or ML workflows.
+
 **This branch targets native Linux (developed and tested on Ubuntu)**. If you're running under WSL2 on Windows, the WSL2 branch is still in development.
 
 ## Table of Contents
 
 * [Core Database Architecture](#core-database-architecture)
-* [Foundational Cluster Service](#foundational-cluster-services)
+* [Cluster MOnitoring Services](#cluster-monitoring-services)
 * [ETL Pipeline Services](#etl-pipeline-services)
 * [Machine Learning Services](#machine-learning-services)
 * [Official Documentation](#official-documentation)
@@ -41,9 +43,9 @@ Rows below are ordered to match this repo's directory listing (`apps/` → `clus
 | HashiCorp Vault (in-cluster) | `2.0.3` | Main Vault; auto-unseals against the host's native Transit Vault at pod start. Helm chart pinned to `0.34.0` in `infrastructure/vault/vault-release.yaml`. |
 | Vault Secrets Operator (VSO) | `1.5.0` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. Helm chart pinned in `infrastructure/vault-secrets-operator/vso-release.yaml`. |
 | Vault Database Secrets Engine | Same as Vault | Issues login roles on demand, 3h default TTL / 24h max; role dropped when the lease ends. Configured by the OpenTofu module in `terraform/vault-database/`. |
-| Headlamp | `0.44.0` | Cluster GUI; installed as a flatpak on the host, not deployed to this cluster on this branch. See the *WSL2* branch for in-cluster deployment workarounds. |
+| Headlamp | `0.44.0` | Cluster GUI; can be installed as a flatpak, or . |
 
-### Foundational Cluster Services
+### Cluster Monitoring Services
 
 Both ETL and ML workloads rely on a shared operational baseline, beyond what's already running above. Not yet in the repo directory; ordered alphabetically by component name.
 
@@ -122,10 +124,6 @@ Same order as Core Database Architecture above, then the three sections below it
 | Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8200:8200` | Ad hoc token/policy management |
 | View Hubble Flows (CLI) | `just hubble observe --follow` | Ad hoc network observability, independent of `hubble.internal` DNS |
 | Open Hubble UI | `just hubble-ui` | Quick local access; starts its own port-forward and opens the browser |
-
-* **Scheduled Backups:** the `ScheduledBackup` in `postgis-cluster.yaml` runs at midnight daily. It carries no `immediate` flag, so the first base backup after a rebuild is taken at the next midnight; until one exists, archived WAL has no base to be applied to. The `ObjectStore` prunes backups and their WAL older than 30 days. SeaweedFS is configured for up to 100 volumes of 1024MB. That store and the database share one physical disk and one `local-path` provisioner, which enforces no size limit on either claim, so neither the 100Gi figures nor the volume cap bound growth before the disk itself does. These backups cover operator error and corruption, not loss of the drive.
-* **Lifecycle Management:** `start-cluster.sh` proceeds in order: refuse if `k3s.service` is active → launch k3s → API responding → node Ready → host Transit Vault unsealed → transit token renewed → in-cluster Vault unsealed → VSO secrets synced → CNPG operator Ready → un-hibernate → final health checks. Only the first four steps exit on failure; from the Transit Vault onward a failure records a warning and the script continues, exiting 1 at the end. The final checks cover the SeaweedFS pod and the CNPG cluster phase, and run after un-hibernation rather than gating it. cert-manager and the `barman-cloud` Deployment are not checked at all, so the run can report success while WAL archiving is not functional.
-* `stop-cluster.sh` confirms the CNPG operator is Available, sets the hibernation annotation, and waits up to 300s for the operator to confirm or for the instance pods to disappear. k3s is not stopped until one of those holds, unless `--force` is passed. A systemd-owned k3s is stopped with `systemctl disable --now`; a script-launched one gets SIGTERM at the PID bound to 6443.
 
 ---
 
