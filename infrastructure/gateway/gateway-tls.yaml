@@ -1,11 +1,8 @@
 # gateway-tls.yaml
 #
-# ClusterIssuer chain for the shared Gateway's edge TLS — the certificate a
-# browser or psql client actually sees when connecting to *.internal. This is
-# a separate trust domain from hubble-ca-issuer (infrastructure/hubble/):
-# that one is cilium-agent/hubble-relay/hubble-ui backend mTLS, invisible to
-# any client; this one is what every future tool's users trust once, in their
-# own browser or client.
+# ClusterIssuer chain (gateway-ca-issuer) plus the shared wildcard edge
+# Certificate for internal-gateway (gateway.yaml). Separate trust domain
+# from hubble-ca-issuer (infrastructure/hubble/), which is backend mTLS only.
 #
 # Same bootstrap -> local CA -> issuing-ClusterIssuer shape used for
 # postgis-ca-issuer and hubble-ca-issuer.
@@ -47,20 +44,17 @@ spec:
     secretName: gateway-local-ca-secret
 ---
 # Wildcard cert covering every *.internal hostname a future HTTPRoute names.
-# A self-signed private CA can issue a wildcard SAN with no domain-validation
-# concern (unlike a public CA) — this means adding a new tool later only ever
-# needs a new HTTPRoute, never a new Certificate.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: gateway-edge-cert
+  name: internal-edge-cert
   namespace: gateway
 spec:
-  secretName: gateway-edge-cert
+  secretName: internal-edge-cert
   dnsNames:
     - "*.internal"
     - "internal"
-  duration: 2160h # 90 days, matches postgis-server-cert's rotation cadence
+  duration: 2160h # 90 days
   renewBefore: 360h # 15 days
   privateKey:
     algorithm: ECDSA
