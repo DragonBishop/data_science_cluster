@@ -1,8 +1,6 @@
 # hubble-httproute.yaml
 #
-# Attaches Hubble UI to the shared Gateway (infrastructure/gateway/) at
-# hubble.internal. Lives in kube-system, alongside its own backendRef
-# (hubble-ui Service, port 80.
+# Routes to the hubble-ui Service.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

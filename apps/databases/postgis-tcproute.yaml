@@ -1,18 +1,8 @@
 # postgis-tcproute.yaml
 #
-# Replaces postgis-external-service.yaml's dedicated LoadBalancer. Raw TCP
-# passthrough to the CNPG primary through the shared Gateway
-# (infrastructure/gateway/) instead of a Service-per-database pattern.
-#
-# TCPRoute has no hostname/SNI matching — the Gateway's `postgres` listener
-# (port 5432) maps 1:1 to this one backend, so there's nothing to route
-# between. postgres.internal (postgres-tls.yaml) is purely a human-friendly
-# way to reach the same IP; TCPRoute itself never inspects it.
-#
-# Same-namespace backendRef (postgis-cluster-rw is in `databases`, same as
-# this TCPRoute) needs no ReferenceGrant. Cross-namespace attachment to the
-# Gateway needs none either — its listener already allows routes from any
-# namespace.
+# Raw TCP passthrough to the CNPG primary through the shared Gateway
+# (infrastructure/gateway/). postgres.internal (postgres-tls.yaml) is a
+# human-friendly way to reach the same IP; TCPRoute itself never inspects it.
 apiVersion: gateway.networking.k8s.io/v1
 kind: TCPRoute
 metadata:
