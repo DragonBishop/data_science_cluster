@@ -40,6 +40,18 @@
   ],
 
   // ----------------------------------------------------------------------------
+  // Port Forwarding
+  // ----------------------------------------------------------------------------
+  // With --network=host, Jupyter is already reachable at localhost on the
+  // host; VS Code's auto-forward notification for it is pure noise.
+  "portsAttributes": {
+    ".*(jupyter|ipykernel_launcher).*": {
+      "label": "Jupyter (matched by process, no forward needed)",
+      "onAutoForward": "ignore"
+    }
+  },
+
+  // ----------------------------------------------------------------------------
   // IDE Execution Tooling
   // ----------------------------------------------------------------------------
   "customizations": {

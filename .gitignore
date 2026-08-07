@@ -62,4 +62,5 @@ scratch*
 *.swp
 .idea/
 .vscode/*
-!.vscode/extensions.jsondata_science_cluster.code-workspace
+!.vscode/extensions.json
+data_science_cluster.code-workspace
