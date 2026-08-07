@@ -30,3 +30,7 @@ ipam:
 
 gatewayAPI:
   enabled: true
+
+egressGateway:
+  # Enables the CiliumEgressGatewayPolicy CRD.
+  enabled: true

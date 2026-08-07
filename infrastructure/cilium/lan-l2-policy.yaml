@@ -1,0 +1,13 @@
+# lan-l2-policy.yaml
+#
+# ARP-announces every LoadBalancer Service's IP on the LAN interface. No
+# serviceSelector — applies to all of them.
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: lan-l2-policy
+spec:
+  interfaces:
+    - ^enp9s0$
+  externalIPs: false
+  loadBalancerIPs: true
