@@ -59,19 +59,22 @@ The IP and DNS structure for this cluster assumes generic IP routing on a Linux 
 
 | File | Hardcoded |
 | --- | --- |
-| `infrastructure/cilium/gateway-lb-pool.yaml` | `192.0.2.240` — shared Gateway's LAN IP |
-| `infrastructure/cilium/dns-lb-pool.yaml` | `192.168.1.241` — DNS resolver's LAN IP |
-| `infrastructure/dns/dns-release.yaml` | Both of the above, plus `192.168.1.1` (LAN router, used as the upstream DNS forwarder) |
+| `infrastructure/cilium/lan-lb-pool.yaml` | `192.0.2.240-192.0.2.250` — reserved block every LAN-facing Service draws from |
+| `infrastructure/gateway/gateway.yaml` | `192.0.2.240` — the shared Gateway's IP |
 | `apps/databases/postgres-tls.yaml` | `192.0.2.240` again, as a cert SAN |
+| `infrastructure/coredns-custom/coredns-lan-service.yaml` | `192.0.2.242` — the LAN-facing IP for k3s's own CoreDNS |
+| `infrastructure/coredns-custom/coredns-custom.yaml` | `192.0.2.240` — what every `*.internal` name resolves to |
 
-Confirm your router's DHCP scope excludes whatever addresses you pick:
+k3s's own in-cluster CoreDNS (`kube-system`) resolves `*.internal` for LAN clients (via `infrastructure/coredns-custom/`, a zone added to the same CoreDNS that's always resolved `*.svc.cluster.local` for pods — not a second resolver). Whether your devices actually reach it depends on your router/DNS setup, covered later in this doc.
+
+Confirm your router's DHCP scope excludes the whole reserved block, not just the addresses currently in use:
 
 ```bash
 ping -c 2 -W 1 192.0.2.240
-ping -c 2 -W 1 192.168.1.241
+ping -c 2 -W 1 192.0.2.242
 ```
 
-No response means the address is likely free, not that the router will never hand it out. DHCP exclusion is what guarantees that.
+No response means the address is likely free, not that the router will never hand it out. DHCP exclusion of the full `192.0.2.240-192.0.2.250` range is what guarantees that.
 
 **Install k3s.** Cilium replaces kube-proxy, Traefik, servicelb, and the default CNI, so the flags below disable all of them at install time:
 
@@ -249,12 +252,14 @@ This writes `clusters/local/flux-system/` and pushes its own commit. Every other
 
 ```text
 cilium ← cert-manager ← gateway ← hubble
-       ← dns
+cilium ← gateway ← databases
+cilium ← coredns-custom
 vault ← vault-secrets-operator ← cnpg-operator ← barman-cloud ← seaweedfs ← databases
 ```
 
 * `cnpg-operator` also needs `cert-manager` via `barman-cloud`'s own `dependsOn`.
-* `Databases` also needs `Gateway`, for its `TCPRoute` to attach to
+* `gateway` holds the one shared `Gateway` every tool's `Route` attaches to, plus the CA chain its Certificate uses. `databases` depends on it for `postgis-tcproute.yaml`'s cross-namespace attach.
+* `coredns-custom` just needs `cilium`, for the LB IP its LAN-facing Service claims.
 
 **Check:**
 
@@ -263,7 +268,7 @@ flux get kustomizations
 kubectl get pods -n flux-system   # all Running
 kubectl get ns
 # vault, vault-secrets-operator-system, cnpg-system, databases,
-# cert-manager, gateway, dns
+# cert-manager, gateway
 ```
 
 ---
@@ -389,17 +394,17 @@ helm list -n kube-system
  # reinstall fresh.
 
 kubectl get ciliumloadbalancerippool
-# gateway-lb-pool and dns-lb-pool both show 0 IPs available. Each pool's
-# one address is already claimed by its Service.
+# lan-ip-pool shows 2 IPs used (the shared Gateway's Service, coredns-external).
 
 kubectl get gateway -n gateway internal-gateway -o wide
-# ADDRESS matches Phase 1, PROGRAMMED True
+# ADDRESS 192.0.2.240, PROGRAMMED True
 
-kubectl get svc -n dns
-# EXTERNAL-IP matches Phase 1, not <pending>
+kubectl get svc -n kube-system coredns-external
+# EXTERNAL-IP 192.0.2.242, not <pending>
 
-dig +short @192.168.1.241 google.com          # forwards correctly
-dig +short @192.168.1.241 hubble.internal      # answers with the Gateway IP
+# coredns-custom's ConfigMap volume is optional: true, so it isn't mounted
+# retroactively into an already-running CoreDNS pod. First time only:
+kubectl rollout restart deployment coredns -n kube-system
 
 kubectl wait --for=condition=Available --timeout=120s -n cert-manager deployment --all
 
@@ -435,7 +440,7 @@ flux reconcile helmrelease cilium -n kube-system --timeout 5m
 
 This does not restart the Cilium agent DaemonSet. only Relay/UI get created and Hubble's certs issued via cert-manager. If this instead reports `RetriesExceeded`/`Stalled` and returns immediately, a plain reconcile won't retry it, see `troubleshooting.md`.
 
-**Direct CLI/UI access, independent of DNS:** `just hubble-ui` port-forwards straight to `localhost:12000` and opens a browser, useful before `hubble.internal` resolves anywhere. `just hubble status` / `just hubble observe --follow` talk to Relay directly over its mTLS port (4245), separate from the HTTPRoute above: the Gateway carries the web UI's HTTP(S) traffic, not Relay's own gRPC port. See the `justfile`.
+**Direct CLI/UI access:** `just hubble-ui` port-forwards straight to `localhost:12000` and opens a browser — useful before `hubble.internal` resolves anywhere (see the DNS section below). `just hubble status` / `just hubble observe --follow` talk to Relay directly over its mTLS port (4245), separate from the HTTPRoute above: the Gateway carries the web UI's HTTP(S) traffic, not Relay's own gRPC port. See the `justfile`.
 
 ---
 
@@ -553,8 +558,9 @@ flux get kustomizations                                   # everything Ready
 Rehearse a restore once, per the README's restore section. A restore path untested on the new build is unverified.
 
 ```bash
-dig +short @192.168.1.241 hubble.internal      # 192.0.2.240
-dig +short @192.168.1.241 postgres.internal    # 192.0.2.240
+curl -v --resolve hubble.internal:443:192.0.2.240 \
+  --cacert <(kubectl get secret -n cert-manager gateway-local-ca-secret -o jsonpath='{.data.tls\.crt}' | base64 -d) \
+  https://hubble.internal/
 ```
 
-Hubble UI needs either a device pointed at `192.168.1.241` as its DNS server, or `curl --resolve hubble.internal:443:192.0.2.240 https://hubble.internal/ -k` as a no-DNS-config workaround (ignoring cert trust for this one-off check). A resolving hostname and valid Route backend are necessary but not sufficient. Confirm the page loads.
+`--resolve` bypasses DNS entirely, so this checks the Gateway/HTTPRoute/cert chain on its own, independent of whether `hubble.internal` actually resolves anywhere yet. If your devices are set up to resolve it (see the DNS section above), plain `curl https://hubble.internal/` should work the same way. Confirm the page loads and the certificate chains to `gateway-local-ca`.
