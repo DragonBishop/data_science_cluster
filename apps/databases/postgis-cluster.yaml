@@ -4,13 +4,12 @@
 # consumes, the object store and schedule used for backups, and a socat
 # Deployment that accepts Postgres connections on the node's loopback address.
 #
-# Apply manifests/postgres-tls.yaml first; the Cluster references the Secret
-# it produces.
+# Apply postgres-tls.yaml first; the Cluster references the Secret it
+# produces.
 
 # ---------------------------------------------------------------------------
-# Superuser credential, read from the secret/postgis KV path and rewritten
-# every hour. Vault's database secrets engine authenticates to Postgres as
-# this user to create and drop the roles it issues.
+# Superuser credential, read from secret/postgis and refreshed hourly. Vault's
+# database secrets engine uses it to create/drop the roles it issues.
 # ---------------------------------------------------------------------------
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultStaticSecret
@@ -31,10 +30,9 @@ spec:
   vaultAuthRef: vault-auth
 ---
 # ---------------------------------------------------------------------------
-# Application credential, issued on a lease by Vault's database secrets engine
-# from the postgis-app-role role. VSO renews the lease and rewrites the Secret
-# on each renewal. Vault drops the underlying Postgres role when the lease
-# ends. The mount and role are configured through Vault directly; see README.
+# Application credential, leased via Vault's postgis-app-role. VSO renews the
+# lease and rewrites the Secret each renewal; Vault drops the Postgres role
+# when the lease ends. Mount/role are configured directly in Vault; see README.
 # ---------------------------------------------------------------------------
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultDynamicSecret
@@ -82,9 +80,11 @@ metadata:
   namespace: databases
 spec:
   instances: 1
-  # Postgres escalates from a smart to a fast shutdown after 15s. The default
-  # is 180.
+  # Postgres escalates from a smart to a fast shutdown after 15s (default 180).
+  # If WAL is still archiving at that point, CNPG waits up to stopDelay minus
+  # smartShutdownTimeout (45s here) before forcing termination.
   smartShutdownTimeout: 15
+  stopDelay: 60
   imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
 
   resources:
@@ -105,20 +105,18 @@ spec:
       secret:
         name: postgis-app-credentials
 
-      # postInitSQL runs against the postgres database, once, at initdb. It
-      # does not run on subsequent applies, on the running cluster, or on a
-      # cluster bootstrapped from a backup.
+      # Runs once against the postgres database at initdb; does not rerun on
+      # later applies, on the running cluster, or after a backup bootstrap.
       #
-      # app_readwrite is granted to each role Vault's database secrets engine
-      # issues. pg_read_all_data and pg_write_all_data are evaluated at access
-      # time, so they cover tables, views and sequences in every schema in
-      # every database, including ones created later. They do not cover
-      # TRUNCATE, DDL, or objects owned by another role.
+      # app_readwrite is granted to every role Vault's database secrets engine
+      # issues. pg_read_all_data/pg_write_all_data apply at access time,
+      # covering tables/views/sequences in every schema and database,
+      # including future ones — not TRUNCATE, DDL, or objects owned by
+      # another role.
       #
-      # Ownership of the data_science database and anything created in it
-      # comes from postgis-database.yaml's Database CRD (owner: app_readwrite)
-      # and from each Vault lease's own `SET role = app_readwrite` — not from
-      # a grant here.
+      # data_science and its objects are owned via postgis-database.yaml's
+      # Database CRD and each lease's own `SET role = app_readwrite`, not a
+      # grant here.
       postInitSQL:
         - CREATE ROLE app_readwrite NOLOGIN
         - GRANT pg_read_all_data, pg_write_all_data TO app_readwrite
@@ -127,9 +125,8 @@ spec:
     size: 100Gi
     storageClass: local-path
 
-  # Server certificate and CA presented to clients, both read from the
-  # cert-manager Secret created by postgres-tls.yaml. Client certificates and
-  # replication use CNPG's own generated CA, which these fields do not change.
+  # Server certificate and CA presented to clients, read from postgres-tls.yaml's
+  # Secret. Client certs and replication still use CNPG's own generated CA.
   certificates:
     serverTLSSecret: postgis-server-cert
     serverCASecret: postgis-server-cert
@@ -166,8 +163,7 @@ metadata:
   namespace: databases
 spec:
   replicas: 1
-  # Terminates the existing pod before creating its replacement, so only one
-  # holds the listening socket.
+  # Recreate: only one pod holds the listening socket at a time.
   strategy:
     type: Recreate
   selector:

@@ -20,7 +20,7 @@ update:
   uv sync -U --all-groups --all-extras --inexact
 
 # set up the nbwipers git filter so notebooks stay clean on commit
-git-setup: install
+git-setup:
   @[ -d .git ] || git init
   uv run nbwipers install local
 

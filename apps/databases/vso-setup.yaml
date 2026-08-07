@@ -1,15 +1,12 @@
 # vso-setup.yaml
 #
-# Creates the databases namespace and configures the Vault Secrets Operator
-# (VSO) to authenticate with the in-cluster Vault. This file establishes the
-# connection to Vault; workloads and the secrets they consume are defined in
-# their respective manifests.
+# Configures the Vault Secrets Operator (VSO) to authenticate with the
+# in-cluster Vault. The databases namespace itself is created by
+# infrastructure/namespaces/ (the databases Kustomization depends on it
+# transitively via both gateway and vault, so it always exists first).
+# This file establishes the connection to Vault; workloads and the secrets
+# they consume are defined in their respective manifests.
 
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: databases
----
 # Service account used by VSO when authenticating to Vault's Kubernetes auth
 # method. Vault authorizes this identity according to the configured
 # `postgis-role`.

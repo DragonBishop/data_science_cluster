@@ -53,7 +53,7 @@ cd data_science_cluster
 
 * **Confirm the network-specific values fit this rollout.**
 
-*Reinstalling on a host that already has k3s installed? See the appendix first.*
+*Reinstalling on a host that already has k3s installed?* Run `/usr/local/bin/k3s-uninstall.sh`, then check Cilium's BPF mounts are actually gone (`mount | grep bpf`; see `troubleshooting.md`). This wipes the in-cluster Vault and PVC data — SeaweedFS and the host Transit Vault live outside k3s's data dir and survive — so plan to rebuild Vault (Section 4+) and restore Postgres (README) afterward.
 
 The IP and DNS structure for this cluster assumes generic IP routing on a Linux OS. These are the only files that hardcode network values:
 
@@ -254,7 +254,7 @@ This writes `clusters/local/flux-system/` and pushes its own commit. Every other
 cilium ← cert-manager ← gateway ← hubble
 cilium ← gateway ← databases
 cilium ← coredns-custom
-vault ← vault-secrets-operator ← cnpg-operator ← barman-cloud ← seaweedfs ← databases
+vault ← vault-secrets-operator ← cnpg-operator ← barman-cloud ← databases
 ```
 
 * `cnpg-operator` also needs `cert-manager` via `barman-cloud`'s own `dependsOn`.
@@ -481,7 +481,7 @@ unset LEASE_USER LEASE_PASS
 
 If ARP doesn't resolve (`no route to host`, or `arping 192.0.2.240` from another LAN device gets nothing back), the likely cause on a consumer/office router is ARP or DHCP-snooping filtering unsolicited replies from an IP it never leased, not a Cilium misconfiguration.
 
-**If you have a backup to restore** see the Appendix for more information; skip if starting empty):
+**Migrating data from an existing Postgres instance?** Restore its dump into the freshly bootstrapped cluster below; skip if starting empty. (Restoring from *this* cluster's own CNPG/Barman backups instead — see README's [Restoring the Database from SeaweedFS](README.md#restoring-the-database-from-seaweedfs).)
 
 ```bash
 kubectl exec -i postgis-cluster-1 -n databases -- pg_restore -U postgres -d data_science --no-owner --no-privileges \
