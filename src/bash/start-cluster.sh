@@ -7,8 +7,10 @@
 # health, workload health) is reconciled continuously by Flux and visible
 # live in Headlamp or `flux get kustomizations` / `kubectl cnpg status` —
 # this script only does what nothing else can do: host-level actions and
-# the hibernation flip, which is deliberately excluded from Flux's declared
-# state (see WORKFLOW.md Phase 12's note on SSA field ownership).
+# the hibernation flip. postgis-cluster.yaml never sets cnpg.io/hibernation:
+# if it did, Flux's own server-side apply would fight this script's runtime
+# toggle back to whatever git says on the next reconcile, so the annotation
+# is deliberately kept out of the git-declared Cluster spec entirely.
 #
 # Failures after the k3s startup phase set had_warnings and the script
 # continues. It exits 1 at the end if any were set.
@@ -79,9 +81,10 @@ until kubectl get nodes | grep -q " Ready"; do
         echo "❌ ERROR: Node did not reach Ready within 5 minutes."
         echo "💡 TROUBLESHOOTING: A node with no CNI stays NotReady indefinitely."
         echo "   1. Is Cilium installed?  cilium status --wait"
-        echo "   2. On a first-time build, install it now (README Step 2c):"
+        echo "   2. On a first-time build, install it now (INSTALLATION.md Section 2,"
+        echo "      version pinned in infrastructure/cilium/cilium-release.yaml):"
         echo "      helm upgrade --install cilium oci://quay.io/cilium/charts/cilium \\"
-        echo "        --version 1.20.0 --namespace kube-system -f manifests/cilium-values.yaml"
+        echo "        --version <chart-version> --namespace kube-system -f infrastructure/cilium/cilium-values.yaml"
         exit 1
     fi
     echo "   ...still waiting for node... ($((retries * 5))s elapsed)"
@@ -126,7 +129,7 @@ else
     KEYFILE="$HOME/.vault-keys.gpg"
     if [ ! -f "$KEYFILE" ]; then
         echo "❌ ERROR: $KEYFILE not found. Cannot unseal Transit Vault."
-        echo "💡 TROUBLESHOOTING: Did you create the GPG keyfile (README Step 3)?. Continuing..."
+        echo "💡 TROUBLESHOOTING: Did you create the GPG keyfile (INSTALLATION.md Section 3)?. Continuing..."
         had_warnings=true
     else
         # Submits each key on stdin via `key=-`, keeping it out of
@@ -181,7 +184,7 @@ else
     echo "⚠️  Transit token renewal failed. Auto-unseal keeps working until the"
     echo "   token's window closes; after that the in-cluster Vault cannot unseal."
     echo "💡 TROUBLESHOOTING: Issue a replacement from the host Transit Vault and"
-    echo "   replace the Secret (README Steps 3 and 4). Capture the token into a"
+    echo "   replace the Secret (INSTALLATION.md Sections 3 and 5). Capture the token into a"
     echo "   variable rather than pasting it as a --from-literal argument:"
     echo "   kubectl delete secret vault-transit-secret -n vault"
     echo "   NEWTOK=\$(vault token create -policy=autounseal-policy -period=768h -orphan -field=token) && \\"
