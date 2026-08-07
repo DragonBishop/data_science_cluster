@@ -2,10 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - cilium-release.yaml
-  - gateway-lb-pool.yaml
-  - gateway-l2-policy.yaml
-  - dns-lb-pool.yaml
-  - dns-l2-policy.yaml
+  - lan-lb-pool.yaml
+  - lan-l2-policy.yaml
 configMapGenerator:
   - name: cilium-values
     namespace: kube-system
