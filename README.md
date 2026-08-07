@@ -211,7 +211,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── feature-proposal.yml
 │   │   └── technical-debt-resolution.yml
 │   └── workflows/
-│       └── ci.yml                       # pytest + coverage against src/clusterpgis, on pull requests
+│       └── ci.yml                       # pytest + coverage
 ├── apps/
 │   └── databases/                       # PostGIS cluster + dependencies, one Flux Kustomization
 │       ├── kustomization.yaml
