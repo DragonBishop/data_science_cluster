@@ -1,5 +1,4 @@
 # Cilium chart values — pinned against Cilium 1.20.0 / Gateway API v1.6.1.
-# Both versions move together; see step 2a before bumping either.
 
 kubeProxyReplacement: true
 

@@ -40,7 +40,7 @@
   * **What's happening:** The script cannot read or decrypt the unseal keys.
   * **How to fix it:**
     1. Confirm `~/.vault-keys.gpg` exists and is mode `600` (`ls -l ~/.vault-keys.gpg`).
-    2. Confirm the passphrase matches the one set in Step 2.
+    2. Confirm the passphrase matches the one set in Step 3.
     3. *Technical note:* `vault operator unseal` does not accept piped input, so the script passes the key via `vault write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | vault write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
 
 * **Vault throws a "permission denied" error**
