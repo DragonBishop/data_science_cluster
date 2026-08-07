@@ -1,0 +1,19 @@
+# coredns-custom.yaml
+#
+# Adds an `internal` zone to k3s's own CoreDNS via its *.server import.
+# First apply needs `kubectl rollout restart deployment coredns -n kube-system`
+# (optional ConfigMap volume, not mounted retroactively). Edits after that
+# reload live.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  internal.server: |
+    internal:53 {
+      template IN A internal {
+        match "^.*\.internal\.?$"
+        answer "{{ .Name }} 60 IN A 192.0.2.240"
+      }
+    }
