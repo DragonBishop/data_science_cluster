@@ -326,7 +326,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 ├── .gitignore
 ├── .python-version
 ├── INSTALLATION.md                      # First-time cluster bootstrap, run sequentially
-├── justfile                             # `just setup` (uv sync + nbwipers filter), `just test-cov`, `just hubble`/`hubble-ui` (Hubble CLI/UI access), `just vault-shell`/`vault-login` (Vault pod shell access)
+├── justfile                             # `just setup` (review for more commands)
 ├── pyproject.toml                       # uv-managed clusterpgis package + dev tooling
 ├── README.md                            # Architecture, setup, and operations reference
 ├── troubleshooting.md                   # Symptom → cause → fix, by subsystem
