@@ -23,7 +23,8 @@ metadata:
   name: vault-connection
   namespace: databases
 spec:
-  address: http://vault.vault.svc.cluster.local:8200
+  address: https://vault.vault.svc.cluster.local:8200
+  caCertSecretRef: vault-ca-bundle
 ---
 # Configures VSO to authenticate to Vault using the Kubernetes auth method.
 # The service account's projected token is exchanged for a Vault token

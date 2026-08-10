@@ -40,6 +40,7 @@ K3S_PID=$(sudo bash -c 'nohup k3s server \
   --disable-kube-proxy \
   --disable-network-policy \
   --flannel-backend=none \
+  --secrets-encryption \
   > /var/log/k3s.log 2>&1 &
   echo $!')
 

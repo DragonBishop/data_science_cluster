@@ -75,7 +75,7 @@
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
-  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgres-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgres.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate. If the cluster was rebuilt, the CA also changed, re-run the `root.crt` command in Step 7.
+  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgis-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgis.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate. If the cluster was rebuilt, the CA also changed, re-run the `root.crt` command in Step 7.
 
 * **Barman Cloud Plugin backups start failing**
   * **What's happening:** The database cannot reach or authenticate to the object store.

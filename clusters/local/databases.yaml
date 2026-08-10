@@ -8,6 +8,7 @@ spec:
   dependsOn:
     - name: barman-cloud
     - name: gateway
+    - name: vault
   sourceRef:
     kind: GitRepository
     name: flux-system

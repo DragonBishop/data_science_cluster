@@ -11,7 +11,7 @@ kubeconfig
 *.kubeconfig
 k3s.yaml
 
-# Private key material. postgres-tls.yaml has cert-manager mint these into
+# Private key material. postgis-tls.yaml has cert-manager mint these into
 # Secrets, and the Transit key belongs in /opt/vault/tls. Certificates are
 # public and are deliberately not listed -- a committed CA bundle is legitimate.
 *.key
