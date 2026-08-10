@@ -130,12 +130,12 @@ Same order as Core Database Architecture above, then the three sections below it
 | Trigger Manual DB Backup | `kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io` | Before a risky schema change, outside the nightly automated backup |
 | Check Scheduled Backups Aren't Suspended | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Confirming nightly backups are actually running |
 | Connect via psql | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
-| Verify Vault State | `kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault status"` | Troubleshooting only |
+| Verify Vault State | `kubectl exec -n vault vault-0 -- vault status` | Troubleshooting only |
 | Open a Vault Shell | `just vault-shell` | Interactive Vault work; `VAULT_ADDR` set and the inherited transit-unseal `VAULT_TOKEN` unset, ready for secure validation through `vault login` |
 | Log Into Vault | `just vault-login` | Same as `just vault-shell`, then runs `vault login`; drops into the shell already authenticated |
 | Verify CNPG State | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
 | Check Flux Sync State | `flux get kustomizations -A` | Confirming the GitOps install graph is Ready end to end |
-| Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8200:8200` | Ad hoc token/policy management |
+| Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8210:8200` (then `VAULT_ADDR=https://127.0.0.1:8210 VAULT_CACERT=~/.vault-certs/vault-internal-ca.crt`) | Ad hoc token/policy management; `8200:8200` would collide with the host Transit Vault's own port |
 | View Hubble Flows (CLI) | `just hubble observe --follow` | Ad hoc network observability, independent of the web UI |
 | Open Hubble UI | `just hubble-ui` | Quick local access; starts its own port-forward and opens the browser |
 
@@ -218,7 +218,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── postgis-cluster.yaml
 │       ├── postgis-database.yaml
 │       ├── postgis-tcproute.yaml
-│       ├── postgres-tls.yaml
+│       ├── postgis-tls.yaml
 │       ├── seaweedfs-credentials.yaml
 │       ├── seaweedfs-networkpolicy.yaml
 │       ├── seaweedfs-release.yaml
@@ -344,7 +344,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 * `apps/databases/` the PostGIS cluster and everything it depends on, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * `kustomization.yaml`: every resource this Kustomization builds, in one pass.
   * `vso-setup.yaml`: Creates the `databases` namespace and the `VaultConnection`/`VaultAuth`/`ServiceAccount` VSO uses to authenticate to Vault.
-  * `postgres-tls.yaml`: cert-manager `Issuer`s and `Certificate` producing the Postgres server certificate. SANs cover `localhost`/`127.0.0.1` (the socat proxy), `postgres.internal`, and the shared Gateway's static LAN IP.
+  * `postgis-tls.yaml`: cert-manager `Issuer`s and `Certificate` producing the Postgres server certificate. SANs cover `localhost`/`127.0.0.1` (the socat proxy), `postgis.internal`, and the shared Gateway's static LAN IP.
   * `postgis-cluster.yaml`: The CNPG `Cluster`, its static and dynamic Vault secrets, the `ObjectStore` and `ScheduledBackup` used for backups, and the `postgres-proxy` Deployment.
   * `postgis-tcproute.yaml`: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`). The listener maps 1:1 to this one backend — TCP has no Host-header equivalent to route on, so there's nothing to disambiguate.
   * `postgis-database.yaml`: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions (reconciles on every generation change, unlike `postInitSQL`, which runs once at initdb).

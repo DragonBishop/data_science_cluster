@@ -4,7 +4,7 @@
 # consumes, the object store and schedule used for backups, and a socat
 # Deployment that accepts Postgres connections on the node's loopback address.
 #
-# Apply postgres-tls.yaml first; the Cluster references the Secret it
+# Apply postgis-tls.yaml first; the Cluster references the Secret it
 # produces.
 
 # ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ spec:
     size: 100Gi
     storageClass: local-path
 
-  # Server certificate and CA presented to clients, read from postgres-tls.yaml's
+  # Server certificate and CA presented to clients, read from postgis-tls.yaml's
   # Secret. Client certs and replication still use CNPG's own generated CA.
   certificates:
     serverTLSSecret: postgis-server-cert

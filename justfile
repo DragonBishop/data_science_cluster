@@ -70,7 +70,7 @@ hubble-ui:
   command -v xdg-open >/dev/null 2>&1 && xdg-open http://localhost:12000 >/dev/null 2>&1 &
   disown
 
-vault_env := "export VAULT_ADDR=http://127.0.0.1:8200; unset VAULT_TOKEN"
+vault_env := "unset VAULT_TOKEN"
 
 # open an interactive shell in vault-0 with VAULT_ADDR set and the inherited transit-unseal VAULT_TOKEN unset, ready for `vault login` or any other vault command
 vault-shell:

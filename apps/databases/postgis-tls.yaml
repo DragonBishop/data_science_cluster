@@ -1,4 +1,4 @@
-# postgres-tls.yaml
+# postgis-tls.yaml
 #
 # Generates a custom self-signed CA and server certificate via cert-manager 
 # for the CloudNativePG cluster. The certificate includes localhost/127.0.0.1 
@@ -68,7 +68,7 @@ spec:
     - postgis-cluster-r
     - postgis-cluster-r.databases.svc.cluster.local
     - localhost
-    - postgres.internal   # resolves via the internal zone on k3s's own CoreDNS
+    - postgis.internal   # resolves via the internal zone on k3s's own CoreDNS
   ipAddresses:
     - 127.0.0.1
     - 192.0.2.240   # the shared Gateway's IP (infrastructure/gateway/)
