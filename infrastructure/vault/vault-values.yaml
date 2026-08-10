@@ -4,12 +4,6 @@
 # This Vault automatically unseals using a separate transit Vault running
 # outside the cluster, allowing it to restart without manual unseal keys.
 
-global:
-  # Disable TLS on Vault's client listener. Access to Vault is restricted
-  # by Kubernetes networking, so the listener serves plaintext traffic
-  # within the cluster.
-  tlsDisable: true
-
 injector:
   # Disable the Vault Agent Injector. Secrets are synchronized into
   # Kubernetes by the Vault Secrets Operator (VSO), so sidecar injection
@@ -28,11 +22,21 @@ server:
       secretName: vault-transit-secret
       secretKey: token
 
-  # Automatically mounts the TLS certificate ConfigMap 
+  # Defaults for the vault CLI when run inside this pod (kubectl exec, just
+  # vault-shell/vault-login), so callers don't need to pass these inline.
+  extraEnvironmentVars:
+    VAULT_ADDR: https://vault-internal.vault.svc.cluster.local:8200
+    VAULT_CACERT: /vault/userconfig/vault-server-cert/ca.crt
+
+  # Automatically mounts the TLS certificate ConfigMap
   # we created into the Vault pod at /vault/userconfig/vault-transit-ca/
   extraVolumes:
     - type: configMap
       name: vault-transit-ca
+    # Server certificate/key for the client-facing listener below, minted by
+    # vault-tls.yaml at /vault/userconfig/vault-server-cert/.
+    - type: secret
+      name: vault-server-cert
 
   standalone:
     enabled: true
@@ -45,7 +49,8 @@ server:
       listener "tcp" {
         address          = "[::]:8200"
         cluster_address  = "[::]:8201"
-        tls_disable      = 1
+        tls_cert_file    = "/vault/userconfig/vault-server-cert/tls.crt"
+        tls_key_file     = "/vault/userconfig/vault-server-cert/tls.key"
       }
 
       # Store Vault's data on the pod's persistent volume. This deployment

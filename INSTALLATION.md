@@ -61,7 +61,7 @@ The IP and DNS structure for this cluster assumes generic IP routing on a Linux 
 | --- | --- |
 | `infrastructure/cilium/lan-lb-pool.yaml` | `192.0.2.240-192.0.2.250` — reserved block every LAN-facing Service draws from |
 | `infrastructure/gateway/gateway.yaml` | `192.0.2.240` — the shared Gateway's IP |
-| `apps/databases/postgres-tls.yaml` | `192.0.2.240` again, as a cert SAN |
+| `apps/databases/postgis-tls.yaml` | `192.0.2.240` again, as a cert SAN |
 | `infrastructure/coredns-custom/coredns-lan-service.yaml` | `192.0.2.242` — the LAN-facing IP for k3s's own CoreDNS |
 | `infrastructure/coredns-custom/coredns-custom.yaml` | `192.0.2.240` — what every `*.internal` name resolves to |
 
@@ -79,7 +79,7 @@ No response means the address is likely free, not that the router will never han
 **Install k3s.** Cilium replaces kube-proxy, Traefik, servicelb, and the default CNI, so the flags below disable all of them at install time:
 
 ```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --disable traefik --disable servicelb --disable-kube-proxy --disable-network-policy --flannel-backend=none" sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --disable traefik --disable servicelb --disable-kube-proxy --disable-network-policy --flannel-backend=none --secrets-encryption" sh -
 
 mkdir -p ~/.kube
 sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
@@ -318,7 +318,7 @@ kubectl get pods -n vault -w
 Initialize this instance. Because the seal is transit, this returns **recovery keys** and a **root token**, not unseal keys. Store both immediately:
 
 ```bash
-kubectl exec -n vault vault-0 -- sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault operator init"
+kubectl exec -n vault vault-0 -- vault operator init
 ```
 
 **Configure it completely:** KV secrets, the Kubernetes auth backend, policies via the OpenTofu module at `terraform/vault-bootstrap/`. Flux never reconciles this directory; state is local, gitignored, and encrypted at rest via OpenTofu's `encryption` block. Generate the state-encryption passphrase once and store it alongside the recovery keys.
@@ -329,11 +329,13 @@ Generate a passphrase using the bash terminal:
 openssl rand -base64 32
 ```
 
-Forward to a local port other than 8200. The host Transit Vault owns `0.0.0.0:8200` permanently, so `VAULT_ADDR=http://127.0.0.1:8200` here would land on the host Vault instead of the tunnel:
+Forward to a local port other than 8200. The host Transit Vault owns `0.0.0.0:8200` permanently, so `VAULT_ADDR=https://127.0.0.1:8200` here would land on the host Vault instead of the tunnel:
 
 ```bash
 kubectl port-forward -n vault vault-0 8210:8200 &
-export VAULT_ADDR=http://127.0.0.1:8210
+
+mkdir -p ~/.vault-certs
+kubectl get secret vault-server-cert -n vault -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.vault-certs/vault-internal-ca.crt
 
 read -rs -p "Vault root token (above): " VAULT_TOKEN; echo
 read -rs -p "State encryption passphrase: " TF_VAR_state_encryption_passphrase; echo
@@ -505,12 +507,11 @@ kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d data_scien
 
 ```bash
 kubectl port-forward -n vault vault-0 8210:8200 &
-export VAULT_ADDR=http://127.0.0.1:8210
 
 read -rs -p "Vault root token (Phase 4): " VAULT_TOKEN; echo
 read -rs -p "State encryption passphrase: " TF_VAR_state_encryption_passphrase; echo
 export VAULT_TOKEN TF_VAR_state_encryption_passphrase
-export TF_VAR_postgres_superuser_password=$(VAULT_TOKEN="$VAULT_TOKEN" vault kv get -field=password secret/postgis)
+export TF_VAR_postgres_superuser_password=$(VAULT_ADDR=https://127.0.0.1:8210 VAULT_CACERT=~/.vault-certs/vault-internal-ca.crt VAULT_TOKEN="$VAULT_TOKEN" vault kv get -field=password secret/postgis)
 
 cd terraform/vault-database
 tofu init
