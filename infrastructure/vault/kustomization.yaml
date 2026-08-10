@@ -3,10 +3,10 @@ kind: Kustomization
 resources:
   - vault-tls.yaml
   - vault-release.yaml
+configurations:
+  - kustomizeconfig.yaml
 configMapGenerator:
   - name: vault-values
     namespace: vault
     files:
       - values.yaml=vault-values.yaml
-generatorOptions:
-  disableNameSuffixHash: true
