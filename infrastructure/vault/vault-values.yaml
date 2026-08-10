@@ -4,6 +4,11 @@
 # This Vault automatically unseals using a separate transit Vault running
 # outside the cluster, allowing it to restart without manual unseal keys.
 
+global:
+  # Chart default is true (plaintext); must be explicit false here, not
+  # merely absent, per hashicorp/vault-helm's own values.yaml default.
+  tlsDisable: false
+
 injector:
   # Disable the Vault Agent Injector. Secrets are synchronized into
   # Kubernetes by the Vault Secrets Operator (VSO), so sidecar injection
@@ -22,10 +27,12 @@ server:
       secretName: vault-transit-secret
       secretKey: token
 
-  # Defaults for the vault CLI when run inside this pod (kubectl exec, just
-  # vault-shell/vault-login), so callers don't need to pass these inline.
+  # The chart already sets VAULT_ADDR itself (127.0.0.1:8200, scheme derived
+  # from tlsDisable), so only the CA needs adding here -- a duplicate
+  # VAULT_ADDR entry fails Helm's server-side apply. This is what lets
+  # kubectl exec/just vault-shell/vault-login run vault commands with no
+  # inline env vars.
   extraEnvironmentVars:
-    VAULT_ADDR: https://vault-internal.vault.svc.cluster.local:8200
     VAULT_CACERT: /vault/userconfig/vault-server-cert/ca.crt
 
   # Automatically mounts the TLS certificate ConfigMap
