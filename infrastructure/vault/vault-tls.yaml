@@ -1,0 +1,106 @@
+# vault-tls.yaml
+#
+# Generates a custom self-signed CA and server certificate via cert-manager
+# for the cluster's Vault. The certificate includes the required in-cluster
+# service DNS names.
+#
+# Uses ClusterIssuers rather than namespaced Issuers: the CA must be trusted
+# from both the vault namespace (Vault's own listener) and the databases
+# namespace (VSO's VaultConnection, whose caCertSecretRef only ever reads a
+# Secret from its own namespace), so the CA-signing Issuer and its backing
+# Secret need to be visible cluster-wide. vault-local-ca lives in the
+# cert-manager namespace because that's this cluster's configured
+# --cluster-resource-namespace (infrastructure/cert-manager/cert-manager-release.yaml)
+# -- the namespace a ClusterIssuer looks in for its referenced CA secret.
+#
+# Ordering vs. vault-release.yaml is handled by resource order in this
+# directory's kustomization.yaml, not by manual apply order. Requires
+# cert-manager.
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-selfsigned-bootstrap
+spec:
+  selfSigned: {}
+---
+# Creates a dedicated, long-lived local CA for Vault using the self-signed
+# bootstrap ClusterIssuer.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-local-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: vault-local-ca
+  secretName: vault-local-ca-secret
+  duration: 87600h # 10 years
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: vault-selfsigned-bootstrap
+    kind: ClusterIssuer
+---
+# A ClusterIssuer backed by the local CA, used to mint the Vault server
+# certificate and the CA-bundle copy read into the databases namespace.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-ca-issuer
+spec:
+  ca:
+    secretName: vault-local-ca-secret
+---
+# Generates the server certificate Secret (containing tls.crt, tls.key, and
+# ca.crt) for Vault, valid for 90 days with auto-renewal.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-server-cert
+  namespace: vault
+spec:
+  secretName: vault-server-cert
+  duration: 2160h # 90 days
+  renewBefore: 360h # 15 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  dnsNames:
+    - vault
+    - vault.vault
+    - vault.vault.svc
+    - vault.vault.svc.cluster.local
+    - vault-internal
+    - vault-internal.vault
+    - vault-internal.vault.svc.cluster.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+---
+# Re-mints the same CA into the databases namespace so VSO's VaultConnection
+# can trust it via caCertSecretRef, which resolves in its own CR's
+# namespace, not vault's. Only this Secret's ca.crt key is ever read; the
+# leaf cert/key cert-manager also puts in it are never presented by anything.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-ca-databases
+  namespace: databases
+spec:
+  commonName: vault-ca-bundle
+  secretName: vault-ca-bundle
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  dnsNames:
+    - vault-ca-bundle.unused.invalid
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
