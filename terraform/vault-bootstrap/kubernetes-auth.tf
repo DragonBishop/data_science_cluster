@@ -25,5 +25,5 @@ resource "vault_kubernetes_auth_backend_role" "postgis" {
   bound_service_account_names       = ["postgis-vault-auth"]
   bound_service_account_namespaces  = ["databases"]
   token_policies                    = [vault_policy.postgis.name]
-  token_ttl                         = 86400  # 24h, matches the existing role
+  token_ttl                         = 86400  # 24h
 }
