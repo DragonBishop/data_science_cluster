@@ -1,0 +1,13 @@
+# Allows kubelet's health-check traffic, which Cilium classifies as the
+# "world" entity rather than "host", to reach every pod in this namespace.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-kubelet-probes
+  namespace: flux-system
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+        - world
