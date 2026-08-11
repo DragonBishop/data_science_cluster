@@ -13,6 +13,13 @@ metadata:
   name: cnpg
   namespace: cnpg-system
 spec:
+  values:
+    resources:
+      requests:
+        cpu: 2m
+        memory: 200Mi
+      limits:
+        memory: 600Mi
   interval: 1h
   releaseName: cnpg
   chart:

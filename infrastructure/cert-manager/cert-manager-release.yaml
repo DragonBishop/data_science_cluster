@@ -24,5 +24,32 @@ spec:
         kind: HelmRepository
         name: jetstack
   values:
+    resources:
+      requests:
+        cpu: 1m
+        memory: 100Mi
+      limits:
+        memory: 300Mi
+    webhook:
+      resources:
+        requests:
+          cpu: 1m
+          memory: 60Mi
+        limits:
+          memory: 180Mi
+    cainjector:
+      resources:
+        requests:
+          cpu: 1m
+          memory: 70Mi
+        limits:
+          memory: 210Mi
+    startupapicheck:
+      resources: 
+        requests:
+          cpu: 1m
+          memory: 50Mi
+        limits:
+          memory: 200Mi
     crds:
       enabled: true

@@ -14,3 +14,19 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: databases
+---
+# Allows kubelet's health-check traffic, which Cilium classifies as the
+# "world" entity rather than "host", to reach these pods.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-kubelet-probes
+  namespace: databases
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+  ingress:
+    - fromEntities:
+        - host
+        - world

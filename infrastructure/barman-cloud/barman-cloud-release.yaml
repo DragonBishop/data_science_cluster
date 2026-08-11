@@ -4,6 +4,13 @@ metadata:
   name: plugin-barman-cloud
   namespace: cnpg-system
 spec:
+  values:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 210Mi
+      limits:
+        memory: 630Mi
   interval: 1h
   releaseName: plugin-barman-cloud
   chart:
