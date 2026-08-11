@@ -14,10 +14,29 @@ bpf:
   # on the same node (e.g. hubble-relay -> hubble-peer) can time out.
   masquerade: true
 
+resources:
+  requests:
+    cpu: 20m
+    memory: 200Mi
+  limits:
+    memory: 600Mi
+
+# Single-node cluster. The default of 2 plus the operator's anti-affinity
+# rule leaves the second replica permanently Pending.
 operator:
-  # Single-node cluster. The default of 2 plus the operator's anti-affinity
-  # rule leaves the second replica permanently Pending.
   replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 150Mi
+    limits:
+      memory: 450Mi
+
+envoy:
+  resources:
+    requests:
+      cpu: 1.75m
+      memory: 65Mi
 
 l2announcements:
   enabled: true

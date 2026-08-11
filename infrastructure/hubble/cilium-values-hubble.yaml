@@ -5,12 +5,29 @@
 # hubble-ca-issuer does.
 hubble:
   relay:
+    resources:
+      requests:
+        memory: 70Mi
+      limits:
+        memory: 100Mi
     enabled: true
     tls:
       server:
         enabled: true
         mtls: true
   ui:
+    frontend:
+      resources:
+        requests:
+          memory: 25Mi
+        limits:
+          memory: 40Mi
+    backend:
+      resources:
+        requests:
+          memory: 70Mi
+        limits:
+          memory: 100Mi
     enabled: true
   tls:
     auto:
