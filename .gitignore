@@ -5,8 +5,8 @@ vault-keys*
 *-unseal*
 *recovery-keys*
 
-# Kubeconfigs. sync-kubeconfig.sh writes to ~/.kube/config; anything matching
-# these names inside the repository is a copy that carries cluster credentials.
+# Kubeconfigs. k3s writes its admin kubeconfig to ~/.kube/config; anything
+# matching these names inside the repository is a copy that carries cluster credentials.
 kubeconfig
 *.kubeconfig
 k3s.yaml

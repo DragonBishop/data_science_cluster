@@ -20,7 +20,7 @@
 
 * **Port 6443 is still bound/in-use after running `stop-cluster.sh`**
   * **What's happening:** The API server stopped, but containerd shims are still running.
-  * **How to fix it:** Once hibernation is confirmed, run `sudo k3s-killall.sh`. It cleans up leftover processes and unmounts directories. Run it before restarting if the previous stop was forced.
+  * **How to fix it:** Re-run `stop-cluster.sh --force` — once hibernation is confirmed, it prompts before running `k3s-killall.sh` for you (never runs it unattended). Or run `sudo k3s-killall.sh` yourself; it cleans up leftover processes and unmounts directories.
 
 ---
 
@@ -70,8 +70,8 @@
   * **What's happening:** the lease was issued before `ALTER ROLE ... SET role = app_readwrite` was added to `creation_statements`, so it owns its objects. `DROP ROLE` at lease expiry also fails with `cannot be dropped because some objects depend on it`.
   * **How to fix it:** update the role definition in Step 8, then `vault lease revoke -prefix database/creds/postgis-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
 * **Application credentials stop working after a password rotation**
-  * **What's happening:** VSO updated the Secret, but CNPG did not reload it.
-  * **How to fix it:** Re-apply the reload label to trigger a reconciliation: `kubectl label secret postgis-app-credentials -n databases cnpg.io/reload=true --overwrite` (use `postgis-app-dynamic-credentials` for the dynamic credential). If the rotation was of the superuser password, also update `database/config/postgis-cluster` in Vault see Step 8.
+  * **What's happening:** App-role rotations (static or dynamic) reload automatically — `postgis-app-credentials` and `postgis-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label in `postgis-cluster.yaml`, so CNPG picks up the new Secret on its own. If it's the *superuser* password that changed, that path isn't covered by the reload label at all.
+  * **How to fix it:** For the superuser password, update `database/config/postgis-cluster` in Vault (Step 8). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgis-app-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
@@ -101,8 +101,8 @@
   * **How to fix it:** Run `kubectl exec -n kube-system ds/cilium -- cilium endpoint list` to view active endpoints. Delete the affected pods (`kubectl delete pod <pod_name>`); the controller recreates them with new network identities.
 
 * **Headlamp shows a stale or failed connection**
-  * **What's happening:** Headlamp reads `~/.kube/config` as written by `sync-kubeconfig.sh`. Running that script while the cluster was down produces a profile that does not connect.
-  * **How to fix it:** Start the cluster, run `sync-kubeconfig.sh` again, and reconnect Headlamp.
+  * **What's happening:** Headlamp reads `~/.kube/config`, which k3s rewrites directly (`--write-kubeconfig`) every time `start-cluster.sh` runs. A stale profile means the file predates the current cluster instance.
+  * **How to fix it:** Run `start-cluster.sh` to regenerate `~/.kube/config`, then reconnect Headlamp.
 
 * **Hubble Relay never becomes Ready (`Startup probe failed: service unhealthy, responded with "NOT_SERVING"`)**
   * **What's happening:** Hubble Relay is a pod, but it reaches cilium-agent's Hubble gRPC port on the **host's own IP** (cilium-agent runs `hostNetwork: true`), so that connection is pod→host traffic, not pod→pod. If `ufw` is active without the rules from `INSTALLATION.md`'s Prerequisites, its default-deny `INPUT` policy drops it silently, Relay just times out with no useful error on either side.
