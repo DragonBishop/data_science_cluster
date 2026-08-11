@@ -20,7 +20,7 @@ spec:
   chart:
     spec:
       chart: cilium
-      version: "1.20.0"
+      version: "${CILIUM_VERSION}"
       sourceRef:
         kind: HelmRepository
         name: cilium
