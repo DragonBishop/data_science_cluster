@@ -7,7 +7,7 @@
 # bypasses that gate and PostgreSQL crash-recovers on the next start.
 #
 set -uo pipefail
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+export KUBECONFIG="$HOME/.kube/config"
 
 CLUSTER_NAME=postgis-cluster
 CLUSTER_NS=databases
@@ -19,8 +19,9 @@ for arg in "$@"; do
         --force) FORCE=true ;;
         -h|--help)
             echo "Usage: $0 [--force]"
-            echo "  --force   stop k3s even when hibernation cannot be confirmed,"
-            echo "            and force-kill leftovers if :6443 stays bound."
+            echo "  --force   stop k3s even when hibernation cannot be confirmed."
+            echo "            If :6443 then stays bound, prompts before running"
+            echo "            k3s-killall.sh — never runs it unattended."
             exit 0 ;;
         *) echo "Unknown argument: $arg" >&2; exit 2 ;;
     esac
@@ -186,7 +187,18 @@ done
 echo ""
 echo "⚠️  Port 6443 is still bound 30s after the stop request."
 if [ "$FORCE" = true ]; then
-    echo "🔻 --force supplied — running k3s-killall.sh."
+    # --force skips the hibernation-confirmation gate; it does not by itself
+    # authorize k3s-killall.sh, which requires this separate confirmation.
+    echo "🔻 --force was supplied, and k3s-killall.sh would force-stop what's left."
+    read -r -p "   Run k3s-killall.sh now? [y/N] " reply
+    case "$reply" in
+        [yY]|[yY][eE][sS]) ;;
+        *)
+            echo "   Skipped. Nothing was killed."
+            echo "   Check: sudo tail -n 50 /var/log/k3s.log   (or: journalctl -u k3s -n 50)"
+            echo "   Force-stop manually: sudo k3s-killall.sh"
+            exit 1 ;;
+    esac
     sudo k3s-killall.sh
     if sudo ss -tlnp 2>/dev/null | grep -q ':6443 '; then
         echo "❌ ERROR: :6443 is still bound after k3s-killall.sh."

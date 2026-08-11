@@ -71,7 +71,7 @@ spec:
     - postgis.internal   # resolves via the internal zone on k3s's own CoreDNS
   ipAddresses:
     - 127.0.0.1
-    - 192.0.2.240   # the shared Gateway's IP (infrastructure/gateway/)
+    - ${GATEWAY_IP}   # the shared Gateway's IP (infrastructure/gateway/)
   issuerRef:
     name: postgis-ca-issuer
     kind: Issuer
