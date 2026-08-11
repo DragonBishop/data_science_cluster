@@ -28,9 +28,6 @@ resource "vault_kv_secret_v2" "seaweedfs" {
           accessKey = var.s3_access_key
           secretKey = var.s3_secret_key
         }]
-        # Admin only grants bucket create/delete; cnpg-backups already exists
-        # (apps/databases/seaweedfs-release.yaml). Write covers DeleteObject,
-        # which Barman Cloud's 30d retentionPolicy relies on.
         actions = ["Read", "Write", "List", "Tagging"]
       }]
     })

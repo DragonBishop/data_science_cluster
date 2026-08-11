@@ -1,6 +1,3 @@
-# The `vault` namespace already exists (infrastructure/namespaces/namespaces.yaml,
-# applied by Flux) — no namespace resource needed here.
-
 resource "kubernetes_secret" "vault_transit_token" {
   metadata {
     name      = "vault-transit-secret"
