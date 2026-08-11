@@ -1,0 +1,14 @@
+# cluster-config.yaml
+#
+# Single source of truth for values otherwise duplicated across multiple
+# manifests. Referenced via postBuild.substituteFrom by the Kustomizations
+# that need them (clusters/local/{gateway,coredns-custom,cilium,databases}.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: flux-system
+data:
+  GATEWAY_IP: "192.0.2.240"
+  CILIUM_VERSION: "1.20.0"
+  COREDNS_LAN_IP: "192.0.2.242"

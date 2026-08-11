@@ -9,7 +9,7 @@ metadata:
   name: coredns-external
   namespace: kube-system
   annotations:
-    lbipam.cilium.io/ips: "192.0.2.242"
+    lbipam.cilium.io/ips: "${COREDNS_LAN_IP}"
 spec:
   type: LoadBalancer
   selector:

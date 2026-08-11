@@ -9,5 +9,5 @@ metadata:
   name: lan-ip-pool
 spec:
   blocks:
-    - start: "192.0.2.240"
+    - start: "${GATEWAY_IP}"
       stop: "192.0.2.250"

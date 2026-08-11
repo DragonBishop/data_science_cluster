@@ -8,6 +8,7 @@ spec:
   dependsOn:
     - name: gateway-api-crds
     - name: namespaces
+    - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -15,6 +16,10 @@ spec:
   prune: true
   wait: true
   timeout: 3m
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   healthChecks:
     - apiVersion: apps/v1
       kind: DaemonSet
