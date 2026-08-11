@@ -35,20 +35,20 @@ These are the resources that make up the database core of the cluster. It is eng
 | Component | Version | Description |
 | --- | --- | --- |
 | k3s | `v1.36.2+k3s1` | Core control plane and execution environment. Host-installed, unpinned by this repo. |
-| PostgreSQL / PostGIS image | `18.3-3.6.2-system-trixie` | Image the CNPG `Cluster` runs, pinned in `apps/databases/postgis-cluster.yaml`. |
-| SeaweedFS | `4.40` | In-cluster S3-compatible object store. CNPG streams WAL and writes scheduled base backups to it. Helm chart pinned to `4.40.0` in `apps/databases/seaweedfs-release.yaml`. |
+| PostgreSQL / PostGIS image | `18.3-3.6.2-system-trixie` | Image the CNPG `Cluster` runs. |
+| SeaweedFS | `4.40` | In-cluster S3-compatible object store. CNPG streams WAL and writes scheduled base backups to it. |
 | Flux | `v2.9.3` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. CLI-installed, unpinned by this repo. |
-| Barman Cloud Plugin | `v0.14.0` | WAL archiving and base backups for CNPG, via the `ObjectStore` resource rather than in-tree `spec.backup.barmanObjectStore`. Helm chart pinned to `0.7.1` in `infrastructure/barman-cloud/barman-cloud-release.yaml`. |
-| cert-manager | `v1.21.1` | Issues the local CA and Postgres server certificate, reissues before expiry. Required by the Barman Cloud Plugin. Helm chart pinned in `infrastructure/cert-manager/cert-manager-release.yaml`. |
-| Cilium | `1.20.0` | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. Helm chart pinned in `infrastructure/cilium/cilium-release.yaml`. |
-| CloudNativePG (CNPG) | `1.30.0` | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. Helm chart pinned to `0.29.0` in `infrastructure/cnpg-operator/cnpg-release.yaml`. |
-| DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with an `internal` zone via a `coredns-custom` ConfigMap (`infrastructure/coredns-custom/`) — not a second resolver. Resolves `*.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
-| Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`) every tool attaches a `Route` to: an HTTPS listener (443, wildcard cert) for web UIs, a raw TCP listener (5432) for Postgres. Defined in `infrastructure/gateway/gateway.yaml`. |
-| Gateway API | `v1.6.1` (CRDs) | Vendored, pinned rather than floated, in `infrastructure/gateway-api-crds/standard-install.yaml`. Cilium's Gateway API support depends on these existing first. |
-| Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay/UI run their own cert-manager mTLS trust domain; UI exposed at `hubble.internal` on the shared Gateway. Configured in `infrastructure/hubble/`, bundled with the Cilium chart. |
-| HashiCorp Vault (in-cluster) | `2.0.3` | Main Vault; auto-unseals against the host's native Transit Vault at pod start. Helm chart pinned to `0.34.0` in `infrastructure/vault/vault-release.yaml`. |
-| Vault Secrets Operator (VSO) | `1.5.0` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. Helm chart pinned in `infrastructure/vault-secrets-operator/vso-release.yaml`. |
-| Vault Database Secrets Engine | Same as Vault | Issues login roles on demand, 3h default TTL / 24h max; role dropped when the lease ends. Configured by the OpenTofu module in `terraform/vault-database/`. |
+| Barman Cloud Plugin | `v0.14.0` | WAL archiving and base backups for CNPG, via the `ObjectStore` resource rather than in-tree `spec.backup.barmanObjectStore`. |
+| cert-manager | `v1.21.1` | Issues the local CA and Postgres server certificate, reissues before expiry. Required by the Barman Cloud Plugin. |
+| Cilium | `1.20.0` | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
+| CloudNativePG (CNPG) | `1.30.0` | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
+| DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with an `internal` zone via a `coredns-custom` ConfigMap (`infrastructure/coredns-custom/`). Resolves `*.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
+| Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`) every tool attaches a `Route` to: an HTTPS listener (443, wildcard cert) for web UIs, a raw TCP listener (5432) for Postgres. |
+| Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
+| Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay/UI run their own cert-manager mTLS trust domain; UI exposed at `hubble.internal` on the shared Gateway. |
+| HashiCorp Vault (in-cluster) | `2.0.3` | Main Vault; auto-unseals against the host's native Transit Vault at pod start. |
+| Vault Secrets Operator (VSO) | `1.5.0` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. |
+| Vault Database Secrets Engine | Same as Vault | Issues login roles on demand, 3h default TTL / 24h max; role dropped when the lease ends. |
 | Headlamp | `0.44.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
 
 ### Cluster Monitoring Services
@@ -83,8 +83,6 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | MLflow | `3.15.1` (latest; not yet installed) | Tracks code versions, hyperparameters, and experiment results, storing metadata in PostgreSQL and artifacts in the cluster's SeaweedFS object store. | Kubeflow is the standard for teams heavily invested in Kubernetes orchestration, and prepared for its complexity. |
 
 ## Official Documentation
-
-Same order as Core Database Architecture above, then the three sections below it in their alphabetical order.
 
 | Component | Documentation Link |
 | --- | --- |
@@ -357,8 +355,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * `vso-setup.yaml`: Creates the `databases` namespace and the `VaultConnection`/`VaultAuth`/`ServiceAccount` VSO uses to authenticate to Vault.
   * `postgis-tls.yaml`: cert-manager `Issuer`s and `Certificate` producing the Postgres server certificate. SANs cover `localhost`/`127.0.0.1` (the socat proxy), `postgis.internal`, and the shared Gateway's static LAN IP.
   * `postgis-cluster.yaml`: The CNPG `Cluster`, its static and dynamic Vault secrets, the `ObjectStore` and `ScheduledBackup` used for backups, and the `postgres-proxy` Deployment.
-  * `postgis-tcproute.yaml`: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`). The listener maps 1:1 to this one backend — TCP has no Host-header equivalent to route on, so there's nothing to disambiguate.
-  * `postgis-database.yaml`: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions (reconciles on every generation change, unlike `postInitSQL`, which runs once at initdb).
+  * `postgis-tcproute.yaml`: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
+  * `postgis-database.yaml`: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
   * `seaweedfs-release.yaml`: `HelmRepository`/`HelmRelease` for SeaweedFS, master/filer data on the external HDD via `hostPath`, S3 gateway on port 9000 with the `cnpg-backups` bucket created at install.
   * `seaweedfs-credentials.yaml`: `VaultStaticSecret` syncing S3 credentials from `secret/seaweedfs`.
   * `seaweedfs-networkpolicy.yaml`: Restricts SeaweedFS ingress to the `databases` namespace.
@@ -374,8 +372,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * `kustomization.yaml`
   * `cilium/`
     * `cilium-release.yaml`: `HelmRepository` (OCI, `quay.io/cilium/charts`) and `HelmRelease` for Cilium, with `releaseName`/namespace matching the bootstrap install so Flux adopts the existing release instead of installing a second one. `valuesFrom` has two entries: `cilium-values` (required) and `cilium-values-hubble` (`optional: true`). `optional: true` lets the HelmRelease install cleanly without it; `helm-controller` watches the ConfigMap and re-reconciles the moment it appears, merging Hubble's values in automatically.
-    * `cilium-values.yaml`: Helm values for kube-proxy replacement, the k3s API server override, single-replica operator, pod CIDR, Gateway API support, L2 announcements, and the egress gateway feature flag (`egressGateway.enabled`) — armed but not yet backed by any `CiliumEgressGatewayPolicy`.
-    * `lan-lb-pool.yaml` / `lan-l2-policy.yaml`: `CiliumLoadBalancerIPPool` (a reserved block, `${GATEWAY_IP}-192.0.2.250`) / `CiliumL2AnnouncementPolicy`, both unscoped — every LoadBalancer Service in the cluster is meant to be LAN-facing, so there's no serviceSelector to maintain. Each Service claims one IP, pinned via `spec.addresses` (Gateway objects) or the `lbipam.cilium.io/ips` annotation (plain Services).
+    * `cilium-values.yaml`: Helm values for kube-proxy replacement, the k3s API server override, single-replica operator, pod CIDR, Gateway API support, L2 announcements, and the egress gateway feature flag (`egressGateway.enabled`).
+    * `lan-lb-pool.yaml` / `lan-l2-policy.yaml`: `CiliumLoadBalancerIPPool` (a reserved block, `${GATEWAY_IP}-192.0.2.250`) / `CiliumL2AnnouncementPolicy`. Each Service claims one IP, pinned via `spec.addresses` (Gateway objects) or the `lbipam.cilium.io/ips` annotation (plain Services).
     * `kustomization.yaml`: Bundles the release and both LB/L2 objects, plus a `configMapGenerator` turning `cilium-values.yaml` into the `ConfigMap` the `HelmRelease`'s `valuesFrom` reads.
   * `cluster-config/`
     * `cluster-config.yaml`: `ConfigMap` holding `GATEWAY_IP`, `CILIUM_VERSION`, `COREDNS_LAN_IP`, read by `gateway`, `coredns-custom`, `cilium`, and `databases` via Flux's `postBuild.substituteFrom`.
@@ -384,7 +382,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * `cnpg-release.yaml`: `HelmRepository`/`HelmRelease` for the CloudNativePG operator.
     * `kustomization.yaml`
   * `coredns-custom/`
-    * `coredns-custom.yaml`: A `coredns-custom` ConfigMap in `kube-system`, picked up by the `*.server` import already in k3s's base Corefile. Adds an `internal` zone answering every `*.internal` name with the shared Gateway's IP — not a second CoreDNS instance, an extension of the one k3s already runs.
+    * `coredns-custom.yaml`: A `coredns-custom` ConfigMap in `kube-system`, picked up by the `*.server` import already in k3s's base Corefile. Adds an `internal` zone answering every `*.internal` name with the shared Gateway's IP.
     * `coredns-lan-service.yaml`: A second Service (`coredns-external`, LoadBalancer) selecting the same pods as the operator-managed `kube-dns` ClusterIP Service, so LAN clients/routers can actually reach the resolver.
     * `kustomization.yaml`
   * `gateway/`
@@ -392,12 +390,12 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * `gateway.yaml`: The one shared `Gateway` (`internal-gateway`) every HTTP(S) tool and Postgres itself attaches a `Route` to — an HTTPS listener (443, TLS from `gateway-tls.yaml`) for web UIs, a raw TCP listener (5432) for Postgres via `TCPRoute`. `allowedRoutes.namespaces.from: All` on both lets any namespace attach a `Route` without a `ReferenceGrant`.
     * `kustomization.yaml`
   * `gateway-api-crds/`
-    * `standard-install.yaml`: Vendored Gateway API CRDs (upstream release manifest, pinned rather than floated). Cilium's Gateway API support depends on these existing first.
+    * `standard-install.yaml`: Vendored Gateway API CRDs.
     * `kustomization.yaml`
   * `hubble/`
     * `hubble-tls.yaml`: A second, separate self-signed local CA and `ClusterIssuer` chain (`hubble-ca-issuer`) Hubble's internal mTLS trust domain (cilium-agent ↔ hubble-relay ↔ hubble-ui).
     * `hubble-httproute.yaml`: Attaches Hubble UI to the shared Gateway at `hubble.internal`.
-    * `cilium-values-hubble.yaml`: Cilium chart values enabling Hubble Relay/UI with cert-manager-issued mTLS, referencing `hubble-ca-issuer` above. Generated as the `cilium-values-hubble` ConfigMap by this `kustomization.yaml`, which `cilium-release.yaml` reads as an optional `valuesFrom` source. This directory's own `dependsOn` (`cert-manager`, `gateway`) is what keeps the ConfigMap from existing until the issuer it references is real.
+    * `cilium-values-hubble.yaml`: Cilium chart values enabling Hubble Relay/UI with cert-manager-issued mTLS, referencing `hubble-ca-issuer` above. Generated as the `cilium-values-hubble` ConfigMap by this `kustomization.yaml`, which `cilium-release.yaml` reads as an optional `valuesFrom` source.
     * `kustomization.yaml`
   * `namespaces/`
     * `namespaces.yaml`: Creates every namespace Flux needs a home for up front (`vault`, `vault-secrets-operator-system`, `cnpg-system`, `databases`, `cert-manager`, `gateway`). A `HelmRelease` doesn't auto-create its own namespace .
