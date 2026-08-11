@@ -230,6 +230,8 @@ From this point on, `src/bash/start-cluster.sh` checks whether the Transit Vault
 
 ## 4. Bootstrap Flux
 
+This writes `clusters/local/flux-system/` and pushes its own commit.
+
 ```bash
 flux bootstrap github \
   --owner=DragonBishop \
@@ -239,15 +241,33 @@ flux bootstrap github \
   --personal
 ```
 
-This writes `clusters/local/flux-system/` and pushes its own commit. Every other `Kustomization` under `clusters/local/` already exists in the repo, so once Flux's first sync completes it starts walking the full dependency graph:
+Once Flux's first sync completes it starts walking the full dependency graph — one Kustomization per directory under `infrastructure/`/`apps/`, `dependsOn`-chained into the install order the cluster actually needs:
 
-```text
-cilium ← cert-manager ← gateway ← hubble
-cilium ← gateway ← databases
-cilium ← coredns-custom
-vault ← vault-secrets-operator ← cnpg-operator ← barman-cloud ← databases
+```mermaid
+flowchart LR
+    crds[gateway-api-crds]
+    ns[namespaces]
+    cilium
+    certmgr[cert-manager]
+    gw[gateway]
+    hubble
+    coredns[coredns-custom]
+    vault
+    vso[vault-secrets-operator]
+    cnpg[cnpg-operator]
+    barman[barman-cloud]
+    db[databases]
+
+    crds --> cilium
+    ns --> cilium
+    cilium --> certmgr --> gw --> hubble
+    gw --> db
+    cilium --> coredns
+    vault --> vso --> cnpg --> barman --> db
+    certmgr --> barman
 ```
 
+* `cilium` needs `gateway-api-crds` (its `GatewayClass`) and `namespaces` (`cert-manager`/`gateway`/etc. need somewhere to live) ready first.
 * `cnpg-operator` also needs `cert-manager` via `barman-cloud`'s own `dependsOn`.
 * `gateway` holds the one shared `Gateway` every tool's `Route` attaches to, plus the CA chain its Certificate uses. `databases` depends on it for `postgis-tcproute.yaml`'s cross-namespace attach.
 * `coredns-custom` just needs `cilium`, for the LB IP its LAN-facing Service claims.
@@ -284,7 +304,18 @@ done
 vault status   # expect Sealed: false
 ```
 
-Everything else here — the transit engine, its `autounseal` key, the `autounseal-policy`, the periodic token, and the `vault-transit-secret`/`vault-transit-ca` the in-cluster Vault reads — is created by the `terraform/vault-transit-bootstrap/` OpenTofu module against this **host** Transit Vault (port 8200 — distinct from `terraform/vault-bootstrap`'s in-cluster target on port 8210). `vault` is already a namespace by this point (`infrastructure/namespaces/namespaces.yaml`, applied by Flux before this section runs), so there's no namespace to create by hand either:
+`VAULT_TOKEN` authenticates the module's `vault` provider — `provider.tf` points it at the host Transit Vault (`127.0.0.1:8200`) but sets no `token`, so the provider falls back to this env var.
+
+`TF_VAR_state_encryption_passphrase` feeds `encryption.tf`'s `pbkdf2`/`aes_gcm` blocks, which encrypt the OpenTofu state file at rest — prompting for it instead of hardcoding it keeps the passphrase out of the state and the shell history.
+
+`tofu apply` then creates everything the in-cluster Vault's auto-unseal depends on:
+
+* The `transit` mount and `autounseal` key (`token.tf`).
+* The `autounseal-policy`, scoping it to just `transit/encrypt|decrypt/autounseal` (`policy.tf`).
+* The periodic orphan token, on a 768h renewal period (`token.tf`).
+* The `vault-transit-secret`/`vault-transit-ca` Kubernetes objects the in-cluster Vault reads, written into the `vault` namespace (`kubernetes-secrets.tf` — that namespace already exists via Flux's `infrastructure/namespaces/namespaces.yaml`, so the module doesn't create it).
+
+Both env vars are `unset` afterward, since neither should outlive this shell:
 
 ```bash
 export VAULT_TOKEN=$(cat ~/.vault-token)
@@ -336,7 +367,7 @@ Generate a passphrase using the bash terminal:
 openssl rand -base64 32
 ```
 
-Forward to a local port other than 8200. The host Transit Vault owns `0.0.0.0:8200` permanently, so `VAULT_ADDR=https://127.0.0.1:8200` here would land on the host Vault instead of the tunnel:
+Port-forward the in-cluster Vault to 8210 (8200 is already taken by the host Transit Vault), then save its CA cert locally so `tofu apply` can verify TLS against it:
 
 ```bash
 kubectl port-forward -n vault vault-0 8210:8200 &
@@ -357,6 +388,8 @@ tofu init
 tofu apply
 cd ../..
 ```
+
+`tofu apply` writes the generated Postgres and S3 credentials into Vault's KV store, then sets up the Kubernetes auth backend so the `postgis-vault-auth` ServiceAccount in `databases` can read them back at runtime.
 
 Try to avoid passing secrets at any point in this project as plain-text. This bash script reads the secrets from the vault as environment variables, the ones it needs from the user it will prompt you for while hiding from the terminal.
 
