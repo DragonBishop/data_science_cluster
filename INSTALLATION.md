@@ -55,15 +55,18 @@ cd data_science_cluster
 
 *Reinstalling on a host that already has k3s installed?* Run `/usr/local/bin/k3s-uninstall.sh`, then check Cilium's BPF mounts are actually gone (`mount | grep bpf`; see `troubleshooting.md`). This wipes the in-cluster Vault and PVC data — SeaweedFS and the host Transit Vault live outside k3s's data dir and survive — so plan to rebuild Vault (Section 4+) and restore Postgres (README) afterward.
 
-The IP and DNS structure for this cluster assumes generic IP routing on a Linux OS. These are the only files that hardcode network values:
+The IP and DNS structure for this cluster assumes generic IP routing on a Linux OS. `infrastructure/cluster-config/cluster-config.yaml` is the single place that hardcodes these network values now — `GATEWAY_IP`, `CILIUM_VERSION`, `COREDNS_LAN_IP` — substituted into every manifest below via Flux's `postBuild.substituteFrom` (see the `clusters/local/*.yaml` Kustomization for each):
 
-| File | Hardcoded |
+| File | Sourced from `cluster-config` |
 | --- | --- |
-| `infrastructure/cilium/lan-lb-pool.yaml` | `192.0.2.240-192.0.2.250` — reserved block every LAN-facing Service draws from |
-| `infrastructure/gateway/gateway.yaml` | `192.0.2.240` — the shared Gateway's IP |
-| `apps/databases/postgis-tls.yaml` | `192.0.2.240` again, as a cert SAN |
-| `infrastructure/coredns-custom/coredns-lan-service.yaml` | `192.0.2.242` — the LAN-facing IP for k3s's own CoreDNS |
-| `infrastructure/coredns-custom/coredns-custom.yaml` | `192.0.2.240` — what every `*.internal` name resolves to |
+| `infrastructure/cilium/lan-lb-pool.yaml` | `${GATEWAY_IP}` as the pool's `start` (the `stop`, `192.0.2.250`, is still a plain literal — it's not duplicated anywhere else) |
+| `infrastructure/gateway/gateway.yaml` | `${GATEWAY_IP}` — the shared Gateway's IP |
+| `apps/databases/postgis-tls.yaml` | `${GATEWAY_IP}` again, as a cert SAN |
+| `infrastructure/coredns-custom/coredns-lan-service.yaml` | `${COREDNS_LAN_IP}` — the LAN-facing IP for k3s's own CoreDNS |
+| `infrastructure/coredns-custom/coredns-custom.yaml` | `${GATEWAY_IP}` — what every `*.internal` name resolves to |
+| `infrastructure/cilium/cilium-release.yaml` | `${CILIUM_VERSION}` — the HelmRelease chart version |
+
+To change any of these (a new LAN IP, a Cilium upgrade), edit `cluster-config.yaml` once and let Flux reconcile — don't edit the individual manifests.
 
 k3s's own in-cluster CoreDNS (`kube-system`) resolves `*.internal` for LAN clients (via `infrastructure/coredns-custom/`, a zone added to the same CoreDNS that's always resolved `*.svc.cluster.local` for pods — not a second resolver). Whether your devices actually reach it depends on your router/DNS setup, covered later in this doc.
 
@@ -76,14 +79,16 @@ ping -c 2 -W 1 192.0.2.242
 
 No response means the address is likely free, not that the router will never hand it out. DHCP exclusion of the full `192.0.2.240-192.0.2.250` range is what guarantees that.
 
-**Install k3s.** Cilium replaces kube-proxy, Traefik, servicelb, and the default CNI, so the flags below disable all of them at install time:
+**Install k3s.** Cilium replaces kube-proxy, Traefik, servicelb, and the default CNI, so the flags below disable all of them. They live in `/etc/rancher/k3s/config.yaml`, which k3s reads automatically on every `k3s server` invocation regardless of how it's started (install, systemd, or `start-cluster.sh`'s own `nohup` launch) — one file instead of hand-keeping the same flags in sync across multiple places:
 
 ```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --disable traefik --disable servicelb --disable-kube-proxy --disable-network-policy --flannel-backend=none --secrets-encryption" sh -
-
 mkdir -p ~/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-sudo chown $(id -u):$(id -g) ~/.kube/config
+
+sudo mkdir -p /etc/rancher/k3s
+printf 'write-kubeconfig-mode: "644"\nwrite-kubeconfig: %s/.kube/config\ndisable:\n  - traefik\n  - servicelb\ndisable-kube-proxy: true\ndisable-network-policy: true\nflannel-backend: none\nsecrets-encryption: true\n' "$HOME" | sudo tee /etc/rancher/k3s/config.yaml > /dev/null
+
+curl -sfL https://get.k3s.io | sh -
+
 kubectl get nodes
 ```
 
@@ -168,7 +173,7 @@ listener "tcp" {
 }
 ```
 
-Enable the service, initialize Vault, and configure the transit secrets engine:
+Enable the service and initialize Vault:
 
 ```bash
 sudo systemctl enable --now vault
@@ -188,21 +193,7 @@ Then use the initial root token given to you by the vault to login:
 
 `vault login`
 
-Configure the auto-unseal policy and generate the authentication token:
-
-```bash
-vault secrets enable transit
-vault write -f transit/keys/autounseal
-
-vault policy write autounseal-policy - <<EOF
-path "transit/encrypt/autounseal" { capabilities = ["update"] }
-path "transit/decrypt/autounseal" { capabilities = ["update"] }
-EOF
-
-vault token create -policy=autounseal-policy -period=768h -orphan
-```
-
-Store this token. The in-cluster Vault's transit seal client renews it on use (`disable_renewal` defaults to `"false"`). The 768h period is 32 days, so it expires only if the cluster stays down longer than that; reissue with the same command and update `vault-transit-secret` if it does.
+The transit secrets engine, its `autounseal` key, the `autounseal-policy`, and the periodic orphan token that authorizes the in-cluster Vault to use it are all created by the OpenTofu module at `terraform/vault-transit-bootstrap/`, run in Section 5 once the `vault` namespace exists for it to write into — nothing to do here. That module also sets up continuous renewal via a `vault-agent-autounseal` systemd service, so the token never needs manual reissuing regardless of how long the cluster stays down.
 
 **Automating future unseals (one-time setup):**
 
@@ -293,18 +284,34 @@ done
 vault status   # expect Sealed: false
 ```
 
-Capture the token into a variable and check it succeeded before creating the Secret. Piping the two commands together can hide a failed token creation and silently create a Secret with an empty token.
+Everything else here — the transit engine, its `autounseal` key, the `autounseal-policy`, the periodic token, and the `vault-transit-secret`/`vault-transit-ca` the in-cluster Vault reads — is created by the `terraform/vault-transit-bootstrap/` OpenTofu module against this **host** Transit Vault (port 8200 — distinct from `terraform/vault-bootstrap`'s in-cluster target on port 8210). `vault` is already a namespace by this point (`infrastructure/namespaces/namespaces.yaml`, applied by Flux before this section runs), so there's no namespace to create by hand either:
 
 ```bash
-kubectl create namespace vault --dry-run=client -o yaml | kubectl apply -f -
+export VAULT_TOKEN=$(cat ~/.vault-token)
+read -rs -p "State encryption passphrase: " TF_VAR_state_encryption_passphrase; echo
+export TF_VAR_state_encryption_passphrase
 
-TOKEN=$(vault token create -policy=autounseal-policy -period=768h -orphan -field=token) || exit 1
-kubectl create secret generic vault-transit-secret --from-file=token=/dev/stdin -n vault <<< "$TOKEN"
-unset TOKEN
+cd terraform/vault-transit-bootstrap
+tofu init
+tofu apply
 
-kubectl create configmap vault-transit-ca \
-  --from-file=ca.crt=/opt/vault/tls/tls.crt -n vault
+unset VAULT_TOKEN TF_VAR_state_encryption_passphrase
+cd ../..
 ```
+
+**Set up continuous token renewal (one-time setup):** the token Tofu just created is periodic (768h / 32 days) and needs renewing before it expires — independent of whether the cluster, or even k3s, is running. A `vault-agent-autounseal` systemd service handles this permanently in the background, reading the token Tofu also wrote to `~/.vault-agent/autounseal-token` and calling `renew-self` on it for as long as the service runs:
+
+```bash
+printf 'vault {\n  address = "https://127.0.0.1:8200"\n  ca_cert = "/opt/vault/tls/tls.crt"\n}\nauto_auth {\n  method "token_file" {\n    config = { token_file_path = "%s/.vault-agent/autounseal-token" }\n  }\n}\n' "$HOME" | sudo tee /etc/vault-agent-autounseal.hcl > /dev/null
+
+printf '[Unit]\nDescription=Vault Agent - transit auto-unseal token renewal\nAfter=vault.service\nRequires=vault.service\n\n[Service]\nExecStart=/usr/bin/vault agent -config=/etc/vault-agent-autounseal.hcl\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n' | sudo tee /etc/systemd/system/vault-agent-autounseal.service > /dev/null
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now vault-agent-autounseal
+systemctl status vault-agent-autounseal   # active (running)
+```
+
+The token's value never changes on renewal (only its TTL does), so `vault-transit-secret` — written once by the Tofu apply above — never needs touching again either.
 
 **Reconcile Vault:**
 
