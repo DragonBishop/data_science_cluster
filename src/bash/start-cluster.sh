@@ -27,20 +27,17 @@ if systemctl is-active --quiet k3s 2>/dev/null; then
     exit 1
 fi
 
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+KUBECONFIG_DEST="$HOME/.kube/config"
+mkdir -p "$(dirname "$KUBECONFIG_DEST")"
+export KUBECONFIG="$KUBECONFIG_DEST"
 
 # --- Step 2: Launch k3s Server ---------------------------------------------
-# Starts k3s in the background under nohup and captures its PID. The flags
-# match those used at install time.
+# Starts k3s in the background under nohup and captures its PID. All server
+# flags (disable list, flannel-backend, secrets-encryption, write-kubeconfig)
+# live in /etc/rancher/k3s/config.yaml, which k3s reads automatically on
+# every invocation regardless of how it's started.
 echo "🚀 Starting k3s cluster..."
 K3S_PID=$(sudo bash -c 'nohup k3s server \
-  --write-kubeconfig-mode 644 \
-  --disable traefik \
-  --disable servicelb \
-  --disable-kube-proxy \
-  --disable-network-policy \
-  --flannel-backend=none \
-  --secrets-encryption \
   > /var/log/k3s.log 2>&1 &
   echo $!')
 
@@ -167,36 +164,7 @@ else
 fi
 echo ""
 
-# --- Step 6: Renew Transit Auto-Unseal Token -------------------------------
-# Reads the token from vault-transit-secret and renews it, restarting its 768h
-# period. The token is passed in VAULT_TOKEN rather than as an argument.
-echo "⏳ Rolling the Transit auto-unseal token forward..."
-transit_token=$(kubectl get secret vault-transit-secret -n vault \
-    -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null) || transit_token=""
-if [ -z "$transit_token" ]; then
-    echo "⚠️  Could not read vault-transit-secret — skipping renewal."
-    echo "💡 TROUBLESHOOTING: kubectl get secret vault-transit-secret -n vault"
-    had_warnings=true
-elif VAULT_TOKEN="$transit_token" vault token renew > /dev/null 2>&1; then
-    ttl=$(VAULT_TOKEN="$transit_token" vault token lookup 2>/dev/null \
-        | awk '$1=="ttl"{print $2}') || ttl=""
-    echo "✅ Transit token renewed (ttl now ${ttl:-unknown})."
-else
-    echo "⚠️  Transit token renewal failed. Auto-unseal keeps working until the"
-    echo "   token's window closes; after that the in-cluster Vault cannot unseal."
-    echo "💡 TROUBLESHOOTING: Issue a replacement from the host Transit Vault and"
-    echo "   replace the Secret (INSTALLATION.md Sections 3 and 5). Capture the token into a"
-    echo "   variable rather than pasting it as a --from-literal argument:"
-    echo "   kubectl delete secret vault-transit-secret -n vault"
-    echo "   NEWTOK=\$(vault token create -policy=autounseal-policy -period=768h -orphan -field=token) && \\"
-    echo "     printf '%s' \"\$NEWTOK\" | kubectl create secret generic vault-transit-secret --from-file=token=/dev/stdin -n vault"
-    echo "   unset NEWTOK"
-    echo "   kubectl delete pod -n vault vault-0"
-    had_warnings=true
-fi
-echo ""
-
-# --- Step 7: Un-hibernate PostGIS and resume backups ------------------------
+# --- Step 6: Un-hibernate PostGIS and resume backups ------------------------
 # Flips cnpg.io/hibernation off when it currently reads "on". Retries the
 # annotate call itself, not a separate readiness check first — CNPG's
 # admission webhook can transiently reject requests while it's still
