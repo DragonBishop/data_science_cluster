@@ -8,8 +8,6 @@ resource "vault_transit_secret_backend_key" "autounseal" {
   name    = "autounseal"
 }
 
-# Orphan periodic token for the in-cluster Vault's transit auto-unseal
-# client; renewed continuously by the vault-agent-autounseal systemd service.
 resource "vault_token" "autounseal" {
   policies          = [vault_policy.autounseal.name]
   no_default_policy = true
