@@ -9,6 +9,7 @@ spec:
     - name: cilium
     - name: cert-manager
     - name: namespaces
+    - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -16,3 +17,7 @@ spec:
   prune: true
   wait: true
   timeout: 3m
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
