@@ -1,19 +1,33 @@
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+# Resitricts egress to kube-dns on port 53, and databases namespace
+# Restricts ingress to databases namespace 
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
 metadata:
-  name: seaweedfs-internal-only
+  name: seaweedfs-ingress-egress
   namespace: databases
 spec:
-  podSelector:
+  endpointSelector:
     matchLabels:
       app.kubernetes.io/name: seaweedfs
-  policyTypes:
-    - Ingress
   ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: databases
+    - fromEndpoints:
+      - matchLabels:
+          k8s:io.kubernetes.pod.namespace: databases
+  egress:
+    - toEndpoints:
+      - matchLabels:
+          k8s:io.kubernetes.pod.namespace: kube-system
+          k8s-app: kube-dns
+      toPorts:
+        - ports:
+          - port: "53"
+            protocol: UDP
+          - port: "53"
+            protocol: TCP
+    - toEndpoints:
+      - matchLabels:
+          k8s:io.kubernetes.pod.namespace: databases
+
 ---
 # Allows kubelet's health-check traffic, which Cilium classifies as the
 # "world" entity rather than "host", to reach these pods.

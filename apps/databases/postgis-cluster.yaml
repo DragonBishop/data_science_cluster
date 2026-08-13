@@ -59,7 +59,7 @@ metadata:
 spec:
   # Barman deletes base backups and their dependent WAL segments older than
   # this window.
-  retentionPolicy: "30d"
+  retentionPolicy: "4d"
   configuration:
     destinationPath: s3://cnpg-backups/
     endpointURL: http://seaweedfs-s3.databases.svc:9000
