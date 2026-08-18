@@ -1,0 +1,9 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: flux-egress
+  namespace: flux-system
+spec:
+  egress:
+    - toFQDNs:
+        - matchName: "github.com"
