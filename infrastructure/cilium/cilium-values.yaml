@@ -1,5 +1,6 @@
-# Cilium chart values — version pinned via cilium-release.yaml's chart.spec.version
-# (sourced from cluster-config's CILIUM_VERSION), targets Gateway API v1.6.1.
+# Cilium chart values — version pinned via cilium-release.yaml's
+# chart.spec.version (sourced from cluster-config's CILIUM_VERSION), targets
+# Gateway API v1.6.1.
 
 kubeProxyReplacement: true
 

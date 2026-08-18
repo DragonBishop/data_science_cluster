@@ -9,7 +9,6 @@ spec:
     - name: barman-cloud
     - name: gateway
     - name: vault
-    - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -19,5 +18,5 @@ spec:
   timeout: 5m
   postBuild:
     substituteFrom:
-      - kind: ConfigMap
+      - kind: Secret
         name: cluster-config

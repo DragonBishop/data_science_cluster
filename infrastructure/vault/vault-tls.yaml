@@ -10,8 +10,9 @@
 # Secret from its own namespace), so the CA-signing Issuer and its backing
 # Secret need to be visible cluster-wide. vault-local-ca lives in the
 # cert-manager namespace because that's this cluster's configured
-# --cluster-resource-namespace (infrastructure/cert-manager/cert-manager-release.yaml)
-# -- the namespace a ClusterIssuer looks in for its referenced CA secret.
+# --cluster-resource-namespace
+# (infrastructure/cert-manager/cert-manager-release.yaml) -- the namespace a
+# ClusterIssuer looks in for its referenced CA secret.
 #
 # Ordering vs. vault-release.yaml is handled by resource order in this
 # directory's kustomization.yaml, not by manual apply order. Requires

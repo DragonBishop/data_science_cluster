@@ -1,5 +1,5 @@
-# Resitricts egress to kube-dns on port 53, and databases namespace
-# Restricts ingress to databases namespace 
+# Restricts egress to kube-dns on port 53, and databases namespace
+# Restricts ingress to databases namespace
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -27,20 +27,3 @@ spec:
     - toEndpoints:
       - matchLabels:
           k8s:io.kubernetes.pod.namespace: databases
-
----
-# Allows kubelet's health-check traffic, which Cilium classifies as the
-# "world" entity rather than "host", to reach these pods.
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: allow-kubelet-probes
-  namespace: databases
-spec:
-  endpointSelector:
-    matchLabels:
-      app.kubernetes.io/name: seaweedfs
-  ingress:
-    - fromEntities:
-        - host
-        - world

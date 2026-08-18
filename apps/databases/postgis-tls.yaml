@@ -44,8 +44,8 @@ spec:
   ca:
     secretName: postgis-local-ca-secret
 ---
-# Generates the server certificate Secret (containing tls.crt, tls.key, and ca.crt) 
-# for the CNPG cluster, valid for 90 days with auto-renewal.
+# Generates the server certificate Secret (containing tls.crt, tls.key, and
+# ca.crt) for the CNPG cluster, valid for 90 days with auto-renewal.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
