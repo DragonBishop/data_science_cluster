@@ -4,6 +4,7 @@ resources:
   - cilium-release.yaml
   - lan-lb-pool.yaml
   - lan-l2-policy.yaml
+  - clusterwide-networkpolicy.yaml
 configurations:
   - kustomizeconfig.yaml
 configMapGenerator:
