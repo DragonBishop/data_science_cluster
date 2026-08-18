@@ -8,6 +8,9 @@ spec:
     - fromEntities:
         - host
   egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver
     - toEndpoints:
       - matchLabels:
           k8s:io.kubernetes.pod.namespace: kube-system

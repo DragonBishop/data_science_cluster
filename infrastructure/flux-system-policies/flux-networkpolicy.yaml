@@ -4,6 +4,7 @@ metadata:
   name: flux-egress
   namespace: flux-system
 spec:
+  endpointSelector: {}
   egress:
     - toFQDNs:
         - matchName: "github.com"
