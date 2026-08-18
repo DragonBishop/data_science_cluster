@@ -19,6 +19,12 @@ k3s.yaml
 *.p12
 *.pfx
 
+*.tfvars
+*.tfvars.json
+*.tfstate
+*.tfstate.*
+.terraform/
+
 # Machine rendered manifests.
 *.rendered.yaml
 manifests/**/rendered/

@@ -228,7 +228,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── barman-cloud.yaml            # Kustomization → infrastructure/barman-cloud/
 │       ├── cert-manager.yaml            # Kustomization → infrastructure/cert-manager/
 │       ├── cilium.yaml                  # Kustomization → infrastructure/cilium/
-│       ├── cluster-config.yaml          # Kustomization → infrastructure/cluster-config/
 │       ├── cnpg-operator.yaml           # Kustomization → infrastructure/cnpg-operator/
 │       ├── coredns-custom.yaml          # Kustomization → infrastructure/coredns-custom/
 │       ├── databases.yaml               # Kustomization → apps/databases/
@@ -250,9 +249,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── cilium-values.yaml
 │   │   ├── lan-l2-policy.yaml
 │   │   ├── lan-lb-pool.yaml
-│   │   └── kustomization.yaml
-│   ├── cluster-config/                  # Single source of truth for values duplicated across manifests
-│   │   ├── cluster-config.yaml          # ConfigMap: GATEWAY_IP, CILIUM_VERSION, COREDNS_LAN_IP
 │   │   └── kustomization.yaml
 │   ├── cnpg-operator/
 │   │   ├── cnpg-release.yaml
@@ -300,7 +296,12 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── visualization/
 │       │   └── __init__.py
 │       └── __init__.py
-├── terraform/                           # OpenTofu modules configuring Vault's internals
+├── terraform/                           # OpenTofu modules configuring cluster-config and Vault's internals
+│   ├── cluster-config/                  # cluster-config Secret: GATEWAY_IP, COREDNS_LAN_IP, HOST_IP, CILIUM_VERSION
+│   │   ├── kubernetes-secret.tf
+│   │   ├── provider.tf
+│   │   ├── variables.tf
+│   │   └── versions.tf
 │   ├── vault-bootstrap/                 # KV mounts, Kubernetes auth backend, postgis-policy/-role
 │   │   ├── .gitignore
 │   │   ├── encryption.tf
@@ -361,7 +362,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`seaweedfs-networkpolicy.yaml`** - Restricts SeaweedFS ingress to the `databases` namespace.
 * **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/`/`apps/` below.
   * **`flux-system/`** - (`gotk-components.yaml`, `gotk-sync.yaml`, `kustomization.yaml`): Flux's own controllers and `GitRepository` source, written by `flux bootstrap`, don't edit directly.
-  * **`gateway-api-crds.yaml`, `namespaces.yaml`, `cluster-config.yaml`, `cilium.yaml`, `cert-manager.yaml`, `gateway.yaml`, `hubble.yaml`, `coredns-custom.yaml`, `vault.yaml`, `vault-secrets-operator.yaml`, `cnpg-operator.yaml`, `barman-cloud.yaml`, `databases.yaml`** - one Flux `Kustomization` per matching directory below, each declaring its own `dependsOn`/`healthChecks`.
+  * **`gateway-api-crds.yaml`, `namespaces.yaml`, `cilium.yaml`, `cert-manager.yaml`, `gateway.yaml`, `hubble.yaml`, `coredns-custom.yaml`, `vault.yaml`, `vault-secrets-operator.yaml`, `cnpg-operator.yaml`, `barman-cloud.yaml`, `databases.yaml`** - one Flux `Kustomization` per matching directory below, each declaring its own `dependsOn`/`healthChecks`.
 * **`infrastructure/`** cluster-wide platform components, listed alphabetically below (Flux's actual install order is in `INSTALLATION.md`, Section 4).
   * **`barman-cloud/`**
     * **`barman-cloud-release.yaml`** - `HelmRelease` for the Barman Cloud Plugin, reuses the `cnpg-operator/` directory's own `HelmRepository` rather than declaring a second one for the same chart index.
@@ -374,9 +375,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * **`cilium-values.yaml`** - Helm values for kube-proxy replacement, the k3s API server override, single-replica operator, pod CIDR, Gateway API support, L2 announcements, and the egress gateway feature flag (`egressGateway.enabled`).
     * **`lan-lb-pool.yaml`** / **`lan-l2-policy.yaml`** - `CiliumLoadBalancerIPPool` (a reserved block, `${GATEWAY_IP}-192.0.2.250`) / `CiliumL2AnnouncementPolicy`. Each Service claims one IP, pinned via `spec.addresses` (Gateway objects) or the `lbipam.cilium.io/ips` annotation (plain Services).
     * **`kustomization.yaml`** - Bundles the release and both LB/L2 objects, plus a `configMapGenerator` turning `cilium-values.yaml` into the `ConfigMap` the `HelmRelease`'s `valuesFrom` reads.
-  * **`cluster-config/`**
-    * **`cluster-config.yaml`** - `ConfigMap` holding `GATEWAY_IP`, `CILIUM_VERSION`, `COREDNS_LAN_IP`, read by `gateway`, `coredns-custom`, `cilium`, and `databases` via Flux's `postBuild.substituteFrom`.
-    * **`kustomization.yaml`**
   * **`cnpg-operator/`**
     * **`cnpg-release.yaml`** - `HelmRepository`/`HelmRelease` for the CloudNativePG operator.
     * **`kustomization.yaml`**
@@ -397,7 +395,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * **`cilium-values-hubble.yaml`** - Cilium chart values enabling Hubble Relay/UI with cert-manager-issued mTLS, referencing `hubble-ca-issuer` above. Generated as the `cilium-values-hubble` ConfigMap by this `kustomization.yaml`, which `cilium-release.yaml` reads as an optional `valuesFrom` source.
     * **`kustomization.yaml`**
   * **`namespaces/`**
-    * **`namespaces.yaml`** - Creates every namespace Flux needs a home for up front (`vault`, `vault-secrets-operator-system`, `cnpg-system`, `databases`, `cert-manager`, `gateway`). A `HelmRelease` doesn't auto-create its own namespace .
+    * **`namespaces.yaml`** - Creates every namespace Flux needs a home for up front (`vault`, `vso-system`, `cnpg-system`, `databases`, `cert-manager`, `gateway`). A `HelmRelease` doesn't auto-create its own namespace .
     * **`kustomization.yaml`**
   * **`vault/`**
     * **`vault-release.yaml`** - `HelmRepository`/`HelmRelease` for the in-cluster Vault.
@@ -406,7 +404,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`vault-secrets-operator/`**
     * **`vso-release.yaml`** - `HelmRepository`/`HelmRelease` for the Vault Secrets Operator.
     * **`kustomization.yaml`**
-* **`terraform/`** OpenTofu modules configuring Vault's internals (KV secrets, the Kubernetes auth backend, the database secrets engine, the host Transit Vault's autounseal token). State is local, gitignored, and encrypted at rest via OpenTofu's own `encryption` block; these modules are applied by hand following the instructions in `INSTALLATION.md`.
+* **`terraform/`** OpenTofu modules configuring cluster-config and Vault's internals (KV secrets, the Kubernetes auth backend, the database secrets engine, the host Transit Vault's autounseal token). State is local and gitignored throughout; the Vault-facing modules additionally encrypt state at rest via OpenTofu's own `encryption` block, since they handle credentials — `cluster-config/` has no `encryption.tf` since its Secret data (IPs, a version string) isn't sensitive. These modules are applied by hand following the instructions in `INSTALLATION.md`.
+  * **`cluster-config/`** - Creates the `cluster-config` Secret in `flux-system` (`GATEWAY_IP`, `COREDNS_LAN_IP`, `HOST_IP`, `CILIUM_VERSION`), read by `gateway`, `coredns-custom`, `cilium`, `vault`, and `databases` via Flux's `postBuild.substituteFrom`. Values come from a `terraform.tfvars` you provide (gitignored), never committed. Applied first, right after k3s is installed — see `INSTALLATION.md` Section 1.
   * **`vault-bootstrap/`** - KV mounts and secrets (`secret/postgis`, `secret/seaweedfs`), the Kubernetes auth backend, and the `postgis-policy`/`postgis-role` Vault uses to authorize the cluster's ServiceAccount. Targets the **in-cluster** Vault.
   * **`vault-database/`** - The database secrets engine connection to `postgis-cluster` and the `postgis-app-role` issuing leased application credentials. Targets the **in-cluster** Vault.
   * **`vault-transit-bootstrap/`** - The transit engine/key, `autounseal-policy`, and the periodic orphan token the in-cluster Vault uses for auto-unseal. Targets the **host** Transit Vault (port 8200).

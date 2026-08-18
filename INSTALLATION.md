@@ -55,7 +55,7 @@ cd data_science_cluster
 
 *Reinstalling on a host that already has k3s installed?* Run `/usr/local/bin/k3s-uninstall.sh`, then check Cilium's BPF mounts are actually gone (`mount | grep bpf`; see `troubleshooting.md`). This wipes the in-cluster Vault and PVC data — SeaweedFS and the host Transit Vault live outside k3s's data dir and survive — so plan to rebuild Vault (Section 4+) and restore Postgres (README) afterward.
 
-The IP and DNS structure for this cluster assumes generic IP routing on a Linux OS. `infrastructure/cluster-config/cluster-config.yaml` is the single place that hardcodes these network values now — `GATEWAY_IP`, `CILIUM_VERSION`, `COREDNS_LAN_IP` — substituted into every manifest below via Flux's `postBuild.substituteFrom` (see the `clusters/local/*.yaml` Kustomization for each):
+The IP and DNS structure for this cluster assumes generic IP routing on a Linux OS. These network values — `GATEWAY_IP`, `CILIUM_VERSION`, `COREDNS_LAN_IP`, `HOST_IP` — live in a `cluster-config` Secret in the `flux-system` namespace, substituted into every manifest below via Flux's `postBuild.substituteFrom` (see the `clusters/local/*.yaml` Kustomization for each). The Secret itself is never committed to git; `terraform/cluster-config/` creates it via OpenTofu from a `terraform.tfvars` file you provide (gitignored). This needs `kubectl` to reach the cluster's API server, so it runs once k3s is installed below — no need to wait for Cilium, the API server answers before the CNI is ready.
 
 | File | Sourced from `cluster-config` |
 | --- | --- |
@@ -65,8 +65,9 @@ The IP and DNS structure for this cluster assumes generic IP routing on a Linux 
 | `infrastructure/coredns-custom/coredns-lan-service.yaml` | `${COREDNS_LAN_IP}` — the LAN-facing IP for k3s's own CoreDNS |
 | `infrastructure/coredns-custom/coredns-custom.yaml` | `${GATEWAY_IP}` — what every `*.internal` name resolves to |
 | `infrastructure/cilium/cilium-release.yaml` | `${CILIUM_VERSION}` — the HelmRelease chart version |
+| `infrastructure/vault/vault-networkpolicy.yaml` | `${HOST_IP}` — the node's own address, for Vault's egress to the host Transit Vault |
 
-To change any of these (a new LAN IP, a Cilium upgrade), edit `cluster-config.yaml` once and let Flux reconcile — don't edit the individual manifests.
+To change any of these (a new LAN IP, a Cilium upgrade), update `terraform.tfvars` and run `tofu apply` again — don't edit the individual manifests.
 
 k3s's own in-cluster CoreDNS (`kube-system`) resolves `*.internal` for LAN clients (via `infrastructure/coredns-custom/`, a zone added to the same CoreDNS that's always resolved `*.svc.cluster.local` for pods — not a second resolver). Whether your devices actually reach it depends on your router/DNS setup, covered later in this doc.
 
@@ -93,6 +94,27 @@ kubectl get nodes
 ```
 
 * **Check:** node shows up, status `NotReady`. Don't panic! This is expected because until Cilium is operational, there is no CNI for the container.
+
+* **Create the `cluster-config` Secret.** `kubectl` already reaches the API server at this point, even though the node itself is `NotReady`:
+
+```bash
+cd terraform/cluster-config
+cat > terraform.tfvars <<'EOF'
+gateway_ip     = "192.0.2.240"
+coredns_lan_ip = "192.0.2.242"
+host_ip        = "<this node's own LAN IP, e.g. from `ip addr` or `hostname -I`>"
+cilium_version = "1.20.0"
+EOF
+tofu init
+tofu apply
+cd ../..
+```
+
+* **Check:**
+
+```bash
+kubectl get secret cluster-config -n flux-system
+```
 
 ---
 
@@ -278,7 +300,7 @@ flowchart LR
 flux get kustomizations
 kubectl get pods -n flux-system   # all Running
 kubectl get ns
-# vault, vault-secrets-operator-system, cnpg-system, databases,
+# vault, vso-system, cnpg-system, databases,
 # cert-manager, gateway
 ```
 
