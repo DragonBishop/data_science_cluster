@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - vault-tls.yaml
   - vault-release.yaml
+  - vault-networkpolicy.yaml
 configurations:
   - kustomizeconfig.yaml
 configMapGenerator:

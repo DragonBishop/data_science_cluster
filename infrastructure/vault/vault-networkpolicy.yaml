@@ -1,0 +1,32 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: vault-ingress-egress
+  namespace: vault
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: vso-system
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+  egress:
+    - toCIDR:
+        - "${HOST_IP}/32"
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: databases
+            cnpg.io/cluster: postgis-cluster
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
