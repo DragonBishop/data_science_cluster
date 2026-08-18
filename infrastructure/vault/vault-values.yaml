@@ -41,7 +41,7 @@ server:
     VAULT_CACERT: /vault/userconfig/vault-server-cert/ca.crt
 
   # Automatically mounts the TLS certificate ConfigMap
-  # we created into the Vault pod at /vault/userconfig/vault-transit-ca/
+  # created into the Vault pod at /vault/userconfig/vault-transit-ca/
   extraVolumes:
     - type: configMap
       name: vault-transit-ca
@@ -75,7 +75,7 @@ server:
       # by an external Vault instance. This allows the in-cluster Vault to
       # recover from restarts without manual unseal operations.
       seal "transit" {
-        address         = "https://HOST_IP:8200"
+        address         = "https://${HOST_IP}:8200"
         disable_renewal = "false"
         key_name        = "autounseal"
         mount_path      = "transit/"
