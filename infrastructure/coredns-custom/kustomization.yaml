@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - coredns-custom.yaml
   - coredns-lan-service.yaml
+  - coredns-networkpolicy.yaml
