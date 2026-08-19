@@ -1,0 +1,47 @@
+name: Technical Debt Resolution
+description: Flag code that works but will cost the project later
+title: 'Debt: '
+labels: ["enhancement"]
+body:
+# Context
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Explain the source of tech debt in operational terms. What happens?
+    validations:
+      required: true
+# Risk
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk
+      description: Explain how and why this creates a liability for the project.
+    validations:
+      required: true
+# Urgency
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: When will this become a problem?
+      options:
+        - It Already Has
+        - Soon
+        - Eventually
+    validations:
+      required: true
+# Resolution
+  - type: textarea
+    id: resolution
+    attributes:
+      label: Resolution Proposal
+      description: Explain what specific changes will eliminate this technical debt
+    validations:
+      required: true
+# Additional Notes
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes
+      description: >
+        Provide relevant file paths, scripts, documentation, or any other additional notes about this issue.

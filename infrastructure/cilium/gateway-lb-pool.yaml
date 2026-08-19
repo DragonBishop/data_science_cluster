@@ -1,0 +1,15 @@
+# gateway-lb-pool.yaml
+#
+# serviceSelector targets the Service Cilium's Gateway controller generates
+# for infrastructure/gateway/gateway.yaml's `internal-gateway` Gateway.
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: gateway-lb-pool
+spec:
+  blocks:
+    - start: "192.0.2.240"
+      stop: "192.0.2.240"
+  serviceSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: internal-gateway # confirm before use — see above
