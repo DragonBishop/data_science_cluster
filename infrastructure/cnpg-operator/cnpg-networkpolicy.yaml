@@ -6,7 +6,17 @@ metadata:
 spec:
   endpointSelector:
     matchLabels:
-      app.kubernetes.io/name: cnpg
+      k8s:io.kubernetes.pod.namespace: cnpg-system
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
   egress:
     - toEndpoints:
         - matchLabels:
@@ -15,3 +25,25 @@ spec:
         - ports:
             - port: "8000"
               protocol: TCP
+            - port: "5432"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+    - toEntities:
+        - host
+        - kube-apiserver
