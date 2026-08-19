@@ -1,8 +1,4 @@
-# Cilium chart values for Hubble Relay/UI, merged into the cilium
-# HelmRelease (infrastructure/cilium/cilium-release.yaml) as an optional
-# valuesFrom source. Generated as a ConfigMap by this Kustomization, which
-# depends on cert-manager and gateway — the ConfigMap only exists once
-# hubble-ca-issuer does.
+# Cilium Helm values for Hubble Relay and UI
 hubble:
   relay:
     resources:
@@ -36,4 +32,4 @@ hubble:
       certManagerIssuerRef:
         group: cert-manager.io
         kind: ClusterIssuer
-        name: hubble-ca-issuer
+        name: vault-pki-issuer
