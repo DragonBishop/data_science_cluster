@@ -48,4 +48,5 @@ egressGateway:
   # Enables the CiliumEgressGatewayPolicy CRD.
   enabled: true
 
+# Enables the CiliumLocalRedirectPolicy CRD.
 localRedirectPolicy: true

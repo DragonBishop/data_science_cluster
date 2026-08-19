@@ -522,6 +522,23 @@ PGPASSWORD="$LEASE_PASS" psql \
 unset LEASE_USER LEASE_PASS
 ```
 
+### Test Localhost Database Connectivity
+
+On the k3s node itself, `CiliumLocalRedirectPolicy` redirects `127.0.0.1:5432` to the CNPG primary pod:
+
+```bash
+LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
+LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
+mkdir -p ~/.postgresql
+kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
+PGPASSWORD="$LEASE_PASS" psql \
+  "host=localhost port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full" \
+  -c 'SELECT current_user, session_user;'
+unset LEASE_USER LEASE_PASS
+```
+
+Reachable only from the node itself, not other LAN machines.
+
 ### Migrate Existing PostgreSQL Data
 
 If migrating data from an existing database dump, restore it into the new cluster:

@@ -213,6 +213,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── kustomization.yaml
 │       ├── postgis-cluster.yaml
 │       ├── postgis-database.yaml
+│       ├── postgis-localhost.yaml
 │       ├── postgis-networkpolicy.yaml
 │       ├── postgis-tcproute.yaml
 │       ├── postgis-tls.yaml
@@ -363,6 +364,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`postgis-tls.yaml`** - cert-manager `Certificate` requesting the Postgres server certificate from `vault-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
   * **`postgis-cluster.yaml`** - The CNPG `Cluster`, its static and dynamic Vault secrets, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`) and `ScheduledBackup` used for backups.
   * **`postgis-tcproute.yaml`** - `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
+  * **`postgis-localhost.yaml`** - `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
   * **`postgis-database.yaml`** - CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
   * **`postgis-networkpolicy.yaml`** - Restricts PostGIS database ingress (CNPG operator, Vault) and egress (kube-dns, SeaweedFS S3).
   * **`seaweedfs-release.yaml`** - `HelmRepository`/`HelmRelease` for SeaweedFS, master/filer data on the external HDD via `hostPath`, S3 gateway on port 9000 with TLS issued by `vault-pki-issuer`, and `cnpg-backups` bucket created at install.
@@ -380,8 +382,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * **`cert-manager-networkpolicy.yaml`** - Scopes cert-manager ingress to kube-apiserver webhook calls and egress to kube-dns, kube-apiserver, and Vault API (port 8200).
     * **`kustomization.yaml`**
   * **`cilium/`**
-    * **`cilium-release.yaml`** - `HelmRepository` (OCI, `quay.io/cilium/charts`) and `HelmRelease` for Cilium, with `releaseName`/namespace matching the bootstrap install so Flux adopts the existing release instead of installing a second one. `valuesFrom` has two entries: `cilium-values` (required) and `cilium-values-hubble` (`optional: true`). `optional: true` lets the HelmRelease install cleanly without it; `helm-controller` watches the ConfigMap and re-reconciles the moment it appears, merging Hubble's values in automatically.
-    * **`cilium-values.yaml`** - Helm values for kube-proxy replacement, the k3s API server override, single-replica operator, pod CIDR, Gateway API support, L2 announcements, and the egress gateway feature flag (`egressGateway.enabled`).
+    * **`cilium-release.yaml`** - `HelmRepository` (OCI, `quay.io/cilium/charts`) and `HelmRelease` for Cilium, with `releaseName`/namespace matching the bootstrap install so Flux adopts the existing release instead of installing a second one. `valuesFrom` has two entries: `cilium-values` (required) and `cilium-values-hubble` (`optional: true`). `optional: true` lets the HelmRelease install cleanly without it; `helm-controller` watches the ConfigMap and re-reconciles the moment it appears, merging Hubble's values in automatically. `upgrade.crds: CreateReplace` applies new CRDs shipped by a chart upgrade (e.g. `CiliumLocalRedirectPolicy`).
+    * **`cilium-values.yaml`** - Helm values for kube-proxy replacement, the k3s API server override, single-replica operator, pod CIDR, Gateway API support, L2 announcements, the egress gateway feature flag (`egressGateway.enabled`), and local redirect policy support (`localRedirectPolicy`).
     * **`clusterwide-networkpolicy.yaml`** - Cluster-wide default baseline policy allowing host ingress, cluster/kube-apiserver egress, and CoreDNS lookups.
     * **`lan-lb-pool.yaml`** / **`lan-l2-policy.yaml`** - `CiliumLoadBalancerIPPool` (a reserved block, `${GATEWAY_IP}-192.0.2.250`) / `CiliumL2AnnouncementPolicy`. Each Service claims one IP, pinned via `spec.addresses` (Gateway objects) or the `lbipam.cilium.io/ips` annotation (plain Services).
     * **`kustomization.yaml`** - Bundles the release and both LB/L2 objects, plus a `configMapGenerator` turning `cilium-values.yaml` into the `ConfigMap` the `HelmRelease`'s `valuesFrom` reads.
