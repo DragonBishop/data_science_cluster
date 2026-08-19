@@ -118,7 +118,6 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Prefect | [https://docs.prefect.io/](https://docs.prefect.io/) |
 | BentoML | [https://docs.bentoml.com/](https://docs.bentoml.com/) |
 | MLflow | [https://mlflow.org/docs/latest/index.html](https://mlflow.org/docs/latest/index.html) |
-: Machine Learning
 
 ## Cluster Operations
 
@@ -361,8 +360,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 * **`apps/databases/`** the PostGIS cluster and everything it depends on, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`** - every resource this Kustomization builds, in one pass.
   * **`vso-setup.yaml`** - Creates the `databases` namespace and the `VaultConnection`/`VaultAuth`/`ServiceAccount` VSO uses to authenticate to Vault.
-  * **`postgis-tls.yaml`** - cert-manager `Certificate` requesting the Postgres server certificate from `vault-pki-issuer`. SANs cover `localhost`/`127.0.0.1` (the socat proxy), `postgis.internal`, and the shared Gateway's static LAN IP.
-  * **`postgis-cluster.yaml`** - The CNPG `Cluster`, its static and dynamic Vault secrets, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`) and `ScheduledBackup` used for backups, and the `postgres-proxy` Deployment.
+  * **`postgis-tls.yaml`** - cert-manager `Certificate` requesting the Postgres server certificate from `vault-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
+  * **`postgis-cluster.yaml`** - The CNPG `Cluster`, its static and dynamic Vault secrets, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`) and `ScheduledBackup` used for backups.
   * **`postgis-tcproute.yaml`** - `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`postgis-database.yaml`** - CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
   * **`postgis-networkpolicy.yaml`** - Restricts PostGIS database ingress (CNPG operator, Vault) and egress (kube-dns, SeaweedFS S3).
