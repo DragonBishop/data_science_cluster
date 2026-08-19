@@ -1,8 +1,4 @@
-# lan-lb-pool.yaml
-#
-# Reserved LAN address block for every LoadBalancer Service in the cluster.
-# No serviceSelector — Cilium treats a pool with none as the default pool,
-# so any LoadBalancer Service gets the next free IP from this block.
+# Reserved LAN IP address pool for LoadBalancer Services
 apiVersion: cilium.io/v2
 kind: CiliumLoadBalancerIPPool
 metadata:

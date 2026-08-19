@@ -1,18 +1,9 @@
-# vault-values.yaml
-#
-# Helm values for the in-cluster Vault deployment (hashicorp/vault chart).
-# This Vault automatically unseals using a separate transit Vault running
-# outside the cluster, allowing it to restart without manual unseal keys.
+# Helm values for in-cluster HashiCorp Vault
 
 global:
-  # Chart default is true (plaintext); must be explicit false here, not
-  # merely absent, per hashicorp/vault-helm's own values.yaml default.
   tlsDisable: false
 
 injector:
-  # Disable the Vault Agent Injector. Secrets are synchronized into
-  # Kubernetes by the Vault Secrets Operator (VSO), so sidecar injection
-  # is not used.
   enabled: false
 
 server:
@@ -25,28 +16,17 @@ server:
       memory: 350Mi
     limits:
       memory: 800Mi
-# This environment variable allows for the transit token to be pulled
-# from the vault at runtime.
   extraSecretEnvironmentVars:
     - envName: VAULT_TOKEN
       secretName: vault-transit-secret
       secretKey: token
 
-  # The chart already sets VAULT_ADDR itself (127.0.0.1:8200, scheme derived
-  # from tlsDisable), so only the CA needs adding here -- a duplicate
-  # VAULT_ADDR entry fails Helm's server-side apply. This is what lets
-  # kubectl exec/just vault-shell/vault-login run vault commands with no
-  # inline env vars.
   extraEnvironmentVars:
     VAULT_CACERT: /vault/userconfig/vault-server-cert/ca.crt
 
-  # Automatically mounts the TLS certificate ConfigMap
-  # created into the Vault pod at /vault/userconfig/vault-transit-ca/
   extraVolumes:
     - type: configMap
       name: vault-transit-ca
-    # Server certificate/key for the client-facing listener below, minted by
-    # vault-tls.yaml at /vault/userconfig/vault-server-cert/.
     - type: secret
       name: vault-server-cert
 
@@ -56,8 +36,6 @@ server:
       disable_mlock = true
       ui = true
 
-      # Client-facing Vault listener. Available within the cluster through
-      # the vault and vault-internal Services.
       listener "tcp" {
         address          = "[::]:8200"
         cluster_address  = "[::]:8201"
@@ -65,15 +43,10 @@ server:
         tls_key_file     = "/vault/userconfig/vault-server-cert/tls.key"
       }
 
-      # Store Vault's data on the pod's persistent volume. This deployment
-      # runs as a single standalone instance rather than an HA cluster.
       storage "file" {
         path = "/vault/data"
       }
 
-      # Automatically unseal this Vault by using the transit seal provided
-      # by an external Vault instance. This allows the in-cluster Vault to
-      # recover from restarts without manual unseal operations.
       seal "transit" {
         address         = "https://${HOST_IP}:8200"
         disable_renewal = "false"

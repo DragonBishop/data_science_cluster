@@ -1,10 +1,4 @@
-# gateway.yaml
-#
-# The one shared Gateway every internal tool attaches a Route to. HTTPS listener
-# (443) for web UIs, raw TCP listener (5432) for Postgres.
-# allowedRoutes.namespaces.from: All lets any namespace attach without a
-# ReferenceGrant. Pinned via spec.addresses to GATEWAY_IP
-# (terraform/cluster-config/).
+# Shared Gateway for HTTPS (443) and PostgreSQL (5432) traffic
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
