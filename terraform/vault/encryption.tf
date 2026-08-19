@@ -1,3 +1,4 @@
+
 variable "state_encryption_passphrase" {
   type      = string
   sensitive = true
@@ -14,6 +15,10 @@ terraform {
     }
 
     state {
+      method = method.aes_gcm.main
+    }
+
+    plan {
       method = method.aes_gcm.main
     }
   }
