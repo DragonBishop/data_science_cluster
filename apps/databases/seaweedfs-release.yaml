@@ -38,3 +38,15 @@ spec:
       port: 9000
       createBuckets:
         - name: cnpg-backups
+      extraArgs:
+        - "-cert.file=/var/run/secrets/spiffe.io/tls.crt"
+        - "-key.file=/var/run/secrets/spiffe.io/tls.key"
+      extraVolumeMounts: |
+        - name: spiffe
+          mountPath: /var/run/secrets/spiffe.io
+          readOnly: true
+      extraVolumes: |
+        - name: spiffe
+          csi:
+            driver: spiffe.csi.cert-manager.io
+            readOnly: true

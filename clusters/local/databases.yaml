@@ -7,6 +7,7 @@ spec:
   interval: 1h
   dependsOn:
     - name: barman-cloud
+    - name: csi-driver-spiffe
     - name: gateway
     - name: vault
   sourceRef:
