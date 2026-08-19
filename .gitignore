@@ -1,19 +1,15 @@
-# Vault unseal material. The GPG keyfile lives at ~/.vault-keys.gpg by design,
-# outside the repository, but a stray copy made during setup must never land here.
+# Vault unseal and key material
 *.gpg
 vault-keys*
 *-unseal*
 *recovery-keys*
 
-# Kubeconfigs. k3s writes its admin kubeconfig to ~/.kube/config; anything
-# matching these names inside the repository is a copy that carries cluster credentials.
+# Kubernetes configs
 kubeconfig
 *.kubeconfig
 k3s.yaml
 
-# Private key material. postgis-tls.yaml has cert-manager mint these into
-# Secrets, and the Transit key belongs in /opt/vault/tls. Certificates are
-# public and are deliberately not listed -- a committed CA bundle is legitimate.
+# Private key material
 *.key
 *.pem
 *.p12
@@ -25,11 +21,11 @@ k3s.yaml
 *.tfstate.*
 .terraform/
 
-# Machine rendered manifests.
+# Machine rendered manifests
 *.rendered.yaml
 manifests/**/rendered/
 
-# Machine-specific overrides.
+# Environment overrides
 cluster.env.local
 .env
 .env.*
@@ -48,7 +44,7 @@ __pycache__/
 .ipynb_checkpoints/
 .ruff_cache/
 
-# pytest/coverage output from `just test-cov`, and hatchling build artifacts
+# Test coverage and build artifacts
 .pytest_cache/
 .coverage
 .coverage.*
@@ -59,11 +55,11 @@ build/
 dist/
 *.egg-info/
 
-# Stray default Jupyter notebook filenames under notebooks/
+# Scratch/temporary notebooks
 [Uu]ntitled*
 scratch*
 
-# Editor and OS noise
+# Editor and OS files
 .DS_Store
 *.swp
 .idea/

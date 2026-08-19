@@ -38,3 +38,29 @@ spec:
       port: 9000
       createBuckets:
         - name: cnpg-backups
+      livenessProbe:
+        httpGet:
+          scheme: HTTPS
+      readinessProbe:
+        httpGet:
+          scheme: HTTPS
+      # S3 TLS certificates provisioned via cert-manager seaweedfs-s3-tls Certificate
+      # backed by vault-pki-issuer.
+      extraArgs:
+        - "-cert.file=/var/run/secrets/seaweedfs.io/tls.crt"
+        - "-key.file=/var/run/secrets/seaweedfs.io/tls.key"
+        - "-config=/var/run/secrets/seaweedfs-config/config"
+      extraVolumeMounts: |
+        - name: seaweedfs-tls
+          mountPath: /var/run/secrets/seaweedfs.io
+          readOnly: true
+        - name: seaweedfs-config
+          mountPath: /var/run/secrets/seaweedfs-config
+          readOnly: true
+      extraVolumes: |
+        - name: seaweedfs-tls
+          secret:
+            secretName: seaweedfs-s3-tls
+        - name: seaweedfs-config
+          secret:
+            secretName: seaweedfs-credentials

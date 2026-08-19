@@ -1,49 +1,4 @@
-# gateway-tls.yaml
-#
-# ClusterIssuer chain (gateway-ca-issuer) plus the shared wildcard edge
-# Certificate for internal-gateway (gateway.yaml). Separate trust domain
-# from hubble-ca-issuer (infrastructure/hubble/), which is backend mTLS only.
-#
-# Same bootstrap -> local CA -> issuing-ClusterIssuer shape used for
-# postgis-ca-issuer and hubble-ca-issuer.
-
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: gateway-selfsigned-bootstrap
-spec:
-  selfSigned: {}
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: gateway-local-ca
-  # ClusterIssuer.spec.ca.secretName resolves in cert-manager's configured
-  # cluster-resource-namespace — confirmed live as `cert-manager`
-  # (--cluster-resource-namespace=$(POD_NAMESPACE) on the controller
-  # Deployment, same fact already confirmed for hubble-tls.yaml).
-  namespace: cert-manager
-spec:
-  isCA: true
-  commonName: gateway-local-ca
-  secretName: gateway-local-ca-secret
-  duration: 87600h # 10 years
-  privateKey:
-    algorithm: ECDSA
-    size: 256
-  issuerRef:
-    name: gateway-selfsigned-bootstrap
-    kind: ClusterIssuer
----
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: gateway-ca-issuer
-spec:
-  ca:
-    secretName: gateway-local-ca-secret
----
-# Wildcard cert covering every *.internal hostname a future HTTPRoute names.
+# Wildcard edge TLS certificate for *.internal HTTPRoutes issued via Vault PKI
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -60,5 +15,5 @@ spec:
     algorithm: ECDSA
     size: 256
   issuerRef:
-    name: gateway-ca-issuer
+    name: vault-pki-issuer
     kind: ClusterIssuer

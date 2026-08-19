@@ -7,7 +7,6 @@ spec:
   interval: 1h
   dependsOn:
     - name: cnpg-operator
-    - name: cert-manager
   sourceRef:
     kind: GitRepository
     name: flux-system

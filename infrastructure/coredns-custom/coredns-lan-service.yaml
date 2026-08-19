@@ -1,8 +1,4 @@
-# coredns-lan-service.yaml
-#
-# LAN-facing Service for k3s's own CoreDNS, selecting the same pods as the
-# operator-managed ClusterIP kube-dns Service (that one stays, in-cluster
-# only). Confirmed selector against the live k3s coredns manifest.
+# LAN-facing LoadBalancer Service for CoreDNS
 apiVersion: v1
 kind: Service
 metadata:
