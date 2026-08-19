@@ -1,34 +1,34 @@
 module_name := "clusterpgis"
 
-# list commands
+# List available recipes
 default:
   @just --list
 
-# install the packages
+# Install dependencies
 install:
   {{ if path_exists("uv.lock") == "true" { "uv sync --all-groups --all-extras --locked --inexact" } else { "uv sync --all-groups --all-extras --inexact" } }}
 
-# setup for development
+# Setup development environment
 setup: install git-setup
 
-# run test coverage and create
+# Run tests and generate coverage reports
 test-cov:
   uv run pytest --cov=src/clusterpgis --cov-report=lcov:lcov.info --cov-report=term-missing --cov-report html --cov-report xml
 
-# update packages and uv lock file
+# Update packages and lockfile
 update:
   uv sync -U --all-groups --all-extras --inexact
 
-# set up the nbwipers git filter so notebooks stay clean on commit
+# Configure nbwipers git filter
 git-setup:
   @[ -d .git ] || git init
   uv run nbwipers install local
 
-# start a long-lived port-forward to hubble-relay on localhost:4245; run this once in its own terminal and `just hubble ...` will reuse it
+# Port-forward to hubble-relay on localhost:4245
 hubble-pf:
   kubectl port-forward -n kube-system svc/hubble-relay 4245:443
 
-# run a hubble CLI command against hubble-relay (e.g. `just hubble status`, `just hubble observe --follow`); reuses an existing `just hubble-pf` if one is listening on 4245, else starts a short-lived one for this call only
+# Run Hubble CLI command against hubble-relay
 hubble *ARGS='status':
   #!/usr/bin/env bash
   set -uo pipefail
@@ -54,7 +54,7 @@ hubble *ARGS='status':
     --tls-client-key-file ~/.hubble/tls/tls.key \
     {{ARGS}} 2> >(grep -v --line-buffered "Hubble CLI version is lower than Hubble Relay" >&2)
 
-# open the Hubble web UI: starts a background port-forward to localhost:12000 (reused across calls) and opens the browser
+# Open Hubble web UI
 hubble-ui:
   #!/usr/bin/env bash
   set -uo pipefail
@@ -72,10 +72,10 @@ hubble-ui:
 
 vault_env := "unset VAULT_TOKEN"
 
-# open an interactive shell in vault-0 with VAULT_ADDR set and the inherited transit-unseal VAULT_TOKEN unset, ready for `vault login` or any other vault command
+# Open interactive shell in vault-0 pod
 vault-shell:
   kubectl exec -it vault-0 -n vault -- sh -c '{{vault_env}}; exec sh'
 
-# same setup as `just vault-shell`, then runs `vault login`; the token prompt is vault's own masked stdin read, never a command argument or echoed value; drops into the shell already authenticated
+# Open authenticated shell in vault-0 pod
 vault-login:
   kubectl exec -it vault-0 -n vault -- sh -c '{{vault_env}}; vault login && exec sh'

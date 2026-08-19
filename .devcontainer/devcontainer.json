@@ -1,12 +1,6 @@
 // ==============================================================================
 // Kubernetes & Data Science Foundation - Devcontainer
 // ==============================================================================
-//   This configuration provides a standardized, engine-agnostic environment 
-//   for managing Kubernetes clusters and executing data science workloads.
-//
-//   Users: Customize the "settings" and "extensions" blocks below to add 
-//   your preferred themes, formatters, aetc.
-// ==============================================================================
 {
   "name": "datasci-k8s-foundation",
   "build": { "dockerfile": "Dockerfile" },
@@ -14,9 +8,6 @@
   // ----------------------------------------------------------------------------
   // Workspace & User Mapping
   // ----------------------------------------------------------------------------
-  //
-
-  // The official devcontainer base image pre-configures the 'vscode' user
   "containerUser": "vscode",
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
@@ -25,8 +16,7 @@
   // Execution Context & Security Boundaries
   // ----------------------------------------------------------------------------
   "runArgs": [
-    // Bypasses container network isolation so the environment natively 
-    // reaches Kubernetes and host-local services.
+    // Use host network namespace to access Kubernetes and host-local services
     "--network=host"
   ],
 
@@ -42,11 +32,10 @@
   // ----------------------------------------------------------------------------
   // Port Forwarding
   // ----------------------------------------------------------------------------
-  // With --network=host, Jupyter is already reachable at localhost on the
-  // host; VS Code's auto-forward notification for it is pure noise.
+  // Disable port auto-forwarding for local Jupyter processes
   "portsAttributes": {
     ".*(jupyter|ipykernel_launcher).*": {
-      "label": "Jupyter (matched by process, no forward needed)",
+      "label": "Jupyter (host network)",
       "onAutoForward": "ignore"
     }
   },

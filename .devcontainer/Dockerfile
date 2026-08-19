@@ -1,29 +1,17 @@
 # ==============================================================================
 # Kubernetes & Data Science Foundation - Dockerfile
 # ==============================================================================
-# Base tools pre-installed for infrastructure management and analytics:
+# Base tools installed:
 # - Python
-# - uv (Modern Python package manager)
-# - just (runs this repo's justfile — the primary interface: install, setup,
-#   hubble, vault-shell, vault-login, etc.)
+# - uv (Python package manager)
+# - just (Command runner for repository tasks)
 # - kubectl & Helm (Cluster management)
-# - cnpg plugin (CloudNativePG status, backups, and psql access)
-# - Cilium CLI & Hubble CLI (Network visibility)
+# - cnpg plugin (CloudNativePG CLI plugin)
+# - Cilium CLI & Hubble CLI (Network management and observability)
 # - Flux CLI (GitOps reconciliation)
-# - PostgreSQL Client (Database access)
+# - PostgreSQL Client (Database connectivity)
 #
-# OpenTofu is not installed here. terraform/vault-bootstrap and
-# terraform/vault-database are applied by hand from the host. The Vault CLI
-# is not installed here either; in-cluster Vault work runs the pod's own
-# binary via `just vault-shell` / `just vault-login` (see justfile).
-#
-# This is a lightweight, platform-agnostic foundation scoped to what this
-# repo's own tooling (justfile, docs) actually exercises — not a general
-# data-science workstation. Add your own extensions/settings below rather
-# than growing this file with personal preferences.
-#
-# NOTE: Project-specific Python libraries do not belong here.
-# Manage them via `uv init`, `uv add`, and `uv sync` in your pyproject.toml.
+# Manage project-specific Python dependencies via pyproject.toml using uv.
 # ==============================================================================
 
 # Start from the official Dev Container Python image.
@@ -34,8 +22,8 @@ FROM mcr.microsoft.com/devcontainers/python:3
 # ------------------------------------------------------------------------------
 # 1. System Utilities
 # ------------------------------------------------------------------------------
-# postgresql-client: Native interaction with local DB bridges.
-# just: runs this repo's justfile (see header note above).
+# postgresql-client: Database CLI utilities.
+# just: Command runner.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     just \
@@ -63,8 +51,7 @@ RUN curl -LsSfo /tmp/get-helm-3 https://raw.githubusercontent.com/helm/helm/main
  && rm /tmp/get-helm-3 \
  && helm version
 
-# Registers as a kubectl subcommand by filename: `kubectl cnpg status`,
-# `kubectl cnpg backup`, and `kubectl cnpg psql` resolve to kubectl-cnpg on PATH.
+# CloudNativePG kubectl plugin
 RUN curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/install-cnpg-plugin.sh \
       | sh -s -- -b /usr/local/bin \
  && kubectl cnpg version
@@ -79,9 +66,7 @@ RUN CILIUM_CLI_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/cil
  && rm /tmp/cilium-linux-amd64.tar.gz \
  && cilium version --client
 
-# Standalone client for `hubble observe`/`hubble status` against Hubble
-# Relay (see justfile's `hubble`/`hubble-pf`/`hubble-ui` recipes); a
-# separate binary from the Cilium CLI above.
+# Hubble CLI client
 RUN HUBBLE_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/hubble/master/stable.txt) \
  && curl -LsSfo /tmp/hubble-linux-amd64.tar.gz \
       "https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-amd64.tar.gz" \

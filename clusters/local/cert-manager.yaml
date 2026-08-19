@@ -7,7 +7,6 @@ spec:
   interval: 1h
   dependsOn:
     - name: cilium
-    - name: namespaces
   sourceRef:
     kind: GitRepository
     name: flux-system

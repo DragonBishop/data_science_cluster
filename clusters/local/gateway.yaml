@@ -6,9 +6,7 @@ metadata:
 spec:
   interval: 1h
   dependsOn:
-    - name: cilium
-    - name: cert-manager
-    - name: namespaces
+    - name: vault
   sourceRef:
     kind: GitRepository
     name: flux-system
