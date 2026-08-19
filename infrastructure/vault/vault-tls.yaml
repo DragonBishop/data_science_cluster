@@ -1,22 +1,4 @@
-# vault-tls.yaml
-#
-# Generates a custom self-signed CA and server certificate via cert-manager
-# for the cluster's Vault. The certificate includes the required in-cluster
-# service DNS names.
-#
-# Uses ClusterIssuers rather than namespaced Issuers: the CA must be trusted
-# from both the vault namespace (Vault's own listener) and the databases
-# namespace (VSO's VaultConnection, whose caCertSecretRef only ever reads a
-# Secret from its own namespace), so the CA-signing Issuer and its backing
-# Secret need to be visible cluster-wide. vault-local-ca lives in the
-# cert-manager namespace because that's this cluster's configured
-# --cluster-resource-namespace
-# (infrastructure/cert-manager/cert-manager-release.yaml) -- the namespace a
-# ClusterIssuer looks in for its referenced CA secret.
-#
-# Ordering vs. vault-release.yaml is handled by resource order in this
-# directory's kustomization.yaml, not by manual apply order. Requires
-# cert-manager.
+# Vault TLS certificates, local CA, and cert-manager ClusterIssuer configuration
 
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -25,8 +7,7 @@ metadata:
 spec:
   selfSigned: {}
 ---
-# Creates a dedicated, long-lived local CA for Vault using the self-signed
-# bootstrap ClusterIssuer.
+# Dedicated local CA for Vault
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -44,8 +25,7 @@ spec:
     name: vault-selfsigned-bootstrap
     kind: ClusterIssuer
 ---
-# A ClusterIssuer backed by the local CA, used to mint the Vault server
-# certificate and the CA-bundle copy read into the databases namespace.
+# ClusterIssuer backed by the Vault local CA
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -54,8 +34,7 @@ spec:
   ca:
     secretName: vault-local-ca-secret
 ---
-# Generates the server certificate Secret (containing tls.crt, tls.key, and
-# ca.crt) for Vault, valid for 90 days with auto-renewal.
+# Server certificate for Vault
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -83,10 +62,7 @@ spec:
     name: vault-ca-issuer
     kind: ClusterIssuer
 ---
-# Re-mints the same CA into the databases namespace so VSO's VaultConnection
-# can trust it via caCertSecretRef, which resolves in its own CR's
-# namespace, not vault's. Only this Secret's ca.crt key is ever read; the
-# leaf cert/key cert-manager also puts in it are never presented by anything.
+# Vault CA bundle for the databases namespace
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -105,3 +81,48 @@ spec:
   issuerRef:
     name: vault-ca-issuer
     kind: ClusterIssuer
+---
+# ClusterIssuer backed by Vault's Intermediate PKI secrets engine.
+# Signs leaf certificates for Postgres (postgis-tls) and SeaweedFS S3.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-pki-issuer
+spec:
+  vault:
+    server: https://vault.vault.svc.cluster.local:8200
+    path: pki_int/sign/internal-server
+    caBundleSecretRef:
+      name: vault-local-ca-secret
+      key: tls.crt
+    auth:
+      kubernetes:
+        role: cert-manager-pki-role
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: cert-manager
+---
+# RBAC allowing cert-manager to request tokens for Vault Kubernetes authentication.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cert-manager-tokenrequest
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cert-manager-tokenrequest
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cert-manager-tokenrequest
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+
+

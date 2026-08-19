@@ -1,8 +1,4 @@
-# postgis-tcproute.yaml
-#
-# Raw TCP passthrough to the CNPG primary through the shared Gateway
-# (infrastructure/gateway/). postgis.internal (postgis-tls.yaml) is a
-# human-friendly way to reach the same IP; TCPRoute itself never inspects it.
+# TCPRoute for external PostgreSQL access via internal-gateway
 apiVersion: gateway.networking.k8s.io/v1
 kind: TCPRoute
 metadata:

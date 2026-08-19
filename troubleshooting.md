@@ -20,7 +20,7 @@
 
 * **Port 6443 is still bound/in-use after running `stop-cluster.sh`**
   * **What's happening:** The API server stopped, but containerd shims are still running.
-  * **How to fix it:** Re-run `stop-cluster.sh --force` — once hibernation is confirmed, it prompts before running `k3s-killall.sh` for you (never runs it unattended). Or run `sudo k3s-killall.sh` yourself; it cleans up leftover processes and unmounts directories.
+  * **How to fix it:** Re-run `stop-cluster.sh --force` and once hibernation is confirmed, it prompts before running `k3s-killall.sh` for you (never runs it unattended). Or run `sudo k3s-killall.sh` yourself; it cleans up leftover processes and unmounts directories.
 
 ---
 
@@ -44,10 +44,14 @@
     3. *Technical note:* `vault operator unseal` does not accept piped input, so the script passes the key via `vault write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | vault write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
 
 * **Vault throws a "permission denied" error**
-  * **How to fix it:** Check the policy and role from Step 5. `vault policy read postgis-policy` shows the five paths it should grant; `vault read auth/kubernetes/role/postgis-role` shows the service account and namespace it is bound to.
+  * **How to fix it:** Check the policies and roles applied from `terraform/vault/`. `vault policy read postgis-policy` and `vault policy read cert-manager-pki-policy` show the paths granted; `vault read auth/kubernetes/role/postgis-role` and `vault read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
 
-* **Secrets are failing to mount into Kubernetes**
-  * **How to fix it:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for dynamic credentials). The status conditions at the bottom report why VSO could not pull the secret.
+* **Secrets or certificates are failing to issue/mount into Kubernetes**
+  * **How to fix it:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for dynamic credentials). For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why VSO or cert-manager could not pull or mint the resource.
+
+* **Certificate issuance fails with a Name Constraint or permission error from Vault PKI**
+  * **What's happening:** Vault's intermediate CA enforces RFC 5280 Name Constraints (`permitted_dns_domains`) and role-level domain allowlists (`allowed_domains` in `terraform/vault/pki.tf`).
+  * **How to fix it:** Check `kubectl describe certificaterequest -n <namespace>`. If Vault rejects the CSR, confirm the requested DNS name or IP SAN is explicitly listed in `permitted_dns_domains` and `allowed_domains` in `terraform/vault/pki.tf`, and re-apply `tofu -chdir=terraform/vault apply`. Confirm `vault-pki-issuer` ClusterIssuer reports `Ready` (`kubectl describe clusterissuer vault-pki-issuer`).
 
 * **Dynamic credentials never reach a "Ready" state**
   * **How to fix it:** `kubectl describe vaultdynamicsecret postgis-app-dynamic-secret -n databases` reports Vault's error.
@@ -68,18 +72,18 @@
 
 * **Tables created by a lease are unreadable by the next one**
   * **What's happening:** the lease was issued before `ALTER ROLE ... SET role = app_readwrite` was added to `creation_statements`, so it owns its objects. `DROP ROLE` at lease expiry also fails with `cannot be dropped because some objects depend on it`.
-  * **How to fix it:** update the role definition in Step 8, then `vault lease revoke -prefix database/creds/postgis-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
+  * **How to fix it:** update the role definition in `terraform/vault/database.tf`, then `vault lease revoke -prefix database/creds/postgis-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
 * **Application credentials stop working after a password rotation**
-  * **What's happening:** App-role rotations (static or dynamic) reload automatically — `postgis-app-credentials` and `postgis-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label in `postgis-cluster.yaml`, so CNPG picks up the new Secret on its own. If it's the *superuser* password that changed, that path isn't covered by the reload label at all.
-  * **How to fix it:** For the superuser password, update `database/config/postgis-cluster` in Vault (Step 8). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgis-app-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
+  * **What's happening:** App-role rotations (static or dynamic) reload automatically, as `postgis-app-credentials` and `postgis-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label in `postgis-cluster.yaml`, so CNPG picks up the new Secret on its own.
+  * **How to fix it:** For the superuser password, update `database/config/postgis-cluster` in Vault (via `terraform/vault/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgis-app-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
-  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgis-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgis.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate. If the cluster was rebuilt, the CA also changed, re-run the `root.crt` command in Step 7.
+  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgis-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgis.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `vault-pki-issuer`. Note: any new name must also be permitted in `terraform/vault/pki.tf` (`permitted_dns_domains` and `allowed_domains`). If the cluster or Vault PKI root was rebuilt, update your local `root.crt` from `kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt`.
 
 * **Barman Cloud Plugin backups start failing**
-  * **What's happening:** The database cannot reach or authenticate to the object store.
-  * **How to fix it:** Run `kubectl cnpg status postgis-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `seaweedfs-credentials` Secret match the credentials inside its `config` field; a mismatch between the two produces no error until an archive is attempted. Confirm the bucket exists:
+  * **What's happening:** The database cannot reach or authenticate to the object store, or S3 TLS handshake fails.
+  * **How to fix it:** Run `kubectl cnpg status postgis-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.databases.svc:9000`) with a valid certificate from `vault-pki-issuer`. Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `seaweedfs-credentials` Secret match the credentials inside its `config` field; a mismatch between the two produces no error until an archive is attempted. Confirm the bucket exists:
 
     ```bash
     kubectl exec -n databases seaweedfs-master-0 -- sh -c 'echo "fs.ls /buckets" | weed shell -master=localhost:9333'
@@ -118,4 +122,3 @@
     ```
 
     `flux get helmrelease cilium -n kube-system` should show `Ready: True` after. If the underlying cause isn't actually fixed yet, this just produces a fresh failed attempt instead of a stuck one; check `helm history cilium -n kube-system` and pod events for the real error.
-    

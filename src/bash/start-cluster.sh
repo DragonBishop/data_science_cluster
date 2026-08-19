@@ -1,26 +1,12 @@
 #!/bin/bash
 #
-# start-cluster.sh — Starts k3s, unseals the host Transit Vault, and
-# un-hibernates the CNPG cluster.
-#
-# Everything else (in-cluster Vault unseal, VSO secret sync, CNPG operator
-# health, workload health) is reconciled continuously by Flux and visible
-# live in Headlamp or `flux get kustomizations` / `kubectl cnpg status` —
-# this script only does what nothing else can do: host-level actions and
-# the hibernation flip. postgis-cluster.yaml never sets cnpg.io/hibernation:
-# if it did, Flux's own server-side apply would fight this script's runtime
-# toggle back to whatever git says on the next reconcile, so the annotation
-# is deliberately kept out of the git-declared Cluster spec entirely.
-#
-# Failures after the k3s startup phase set had_warnings and the script
-# continues. It exits 1 at the end if any were set.
+# start-cluster.sh: Starts k3s, unseals host Transit Vault, and resumes CNPG cluster.
 #
 set -eu
 had_warnings=false
 
 # --- Step 1: Prevent duplicate execution ----------------------------------
-# Exits if systemd's k3s service is already active. Two k3s instances
-# against the same data directory and ports corrupt cluster state.
+# Exit if systemd k3s service is already active
 if systemctl is-active --quiet k3s 2>/dev/null; then
     echo "⚠️  systemd's k3s.service is already active. Refusing to start a second instance."
     echo "   To adopt a script-managed lifecycle, run: sudo systemctl disable --now k3s"
@@ -32,19 +18,14 @@ mkdir -p "$(dirname "$KUBECONFIG_DEST")"
 export KUBECONFIG="$KUBECONFIG_DEST"
 
 # --- Step 2: Launch k3s Server ---------------------------------------------
-# Starts k3s in the background under nohup and captures its PID. All server
-# flags (disable list, flannel-backend, secrets-encryption, write-kubeconfig)
-# live in /etc/rancher/k3s/config.yaml, which k3s reads automatically on
-# every invocation regardless of how it's started.
+# Start k3s using configuration from /etc/rancher/k3s/config.yaml
 echo "🚀 Starting k3s cluster..."
 K3S_PID=$(sudo bash -c 'nohup k3s server \
   > /var/log/k3s.log 2>&1 &
   echo $!')
 
 # --- Step 3: Wait for API Server -------------------------------------------
-# Polls `kubectl get nodes` every 5s for up to 60s. Each iteration also signals
-# the k3s PID, so a process that exits early fails the step immediately rather
-# than at the timeout.
+# Poll until API server responds
 echo "⏳ Waiting for Kubernetes API to become available (pid $K3S_PID)..."
 retries=0
 until kubectl get nodes &> /dev/null; do
@@ -64,9 +45,7 @@ done
 echo "✅ Kubernetes API is up."
 
 # --- Step 4: Wait for Node Readiness ---------------------------------------
-# Polls node status every 5s for up to 5 minutes. The node reports NotReady
-# until a CNI is running, so this step is what surfaces a missing or unhealthy
-# Cilium. Continues signalling the k3s PID.
+# Poll until node reports Ready status
 retries=0
 until kubectl get nodes | grep -q " Ready"; do
     if ! sudo kill -0 "$K3S_PID" 2>/dev/null; then
@@ -91,13 +70,11 @@ echo "✅ Node is Ready."
 echo ""
 
 # --- Step 5: Unseal Host Transit Vault ------------------------------------
-# Reads the host Transit Vault's seal state. If sealed, decrypts the Shamir
-# keys from the GPG keyfile and submits them one per line.
+# Check seal state and unseal via GPG keyfile if necessary
 export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_CACERT="/opt/vault/tls/tls.crt"
 
-# Maps `vault status` exit codes: 0 unsealed, 2 sealed, anything else a
-# connection or certificate failure.
+# Returns seal status: unsealed, sealed, or unreachable
 transit_seal_state() {
     local rc=0
     vault status -format=json > /dev/null 2>&1 || rc=$?
@@ -130,9 +107,7 @@ else
         echo "💡 TROUBLESHOOTING: Did you create the GPG keyfile (INSTALLATION.md Section 3)?. Continuing..."
         had_warnings=true
     else
-        # Submits each key on stdin via `key=-`, keeping it out of
-        # /proc/<pid>/cmdline. Returns the exit status of gpg, so a failed or
-        # cancelled decryption is distinguishable from a rejected key.
+        # Decrypts keys and writes to Vault unseal endpoint via stdin
         decrypt_and_unseal() {
             gpg --quiet --decrypt "$KEYFILE" | while IFS= read -r key; do
                 [ -n "$key" ] || continue
@@ -165,12 +140,7 @@ fi
 echo ""
 
 # --- Step 6: Un-hibernate PostGIS and resume backups ------------------------
-# Flips cnpg.io/hibernation off when it currently reads "on". Retries the
-# annotate call itself, not a separate readiness check first — CNPG's
-# admission webhook can transiently reject requests while it's still
-# initializing, but there's no need to poll operator health separately
-# before finding that out; the retry loop surfaces the same failure with a
-# clear message if the operator genuinely isn't there.
+# Resume CNPG cluster and scheduled backups
 if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
   hib=$(kubectl get cluster postgis-cluster -n databases \
     -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null) || hib=""
