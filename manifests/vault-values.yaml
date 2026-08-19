@@ -1,0 +1,67 @@
+# vault-values.yaml
+#
+# Helm values for the in-cluster Vault deployment (hashicorp/vault chart).
+# This Vault automatically unseals using a separate transit Vault running
+# outside the cluster, allowing it to restart without manual unseal keys.
+
+global:
+  # Disable TLS on Vault's client listener. Access to Vault is restricted
+  # by Kubernetes networking, so the listener serves plaintext traffic
+  # within the cluster.
+  tlsDisable: true
+
+injector:
+  # Disable the Vault Agent Injector. Secrets are synchronized into
+  # Kubernetes by the Vault Secrets Operator (VSO), so sidecar injection
+  # is not used.
+  enabled: false
+
+server:
+  image:
+    repository: "hashicorp/vault"
+    tag: "2.0.3"
+
+# This environment variable allows for the transit token to be pulled
+# from the vault at runtime.
+  extraSecretEnvironmentVars:
+    - envName: VAULT_TOKEN
+      secretName: vault-transit-secret
+      secretKey: token
+
+  # Automatically mounts the TLS certificate ConfigMap 
+  # we created into the Vault pod at /vault/userconfig/vault-transit-ca/
+  extraVolumes:
+    - type: configMap
+      name: vault-transit-ca
+
+  standalone:
+    enabled: true
+    config: |
+      disable_mlock = true
+      ui = true
+
+      # Client-facing Vault listener. Available within the cluster through
+      # the vault and vault-internal Services.
+      listener "tcp" {
+        address          = "[::]:8200"
+        cluster_address  = "[::]:8201"
+        tls_disable      = 1
+      }
+
+      # Store Vault's data on the pod's persistent volume. This deployment
+      # runs as a single standalone instance rather than an HA cluster.
+      storage "file" {
+        path = "/vault/data"
+      }
+
+      # Automatically unseal this Vault by using the transit seal provided
+      # by an external Vault instance. This allows the in-cluster Vault to
+      # recover from restarts without manual unseal operations.
+      seal "transit" {
+        address         = "https://HOST_IP:8200"
+        disable_renewal = "false"
+        key_name        = "autounseal"
+        mount_path      = "transit/"
+        tls_ca_cert     = "/vault/userconfig/vault-transit-ca/ca.crt"
+        tls_server_name = "vault.local"
+      }

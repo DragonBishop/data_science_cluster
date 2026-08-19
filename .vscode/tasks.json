@@ -1,0 +1,14 @@
+// ~/coding/.vscode/tasks.json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "headlamp: start",
+      "type": "shell",
+      "command": "pkill -f 'kubectl.*port-forward.*svc/headlamp' >/dev/null 2>&1; kubectl create token headlamp-admin -n kube-system; nohup kubectl port-forward svc/headlamp 8080:80 -n kube-system >/tmp/headlamp.log 2>&1 & sleep 1",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": [],
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}
