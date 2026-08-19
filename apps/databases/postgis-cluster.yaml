@@ -122,38 +122,3 @@ spec:
   method: plugin
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
----
-# Host-network proxy forwarding 127.0.0.1:5432 to postgis-cluster-rw Service
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: postgres-proxy
-  namespace: databases
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: postgres-proxy
-  template:
-    metadata:
-      labels:
-        app: postgres-proxy
-    spec:
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
-      containers:
-      - name: socat-bridge
-        image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
-        command:
-          - socat
-          - TCP-LISTEN:5432,bind=127.0.0.1,fork,reuseaddr
-          - TCP:postgis-cluster-rw.databases.svc.cluster.local:5432
-        resources:
-          requests:
-            cpu: "10m"
-            memory: "16Mi"
-          limits:
-            cpu: "50m"
-            memory: "32Mi"
