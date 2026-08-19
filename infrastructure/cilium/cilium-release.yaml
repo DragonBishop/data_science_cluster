@@ -33,5 +33,6 @@ spec:
       valuesKey: values.yaml
       optional: true
   upgrade:
+    crds: CreateReplace
     remediation:
       remediateLastFailure: true
