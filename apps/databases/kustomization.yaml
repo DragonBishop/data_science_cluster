@@ -4,6 +4,7 @@ resources:
   - postgis-tls.yaml
   - postgis-cluster.yaml
   - postgis-tcproute.yaml
+  - postgis-localhost.yaml
   - postgis-database.yaml
   - postgis-networkpolicy.yaml
   - seaweedfs-release.yaml
