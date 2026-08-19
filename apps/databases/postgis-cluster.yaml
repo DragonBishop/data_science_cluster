@@ -1,16 +1,6 @@
-# postgis-cluster.yaml
-#
-# Deploys the CloudNativePG PostGIS cluster, the Vault-sourced Secrets it
-# consumes, the object store and schedule used for backups, and a socat
-# Deployment that accepts Postgres connections on the node's loopback address.
-#
-# Apply postgis-tls.yaml first; the Cluster references the Secret it
-# produces.
+# CloudNativePG PostGIS cluster configuration, Vault credentials,
+# backup storage target, and localhost database bridge.
 
-# ---------------------------------------------------------------------------
-# Superuser credential, read from secret/postgis and refreshed hourly. Vault's
-# database secrets engine uses it to create/drop the roles it issues.
-# ---------------------------------------------------------------------------
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultStaticSecret
 metadata:
@@ -29,11 +19,7 @@ spec:
   refreshAfter: 1h
   vaultAuthRef: vault-auth
 ---
-# ---------------------------------------------------------------------------
-# Application credential, leased via Vault's postgis-app-role. VSO renews the
-# lease and rewrites the Secret each renewal; Vault drops the Postgres role
-# when the lease ends. Mount/role are configured directly in Vault; see README.
-# ---------------------------------------------------------------------------
+# Dynamic database credentials leased from Vault
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultDynamicSecret
 metadata:
@@ -49,20 +35,20 @@ spec:
     labels:
       cnpg.io/reload: "true"
 ---
-# S3 target for WAL archiving and base backups, addressed through the
-# in-cluster SeaweedFS Service.
+# S3 object store for WAL archiving and base backups (SeaweedFS)
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
   name: postgis-backups
   namespace: databases
 spec:
-  # Barman deletes base backups and their dependent WAL segments older than
-  # this window.
   retentionPolicy: "4d"
   configuration:
     destinationPath: s3://cnpg-backups/
-    endpointURL: http://seaweedfs-s3.databases.svc:9000
+    endpointURL: https://seaweedfs-s3.databases.svc:9000
+    endpointCA:
+      name: postgis-server-cert
+      key: ca.crt
     s3Credentials:
       accessKeyId:
         name: seaweedfs-credentials
@@ -80,9 +66,6 @@ metadata:
   namespace: databases
 spec:
   instances: 1
-  # Postgres escalates from a smart to a fast shutdown after 15s (default 180).
-  # If WAL is still archiving at that point, CNPG waits up to stopDelay minus
-  # smartShutdownTimeout (45s here) before forcing termination.
   smartShutdownTimeout: 15
   stopDelay: 60
   imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
@@ -94,7 +77,6 @@ spec:
     limits:
       memory: "2Gi"
 
-  # superuserSecret is read only when enableSuperuserAccess is true.
   enableSuperuserAccess: true
   superuserSecret:
     name: postgis-app-credentials
@@ -105,18 +87,7 @@ spec:
       secret:
         name: postgis-app-credentials
 
-      # Runs once against the postgres database at initdb; does not rerun on
-      # later applies, on the running cluster, or after a backup bootstrap.
-      #
-      # app_readwrite is granted to every role Vault's database secrets engine
-      # issues. pg_read_all_data/pg_write_all_data apply at access time,
-      # covering tables/views/sequences in every schema and database,
-      # including future ones — not TRUNCATE, DDL, or objects owned by
-      # another role.
-      #
-      # data_science and its objects are owned via postgis-database.yaml's
-      # Database CRD and each lease's own `SET role = app_readwrite`, not a
-      # grant here.
+      # Runs once at initdb to establish the shared read/write role
       postInitSQL:
         - CREATE ROLE app_readwrite NOLOGIN
         - GRANT pg_read_all_data, pg_write_all_data TO app_readwrite
@@ -125,8 +96,7 @@ spec:
     size: 100Gi
     storageClass: local-path
 
-  # Server certificate and CA presented to clients, read from postgis-tls.yaml's
-  # Secret. Client certs and replication still use CNPG's own generated CA.
+  # TLS server certificate and CA issued via cert-manager and Vault PKI
   certificates:
     serverTLSSecret: postgis-server-cert
     serverCASecret: postgis-server-cert
@@ -137,8 +107,7 @@ spec:
       parameters:
         barmanObjectName: postgis-backups
 ---
-# Creates a Backup at midnight daily. The first Backup is taken at the next
-# occurrence of the schedule.
+# Daily scheduled backup at midnight
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
@@ -154,8 +123,7 @@ spec:
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
 ---
-# Runs socat in the host network namespace, listening on 127.0.0.1:5432 and
-# forwarding each connection to the cluster's read-write Service.
+# Host-network proxy forwarding 127.0.0.1:5432 to postgis-cluster-rw Service
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -163,7 +131,6 @@ metadata:
   namespace: databases
 spec:
   replicas: 1
-  # Recreate: only one pod holds the listening socket at a time.
   strategy:
     type: Recreate
   selector:
@@ -179,7 +146,6 @@ spec:
       containers:
       - name: socat-bridge
         image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
-        # Binding to an IPv4 literal listens on IPv4 only.
         command:
           - socat
           - TCP-LISTEN:5432,bind=127.0.0.1,fork,reuseaddr
