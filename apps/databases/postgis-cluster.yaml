@@ -70,22 +70,6 @@ spec:
   stopDelay: 60
   imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
 
-  managed:
-    services:
-      additional:
-        - selectorType: rw
-          serviceTemplate:
-            metadata:
-              name: postgis-cluster-localhost
-            spec:
-              type: ClusterIP
-              externalIPs:
-                - 127.0.0.1
-              ports:
-                - name: postgres
-                  port: 5432
-                  targetPort: 5432
-
   resources:
     requests:
       cpu: "500m"
