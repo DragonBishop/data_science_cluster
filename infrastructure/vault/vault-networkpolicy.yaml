@@ -7,14 +7,6 @@ spec:
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: vault
-  ingress:
-    - fromEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: vso-system
-      toPorts:
-        - ports:
-            - port: "8200"
-              protocol: TCP
   egress:
     - toCIDR:
         - "${HOST_IP}/32"
@@ -30,3 +22,14 @@ spec:
         - ports:
             - port: "5432"
               protocol: TCP
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: vso-system
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cert-manager
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+
