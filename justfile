@@ -6,6 +6,20 @@ default:
 
 # --- Bootstrap (first-time install, see INSTALLATION.md) -------------------
 
+# Prompt for a cluster name, stored for start-cluster.sh/stop-cluster.sh
+cluster-name:
+  #!/usr/bin/env bash
+  set -eu
+  read -r -p "Name this cluster (used for its kubeconfig context), or press Enter for 'default': " NAME
+  if [ -n "$NAME" ]; then
+    ENV_FILE="$HOME/.config/data_science_cluster/cluster.env"
+    mkdir -p "$(dirname "$ENV_FILE")"
+    printf 'CLUSTER_NAME=%s\n' "$NAME" > "$ENV_FILE"
+    echo "✅ Wrote $ENV_FILE (CLUSTER_NAME=$NAME)"
+  else
+    echo "✅ Keeping 'default'."
+  fi
+
 # Write /etc/rancher/k3s/config.yaml
 k3s-config:
   #!/usr/bin/env bash

@@ -19,11 +19,11 @@ This setup workflow is designed to be completed sequentially. Deviating from thi
 
 **Host Tooling:** Ensure the following CLI tools are installed on the host:
 
-- Flux CLI
-- OpenTofu
-- PostgreSQL client (`psql`)
-- GitHub CLI (`gh`)
-- `just`
+* Flux CLI
+* OpenTofu
+* PostgreSQL client (`psql`)
+* GitHub CLI (`gh`)
+* `just`
 
 ```bash
 sudo apt install -y postgresql-client-common postgresql-client just
@@ -61,7 +61,7 @@ sudo ufw status verbose
 
 ## 1. Clone Repo and Install k3s
 
-- **Clone the repository:**
+* **Clone the repository:**
 
 ```bash
 git clone https://github.com/DragonBishop/data_science_cluster.git
@@ -71,7 +71,7 @@ cd data_science_cluster
 > [!NOTE]
 > If reinstalling on a host with an existing k3s installation, run `/usr/local/bin/k3s-uninstall.sh` and verify Cilium BPF mounts are unmounted (`mount | grep bpf`; see `troubleshooting.md`). Reinstalling wipes in-cluster Vault and PVC data.
 
-- **Configure Network Values:**
+* **Configure Network Values:**
 
 The cluster uses network values defined in a `cluster-config` Secret in the `flux-system` namespace. These values are substituted into manifests during Flux reconciliation (`postBuild.substituteFrom` in `clusters/local/*.yaml`). The Secret is managed via OpenTofu from `terraform/cluster-config/terraform.tfvars` (gitignored).
 
@@ -96,7 +96,23 @@ ping -c 2 -W 1 192.0.2.240
 ping -c 2 -W 1 192.0.2.242
 ```
 
-- **Install k3s:**
+* **Name the Cluster:**
+
+```bash
+just cluster-name
+```
+
+Prompts for a name; pressing Enter keeps `default`. A name you enter is stored in `~/.config/data_science_cluster/cluster.env`. `start-cluster.sh` reads this on every start and applies it as the kubeconfig cluster/context/user name, overriding the `default` that k3s hardcodes on each `write-kubeconfig`. Or shell command:
+
+```bash
+read -r -p "Name this cluster, or press Enter for 'default': " NAME
+if [ -n "$NAME" ]; then
+  mkdir -p ~/.config/data_science_cluster
+  printf 'CLUSTER_NAME=%s\n' "$NAME" > ~/.config/data_science_cluster/cluster.env
+fi
+```
+
+* **Install k3s:**
 
 Cilium replaces kube-proxy, Traefik, servicelb, and the default CNI. Configure `/etc/rancher/k3s/config.yaml` with the necessary flags before running the installer:
 
@@ -116,9 +132,9 @@ sudo mkdir -p /etc/rancher/k3s
 printf 'write-kubeconfig-mode: "644"\nwrite-kubeconfig: %s/.kube/config\ndisable:\n  - traefik\n  - servicelb\ndisable-kube-proxy: true\ndisable-network-policy: true\nflannel-backend: none\nsecrets-encryption: true\n' "$HOME" | sudo tee /etc/rancher/k3s/config.yaml > /dev/null
 ```
 
-- **Check:** Verify the node appears with status `NotReady` (expected until Cilium CNI is installed).
+* **Check:** Verify the node appears with status `NotReady` (expected until Cilium CNI is installed).
 
-- **Create the `cluster-config` Secret:**
+* **Create the `cluster-config` Secret:**
 
 ```bash
 just cluster-config
@@ -140,7 +156,7 @@ tofu apply
 cd ../..
 ```
 
-- **Check:**
+* **Check:**
 
 ```bash
 kubectl get secret cluster-config -n flux-system
@@ -326,13 +342,13 @@ flowchart TD
     gw --> db
 ```
 
-- `cilium` requires `gateway-api-crds` and `namespaces`.
-- `coredns-custom`, `flux-system-policies`, and `cert-manager` depend on `cilium`.
-- `vault` depends on `cert-manager` (for `vault-server-cert` TLS bootstrap).
-- `vault-secrets-operator` and `gateway` depend on `vault` (for PKI and secrets sync).
-- `cnpg-operator` depends on `vault-secrets-operator`, and `barman-cloud` depends on `cnpg-operator`.
-- `hubble` depends on `gateway` (attaching the `hubble.internal` HTTPRoute).
-- `databases` depends on `barman-cloud`, `gateway`, and `vault`.
+* `cilium` requires `gateway-api-crds` and `namespaces`.
+* `coredns-custom`, `flux-system-policies`, and `cert-manager` depend on `cilium`.
+* `vault` depends on `cert-manager` (for `vault-server-cert` TLS bootstrap).
+* `vault-secrets-operator` and `gateway` depend on `vault` (for PKI and secrets sync).
+* `cnpg-operator` depends on `vault-secrets-operator`, and `barman-cloud` depends on `cnpg-operator`.
+*`hubble` depends on `gateway` (attaching the `hubble.internal` HTTPRoute).
+* `databases` depends on `barman-cloud`, `gateway`, and `vault`.
 
 **Check:**
 
@@ -531,8 +547,8 @@ flux reconcile helmrelease cilium -n kube-system --timeout 5m
 
 **Hubble Access:**
 
-- `just hubble-ui` port-forwards to `localhost:12000` and opens the UI in a browser.
-- `just hubble status` and `just hubble observe --follow` connect to Hubble Relay over mTLS (port 4245).
+* `just hubble-ui` port-forwards to `localhost:12000` and opens the UI in a browser.
+* `just hubble status` and `just hubble observe --follow` connect to Hubble Relay over mTLS (port 4245).
 
 ---
 
