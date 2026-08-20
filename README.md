@@ -121,22 +121,70 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 
 ## Cluster Operations
 
+Organized to match the justfile's own section layout (`just --list` shows every recipe).
+
+### Bootstrap
+
+One-time, first-install steps - see `INSTALLATION.md` for the full sequence and context.
+
+| Operation | Command |
+| --- | --- |
+| Write `/etc/rancher/k3s/config.yaml` | `just k3s-config` |
+| Write and apply `terraform/cluster-config` | `just cluster-config` |
+| Install/reinstall Cilium | `just cilium-install` |
+| Generate the host Transit Vault's TLS certificate | `just vault-host-tls` |
+| Enable, initialize, unseal, and log into the host Transit Vault | `just vault-host-init` |
+| Create the GPG-encrypted unseal keyfile | `just vault-keyfile` |
+| Unseal the host Transit Vault and apply `terraform/vault-transit-bootstrap` | `just vault-transit-bootstrap` |
+| Install the `vault-agent-autounseal` systemd service | `just vault-autounseal-agent` |
+| Apply `terraform/vault` and verify it | `just vault-engines` |
+
+### Cluster Lifecycle
+
 | Operation | Command | When |
 | --- | --- | --- |
 | Start the cluster | `just start` | Each work session |
 | Stop the cluster | `just stop` (`just stop --force` if a stuck stop needs it) | Each work session |
-| Trigger Manual DB Backup | `kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io` | Before a risky schema change, outside the nightly automated backup |
-| Check Scheduled Backups Aren't Suspended | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Confirming nightly backups are actually running |
-| Connect via psql (superuser, in-cluster) | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
+| Interactively inspect a pod | `just fuzzypods` | Ad hoc troubleshooting; fuzzy-select a pod from all namespaces and describe it |
+| Check overall cluster health | `just status` | Post-install verification, or a periodic sanity check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
+| Check Flux sync state | `flux get kustomizations -A` | Confirming the GitOps install graph is Ready end to end |
+
+### Database
+
+| Operation | Command | When |
+| --- | --- | --- |
 | Connect via psql (app role, host) | `just db-connect` (`just db-connect localhost` from the node itself) | Application-level access with Vault-issued credentials |
-| Verify Vault State | `kubectl exec -n vault vault-0 -- vault status` | Troubleshooting only |
-| Open a Vault Shell | `just vault-shell` | Interactive Vault work; `VAULT_ADDR` set and the inherited transit-unseal `VAULT_TOKEN` unset, ready for secure validation through `vault login` |
-| Log Into Vault | `just vault-login` | Same as `just vault-shell`, then runs `vault login`; drops into the shell already authenticated |
-| Verify CNPG State | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
-| Check Flux Sync State | `flux get kustomizations -A` | Confirming the GitOps install graph is Ready end to end |
-| Port-Forward Vault API | `kubectl port-forward -n vault vault-0 8210:8200` (then `VAULT_ADDR=https://127.0.0.1:8210 VAULT_CACERT=~/.vault-certs/vault-internal-ca.crt`) | Ad hoc token/policy management; `8200:8200` would collide with the host Transit Vault's own port |
-| View Hubble Flows (CLI) | `just hubble observe --follow` | Ad hoc network observability, independent of the web UI |
+| Connect via psql (superuser, in-cluster) | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
+| Trigger a manual DB backup | `kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io` | Before a risky schema change, outside the nightly automated backup |
+| Check scheduled backups aren't suspended | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Confirming nightly backups are actually running |
+| Verify CNPG state | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
+
+### Observability (Hubble)
+
+| Operation | Command | When |
+| --- | --- | --- |
 | Open Hubble UI | `just hubble-ui` | Quick local access; starts its own port-forward and opens the browser |
+| View Hubble flows (CLI) | `just hubble observe --follow` (or any other `hubble` subcommand) | Ad hoc network observability, independent of the web UI |
+| Port-forward Hubble Relay only | `just hubble-pf` | Lower-level primitive `just hubble` uses internally; no TLS cert setup |
+
+### Vault
+
+| Operation | Command | When |
+| --- | --- | --- |
+| Open a Vault shell | `just vault-shell` | Interactive Vault work inside the `vault-0` pod, where addressing already works; inherited `VAULT_TOKEN` is unset first |
+| Log into Vault | `just vault-login` | Same as `just vault-shell`, then runs `vault login`; drops into the shell already authenticated |
+| Port-forward in-cluster Vault to the host | `just vault-pf` | Internal plumbing `just vault-engines` uses; prefer `just vault-shell`/`vault-login` for ad hoc CLI work instead of using this directly |
+| Verify Vault state | `kubectl exec -n vault vault-0 -- vault status` | Troubleshooting only |
+
+### Development
+
+| Operation | Command |
+| --- | --- |
+| Install dependencies | `just install` |
+| Set up the dev environment (install + git filters) | `just setup` |
+| Run tests with coverage | `just test-cov` |
+| Update packages and the lockfile | `just update` |
+| Configure the `nbwipers` git filter | `just git-setup` |
 
 ---
 
@@ -300,6 +348,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   ├── bash/
 │   │   ├── start-cluster.sh             # Boot sequence: API, Transit Vault unseal, readiness checks
 │   │   └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
+│   ├── k3s/
+│   │   └── config.yaml                  # k3s server config, installed via `just k3s-config`
 │   └── clusterpgis/                     # The installable clusterpgis package (src layout)
 │       ├── data/
 │       │   └── __init__.py

@@ -10,9 +10,10 @@ This setup workflow is designed to be completed sequentially. Deviating from thi
 - OpenTofu
 - PostgreSQL client (`psql`)
 - GitHub CLI (`gh`)
+- `just`
 
 ```bash
-sudo apt install -y postgresql-client-common postgresql-client
+sudo apt install -y postgresql-client-common postgresql-client just
 curl -s https://fluxcd.io/install.sh | sudo bash
 flux check --pre
 gh auth status
@@ -87,14 +88,19 @@ ping -c 2 -W 1 192.0.2.242
 Cilium replaces kube-proxy, Traefik, servicelb, and the default CNI. Configure `/etc/rancher/k3s/config.yaml` with the necessary flags before running the installer:
 
 ```bash
-mkdir -p ~/.kube
-
-sudo mkdir -p /etc/rancher/k3s
-printf 'write-kubeconfig-mode: "644"\nwrite-kubeconfig: %s/.kube/config\ndisable:\n  - traefik\n  - servicelb\ndisable-kube-proxy: true\ndisable-network-policy: true\nflannel-backend: none\nsecrets-encryption: true\n' "$HOME" | sudo tee /etc/rancher/k3s/config.yaml > /dev/null
+just k3s-config
 
 curl -sfL https://get.k3s.io | sh -
 
 kubectl get nodes
+```
+
+`just k3s-config` installs `src/k3s/config.yaml` to `/etc/rancher/k3s/config.yaml`. Or shell command:
+
+```bash
+mkdir -p ~/.kube
+sudo mkdir -p /etc/rancher/k3s
+printf 'write-kubeconfig-mode: "644"\nwrite-kubeconfig: %s/.kube/config\ndisable:\n  - traefik\n  - servicelb\ndisable-kube-proxy: true\ndisable-network-policy: true\nflannel-backend: none\nsecrets-encryption: true\n' "$HOME" | sudo tee /etc/rancher/k3s/config.yaml > /dev/null
 ```
 
 - **Check:** Verify the node appears with status `NotReady` (expected until Cilium CNI is installed).
@@ -102,13 +108,20 @@ kubectl get nodes
 - **Create the `cluster-config` Secret:**
 
 ```bash
+just cluster-config
+```
+
+Opens `terraform/cluster-config/terraform.tfvars` (pre-filled with a detected `host_ip`) for review, then applies it. Or shell command:
+
+```bash
 cd terraform/cluster-config
-cat > terraform.tfvars <<'EOF'
-gateway_ip     = "192.0.2.240"
-coredns_lan_ip = "192.0.2.242"
-host_ip        = "<this node's own LAN IP, e.g. from `ip addr` or `hostname -I`>"
-cilium_version = "1.20.0"
-EOF
+if [ -f terraform.tfvars ]; then
+  echo "terraform.tfvars already exists, opening it for review/edit."
+else
+  DETECTED_HOST_IP=$(hostname -I | awk '{print $1}')
+  printf 'gateway_ip     = "192.0.2.240"\ncoredns_lan_ip = "192.0.2.242"\nhost_ip        = "%s"\ncilium_version = "1.20.0"\n' "$DETECTED_HOST_IP" > terraform.tfvars
+fi
+"${EDITOR:-nano}" terraform.tfvars
 tofu init
 tofu apply
 cd ../..
@@ -131,6 +144,12 @@ kubectl apply --server-side -f infrastructure/gateway-api-crds/standard-install.
 ```
 
 Install the Cilium Helm chart matching the version declared in `infrastructure/cilium/cilium-release.yaml`:
+
+```bash
+just cilium-install
+```
+
+Or shell command:
 
 ```bash
 CILIUM_VERSION=$(grep 'version:' infrastructure/cilium/cilium-release.yaml | tr -d ' "' | cut -d: -f2)
@@ -170,6 +189,12 @@ sudo apt update && sudo apt install -y vault
 Generate the TLS certificate for the host Transit Vault:
 
 ```bash
+just vault-host-tls
+```
+
+Or shell command:
+
+```bash
 sudo openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
   -keyout /opt/vault/tls/tls.key \
   -out /opt/vault/tls/tls.crt \
@@ -195,57 +220,55 @@ listener "tcp" {
 }
 ```
 
-Enable the service and initialize Vault:
+Enable the service, initialize Vault, unseal it, and log in:
+
+```bash
+just vault-host-init
+```
+
+Or shell command:
 
 ```bash
 sudo systemctl enable --now vault
-
 export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_CACERT="/opt/vault/tls/tls.crt"
 vault operator init
+# Save the 5 unseal keys and root token above in a password manager now.
+vault operator unseal   # run 3 times, entering a different unseal key each time
+vault login
 ```
 
 > [!CRITICAL]
 > Store the generated 5 unseal keys and initial root token in a secure password manager immediately. Data cannot be recovered if these keys are lost.
 
-Unseal the Transit Vault by providing three unseal keys:
-
-```bash
-vault operator unseal
-```
-
-Log in using the root token:
-
-```bash
-vault login
-```
-
 **Automate Future Host Vault Unsealing:**
 
 `src/bash/start-cluster.sh` can automatically decrypt keys from a GPG-encrypted keyfile.
 
-Generate the encrypted keyfile using a temporary RAM disk:
+Generate the encrypted keyfile using a temporary RAM disk, and configure `gpg-agent` to expire passphrase caching immediately:
 
 ```bash
-mkdir -p /dev/shm/vault-setup && cd /dev/shm/vault-setup
-nano keys.txt
-# Paste the 3 unseal keys into keys.txt (one per line)
+just vault-keyfile
+```
 
+Or shell command:
+
+```bash
+mkdir -p /dev/shm/vault-setup
+cd /dev/shm/vault-setup
+"${EDITOR:-nano}" keys.txt   # paste the 3 unseal keys, one per line
 gpg --batch --yes --cipher-algo AES256 --symmetric keys.txt
 mv keys.txt.gpg ~/.vault-keys.gpg
 chmod 600 ~/.vault-keys.gpg
-cd / && rm -rf /dev/shm/vault-setup
-```
-
-Configure `gpg-agent` to expire passphrase caching immediately:
-
-```bash
-cat >> ~/.gnupg/gpg-agent.conf <<'EOF'
-default-cache-ttl 0
-max-cache-ttl 0
-EOF
+cd /
+rm -rf /dev/shm/vault-setup
+mkdir -p ~/.gnupg
+printf 'default-cache-ttl 0\nmax-cache-ttl 0\n' >> ~/.gnupg/gpg-agent.conf
 gpgconf --reload gpg-agent
 ```
+
+> [!NOTE]
+> `default-cache-ttl 0` / `max-cache-ttl 0` in `~/.gnupg/gpg-agent.conf` only govern gpg-agent's own memory cache. On desktops with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be saved to the OS keyring, which bypasses that setting. Add `no-allow-external-cache` to the same file to stop that, or leave it as-is to let the keyring remember the passphrase for you.
 
 ---
 
@@ -313,37 +336,30 @@ kubectl get ns
 
 Configure the host Transit Vault resources required for in-cluster auto-unsealing.
 
-Set environment variables pointing to the host Transit Vault:
+Applies `terraform/vault-transit-bootstrap`, which sets up the host Vault's transit auto-unseal path and syncs the resulting credentials into the `vault` namespace. Unseals the host Transit Vault via the GPG keyfile first, if needed:
+
+```bash
+just vault-transit-bootstrap
+```
+
+Or shell command:
 
 ```bash
 export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_CACERT="/opt/vault/tls/tls.crt"
-vault status
-```
-
-If the host Transit Vault is sealed, unseal it using the GPG keyfile:
-
-```bash
-gpg --quiet --decrypt "$HOME/.vault-keys.gpg" | while IFS= read -r key; do
-    [ -n "$key" ] || continue
-    printf '%s\n' "$key" | vault write sys/unseal key=-
+# If sealed, unseal via the GPG keyfile from the previous step:
+gpg --quiet --decrypt ~/.vault-keys.gpg | while IFS= read -r key; do
+  [ -n "$key" ] || continue
+  printf '%s\n' "$key" | vault write sys/unseal key=-
 done
-vault status   # Sealed: false
-```
-
-Apply the `terraform/vault-transit-bootstrap` module to configure the transit mount, autounseal key, policy, periodic orphan token, and Kubernetes Secret objects in the `vault` namespace:
-
-```bash
 export VAULT_TOKEN=$(cat ~/.vault-token)
 read -rs -p "State encryption passphrase: " TF_VAR_state_encryption_passphrase; echo
 export TF_VAR_state_encryption_passphrase
-
 cd terraform/vault-transit-bootstrap
 tofu init
 tofu apply
-
-unset VAULT_TOKEN TF_VAR_state_encryption_passphrase
 cd ../..
+unset VAULT_TOKEN TF_VAR_state_encryption_passphrase
 ```
 
 **Configure Continuous Token Renewal:**
@@ -351,13 +367,39 @@ cd ../..
 Set up the `vault-agent-autounseal` systemd service to renew the transit auto-unseal token periodically:
 
 ```bash
-printf 'vault {\n  address = "https://127.0.0.1:8200"\n  ca_cert = "/opt/vault/tls/tls.crt"\n}\nauto_auth {\n  method "token_file" {\n    config = { token_file_path = "%s/.vault-agent/autounseal-token" }\n  }\n}\n' "$HOME" | sudo tee /etc/vault-agent-autounseal.hcl > /dev/null
+just vault-autounseal-agent
+```
 
-printf '[Unit]\nDescription=Vault Agent - transit auto-unseal token renewal\nAfter=vault.service\nRequires=vault.service\n\n[Service]\nExecStart=/usr/bin/vault agent -config=/etc/vault-agent-autounseal.hcl\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n' | sudo tee /etc/systemd/system/vault-agent-autounseal.service > /dev/null
+Or shell command:
 
+```bash
+sudo tee /etc/vault-agent-autounseal.hcl > /dev/null <<EOF
+vault {
+  address = "https://127.0.0.1:8200"
+  ca_cert = "/opt/vault/tls/tls.crt"
+}
+auto_auth {
+  method "token_file" {
+    config = { token_file_path = "$HOME/.vault-agent/autounseal-token" }
+  }
+}
+EOF
+sudo tee /etc/systemd/system/vault-agent-autounseal.service > /dev/null <<'EOF'
+[Unit]
+Description=Vault Agent - transit auto-unseal token renewal
+After=vault.service
+Requires=vault.service
+
+[Service]
+ExecStart=/usr/bin/vault agent -config=/etc/vault-agent-autounseal.hcl
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now vault-agent-autounseal
-systemctl status vault-agent-autounseal   # active (running)
+systemctl status vault-agent-autounseal --no-pager
 ```
 
 **Reconcile and Initialize the In-Cluster Vault:**
@@ -378,42 +420,40 @@ kubectl exec -n vault vault-0 -- vault operator init
 
 **Configure Vault Engines and Policies:**
 
-Configure KV secrets, Kubernetes authentication, policies, the 2-tier PKI engine, and database secrets engine via `terraform/vault/`:
+Applies `terraform/vault/`, which sets up Vault's secrets engines and policies (KV, Kubernetes auth, a 2-tier PKI engine, database secrets), then verifies the result:
 
 ```bash
-just vault-pf
+just vault-engines
+```
+
+Or shell command:
+
+```bash
+mkdir -p ~/.vault-certs
+[ -f ~/.vault-certs/vault-internal-ca.crt ] || kubectl get secret vault-server-cert -n vault -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.vault-certs/vault-internal-ca.crt
+kubectl port-forward -n vault vault-0 8210:8200 &
 
 read -rs -p "Vault root token (above): " VAULT_TOKEN; echo
 read -rs -p "State encryption passphrase: " TF_VAR_state_encryption_passphrase; echo
 export VAULT_TOKEN TF_VAR_state_encryption_passphrase
-
 export TF_VAR_postgres_superuser_password=$(openssl rand -base64 24)
 export TF_VAR_s3_access_key=$(openssl rand -hex 10)
 export TF_VAR_s3_secret_key=$(openssl rand -hex 20)
-
 cd terraform/vault
 tofu init
 tofu apply
 cd ../..
-```
 
-**Verify Configuration:**
-
-```bash
 vault kv get secret/postgis
 vault kv get secret/seaweedfs
 vault read pki_int/roles/internal-server
 vault read auth/kubernetes/role/cert-manager-pki-role
-head -c 200 terraform/vault/terraform.tfstate
-```
+head -c 200 terraform/vault/terraform.tfstate   # should be encrypted, non-plaintext
 
-Ensure the tfstate file is encrypted (non-plaintext output).
-
-Clean up environment variables:
-
-```bash
 unset VAULT_TOKEN TF_VAR_state_encryption_passphrase TF_VAR_postgres_superuser_password TF_VAR_s3_access_key TF_VAR_s3_secret_key
 ```
+
+Ensure the printed tfstate excerpt is encrypted (non-plaintext output). Exported environment variables (token, passphrase, generated secrets) are unset automatically at the end.
 
 ---
 
