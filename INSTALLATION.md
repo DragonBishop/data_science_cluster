@@ -381,11 +381,7 @@ kubectl exec -n vault vault-0 -- vault operator init
 Configure KV secrets, Kubernetes authentication, policies, the 2-tier PKI engine, and database secrets engine via `terraform/vault/`:
 
 ```bash
-# Port-forward in-cluster Vault to local port 8210
-kubectl port-forward -n vault vault-0 8210:8200 &
-
-mkdir -p ~/.vault-certs
-kubectl get secret vault-server-cert -n vault -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.vault-certs/vault-internal-ca.crt
+just vault-pf
 
 read -rs -p "Vault root token (above): " VAULT_TOKEN; echo
 read -rs -p "State encryption passphrase: " TF_VAR_state_encryption_passphrase; echo
@@ -512,14 +508,17 @@ kubectl get tcproute -n databases postgis-external -o jsonpath='{.status.parents
 ### Test LAN Database Connectivity
 
 ```bash
+just db-connect
+```
+
+Or shell command:
+
+```bash
 LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
 LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
 mkdir -p ~/.postgresql
-kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
-PGPASSWORD="$LEASE_PASS" psql \
-  "host=192.0.2.240 port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full" \
-  -c 'SELECT current_user, session_user;'
-unset LEASE_USER LEASE_PASS
+[ -f ~/.postgresql/root.crt ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
+PGPASSWORD="$LEASE_PASS" psql "host=192.0.2.240 port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full"
 ```
 
 ### Test Localhost Database Connectivity
@@ -527,14 +526,17 @@ unset LEASE_USER LEASE_PASS
 On the k3s node itself, `CiliumLocalRedirectPolicy` redirects `127.0.0.1:5432` to the CNPG primary pod:
 
 ```bash
+just db-connect localhost
+```
+
+Or shell command (same as above, with `host=localhost`):
+
+```bash
 LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
 LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
 mkdir -p ~/.postgresql
-kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
-PGPASSWORD="$LEASE_PASS" psql \
-  "host=localhost port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full" \
-  -c 'SELECT current_user, session_user;'
-unset LEASE_USER LEASE_PASS
+[ -f ~/.postgresql/root.crt ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
+PGPASSWORD="$LEASE_PASS" psql "host=localhost port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full"
 ```
 
 Reachable only from the node itself, not other LAN machines.
@@ -570,14 +572,17 @@ kubectl get vaultdynamicsecret postgis-app-dynamic-secret -n databases
 kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c '\du'
 # Issued role should show: Member of: app_readwrite
 
+just db-connect
+```
+
+Or shell command:
+
+```bash
 LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
 LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
 mkdir -p ~/.postgresql
-kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
-PGPASSWORD="$LEASE_PASS" psql \
-  "host=192.0.2.240 port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full" \
-  -c 'SELECT current_user, session_user;'
-unset LEASE_USER LEASE_PASS
+[ -f ~/.postgresql/root.crt ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
+PGPASSWORD="$LEASE_PASS" psql "host=192.0.2.240 port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full"
 ```
 
 > [!NOTE]
