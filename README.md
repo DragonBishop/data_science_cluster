@@ -123,11 +123,12 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 
 | Operation | Command | When |
 | --- | --- | --- |
-| Start the cluster | `./src/bash/start-cluster.sh` | Each work session |
-| Stop the cluster | `./src/bash/stop-cluster.sh` | Each work session |
+| Start the cluster | `just start` | Each work session |
+| Stop the cluster | `just stop` (`just stop --force` if a stuck stop needs it) | Each work session |
 | Trigger Manual DB Backup | `kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io` | Before a risky schema change, outside the nightly automated backup |
 | Check Scheduled Backups Aren't Suspended | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Confirming nightly backups are actually running |
-| Connect via psql | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
+| Connect via psql (superuser, in-cluster) | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
+| Connect via psql (app role, host) | `just db-connect` (`just db-connect localhost` from the node itself) | Application-level access with Vault-issued credentials |
 | Verify Vault State | `kubectl exec -n vault vault-0 -- vault status` | Troubleshooting only |
 | Open a Vault Shell | `just vault-shell` | Interactive Vault work; `VAULT_ADDR` set and the inherited transit-unseal `VAULT_TOKEN` unset, ready for secure validation through `vault login` |
 | Log Into Vault | `just vault-login` | Same as `just vault-shell`, then runs `vault login`; drops into the shell already authenticated |
