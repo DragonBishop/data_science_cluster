@@ -69,7 +69,51 @@ done
 echo "✅ Node is Ready."
 echo ""
 
-# --- Step 5: Unseal Host Transit Vault ------------------------------------
+# --- Step 5: Rename kubeconfig identity -------------------------------------
+# k3s hardcodes cluster/context/user as "default" every time it (re)writes
+# KUBECONFIG_DEST via config.yaml's write-kubeconfig setting, so this runs on
+# every start to keep the chosen name in place. Name comes from
+# ~/.config/data_science_cluster/cluster.env (set via `just cluster-name`);
+# falls back to "default" if that hasn't been run.
+CLUSTER_ENV_FILE="$HOME/.config/data_science_cluster/cluster.env"
+CLUSTER_NAME="default"
+[ -f "$CLUSTER_ENV_FILE" ] && . "$CLUSTER_ENV_FILE"
+KUBECONFIG_ALIAS="${CLUSTER_NAME:-default}"
+python3 - "$KUBECONFIG_DEST" "default" "$KUBECONFIG_ALIAS" <<'EOF'
+import sys
+import yaml
+
+path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path) as f:
+    cfg = yaml.safe_load(f)
+
+changed = False
+for section in ("clusters", "users"):
+    for item in cfg.get(section, []):
+        if item.get("name") == old:
+            item["name"] = new
+            changed = True
+for ctx in cfg.get("contexts", []):
+    if ctx.get("name") == old:
+        ctx["name"] = new
+        changed = True
+    c = ctx.get("context", {})
+    if c.get("cluster") == old:
+        c["cluster"] = new
+        changed = True
+    if c.get("user") == old:
+        c["user"] = new
+        changed = True
+if cfg.get("current-context") == old:
+    cfg["current-context"] = new
+    changed = True
+
+if changed:
+    with open(path, "w") as f:
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+EOF
+
+# --- Step 6: Unseal Host Transit Vault ------------------------------------
 # Check seal state and unseal via GPG keyfile if necessary
 export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_CACERT="/opt/vault/tls/tls.crt"
@@ -139,7 +183,7 @@ else
 fi
 echo ""
 
-# --- Step 6: Un-hibernate PostGIS and resume backups ------------------------
+# --- Step 7: Un-hibernate PostGIS and resume backups ------------------------
 # Resume CNPG cluster and scheduled backups
 if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
   hib=$(kubectl get cluster postgis-cluster -n databases \

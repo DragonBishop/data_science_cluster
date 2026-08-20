@@ -14,7 +14,7 @@ The resources that make up the cluster are modularized to allow for easy pivotin
 
 *Note* A DevContainer template for managing the cluster through VSCode is provided, as a bare-bones skeleton for you customize as you wish.
 
-**This branch targets native Linux (developed and tested on Ubuntu)**. If you're running under WSL2 on Windows, the WSL2 branch is still in development.
+**Developed and tested on Ubuntu.**
 
 ## Table of Contents
 
@@ -84,6 +84,14 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 
 ## Official Documentation
 
+### Host Side Tooling Documentation
+
+| Component | Documentation Link |
+| --- | --- |
+| OpenTofu | [https://opentofu.org/docs/](https://opentofu.org/docs/) |
+
+### Core Architecture Documentation
+
 | Component | Documentation Link |
 | --- | --- |
 | k3s | [https://docs.k3s.io/](https://docs.k3s.io/) |
@@ -103,11 +111,15 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Vault Database Secrets Engine | [https://developer.hashicorp.com/vault/docs/secrets/databases](https://developer.hashicorp.com/vault/docs/secrets/databases) |
 | Headlamp | [https://headlamp.dev/docs/latest/](https://headlamp.dev/docs/latest/) |
 
+### Cluster Monitoring Services Documentation
+
 | Component | Documentation Link |
 | --- | --- |
 | kube-prometheus-stack | [https://github.com/prometheus-operator/kube-prometheus](https://github.com/prometheus-operator/kube-prometheus) |
 | Loki | [https://grafana.com/docs/loki/latest/](https://grafana.com/docs/loki/latest/) |
 | Tetragon | [https://tetragon.io/](https://tetragon.io/) |
+
+### ETL and ML Services Documentation
 
 | Component | Documentation Link |
 | --- | --- |
