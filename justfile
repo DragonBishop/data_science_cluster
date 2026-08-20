@@ -14,6 +14,43 @@ start:
 stop *ARGS:
   ./src/bash/stop-cluster.sh {{ARGS}}
 
+# Read-only cluster health check (Flux, Gateway/DNS, cert-manager, database, backups, Hubble)
+status:
+  #!/usr/bin/env bash
+  set -uo pipefail
+  echo "== Flux =="
+  flux get kustomizations
+
+  echo ""
+  echo "== Gateway / DNS =="
+  kubectl get ciliumloadbalancerippool
+  kubectl get gateway -n gateway internal-gateway -o wide
+  kubectl get svc -n kube-system coredns-external
+
+  echo ""
+  echo "== cert-manager =="
+  kubectl get clusterissuer vault-pki-issuer
+
+  echo ""
+  echo "== Database =="
+  kubectl cnpg status postgis-cluster -n databases
+  kubectl get database -n databases
+  echo -n "TCPRoute: "; kubectl get tcproute -n databases postgis-external -o jsonpath='{.status.parents[*].conditions[*].message}'; echo
+
+  echo ""
+  echo "== Backups =="
+  kubectl get scheduledbackup -n databases
+  kubectl rollout status deployment -n cnpg-system plugin-barman-cloud --timeout=10s
+
+  echo ""
+  echo "== SeaweedFS =="
+  kubectl get svc,pods -n databases -l app.kubernetes.io/instance=seaweedfs
+
+  echo ""
+  echo "== Hubble =="
+  kubectl get pods -n kube-system -l 'k8s-app in (hubble-relay,hubble-ui)'
+  echo -n "HTTPRoute: "; kubectl get httproute -n kube-system hubble-ui -o jsonpath='{.status.parents[*].conditions[*].message}'; echo
+
 # --- Database ------------------------------------------------------------
 
 # Connect via psql to postgis-cluster (HOST defaults to the live Gateway IP; pass `localhost` for the node-local path)
