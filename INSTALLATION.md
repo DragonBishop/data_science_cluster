@@ -601,8 +601,8 @@ Verify Gateway routing and TLS termination:
 
 ```bash
 curl -v --resolve hubble.internal:443:192.0.2.240 \
-  --cacert <(kubectl get secret -n vault vault-server-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
+  --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
   https://hubble.internal/
 ```
 
-Verify that the page responds and the certificate chains to the Vault CA.
+Verify that the page responds and the certificate chains to `vault-pki-issuer`'s CA. `internal-edge-cert` is issued by `vault-pki-issuer` (Vault's PKI secrets engine); `vault-server-cert` is a separate, self-signed CA used only for Vault's own API TLS, and won't verify this connection.
