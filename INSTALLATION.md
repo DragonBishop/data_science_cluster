@@ -2,6 +2,19 @@
 
 This setup workflow is designed to be completed sequentially. Deviating from this order may result in initialization failures.
 
+## Table of Contents
+
+* [Prerequisites](#prerequisites)
+* [1. Clone Repo and Install k3s](#1-clone-repo-and-install-k3s)
+* [2. Cilium](#2-cilium)
+* [3. Deploy the Host-Level Transit Vault](#3-deploy-the-host-level-transit-vault)
+* [4. Bootstrap Flux](#4-bootstrap-flux)
+* [5. Deploy In-Cluster HashiCorp Vault](#5-deploy-in-cluster-hashicorp-vault)
+* [6. Flux Kustomization Rollout](#6-flux-kustomization-rollout)
+* [7a. Deploy CloudNativePostgreSQL Database Server with PostGIS](#7a-deploy-cloudnativepostgresql-database-server-with-postgis)
+* [7b. Dynamic Database Role and Access Verification](#7b-dynamic-database-role-and-access-verification)
+* [8. Full End-to-End Verification](#8-full-end-to-end-verification)
+
 ## Prerequisites
 
 **Host Tooling:** Ensure the following CLI tools are installed on the host:
@@ -95,7 +108,7 @@ curl -sfL https://get.k3s.io | sh -
 kubectl get nodes
 ```
 
-`just k3s-config` installs `src/k3s/config.yaml` to `/etc/rancher/k3s/config.yaml`. Or shell command:
+`just k3s-config` writes `/etc/rancher/k3s/config.yaml`. Or shell command:
 
 ```bash
 mkdir -p ~/.kube
@@ -523,7 +536,7 @@ flux reconcile helmrelease cilium -n kube-system --timeout 5m
 
 ---
 
-## 7. Deploy CloudNativePostgreSQL Database Server with PostGIS
+## 7a. Deploy CloudNativePostgreSQL Database Server with PostGIS
 
 ### Verify Database Deployment
 
@@ -601,7 +614,7 @@ kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d data_scien
 
 ---
 
-## 8. Dynamic Database Role and Access Verification
+## 7b. Dynamic Database Role and Access Verification
 
 Once the CNPG cluster is healthy and VSO reconciles `apps/databases/vso-setup.yaml`, VSO requests credentials from Vault and writes them to the `postgis-app-dynamic-credentials` Secret.
 
@@ -630,7 +643,7 @@ PGPASSWORD="$LEASE_PASS" psql "host=192.0.2.240 port=5432 dbname=data_science us
 
 ---
 
-## 9. Full End-to-End Verification
+## 8. Full End-to-End Verification
 
 Verify cluster health, backups, and Flux status:
 
