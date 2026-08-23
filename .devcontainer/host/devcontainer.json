@@ -1,0 +1,68 @@
+// Host devcontainer for this repo.
+{
+  "name": "datasci-k8s-host",
+  "build": { "dockerfile": "Dockerfile" },
+
+  "containerUser": "vscode",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+
+  // Reaches the local k3s cluster and host-local services directly.
+  "runArgs": [
+    "--network=host"
+  ],
+
+  // Read-only injection of host Kubernetes and Helm contexts.
+  "mounts": [
+    "source=${localEnv:HOME}/.config/helm,target=/home/vscode/.config/helm,type=bind,consistency=cached,readonly",
+    "source=${localEnv:HOME}/.kube/config,target=/home/vscode/.kube/config,type=bind,consistency=cached,readonly"
+  ],
+
+  // Suppresses the auto-forward notification for local Jupyter processes.
+  "portsAttributes": {
+    ".*(jupyter|ipykernel_launcher).*": {
+      "label": "Jupyter (host network)",
+      "onAutoForward": "ignore"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Python
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-python.vscode-python-envs",
+        "ms-toolsai.jupyter",
+
+        // DataOps
+        "dbtlabsinc.dbt",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        // "quarto.quarto",
+        "opentofu.vscode-opentofu",
+        // "mechatroner.rainbow-csv",
+
+        // Git
+        "github.vscode-github-actions",
+        "github.vscode-pull-request-github",
+        // "mhutchie.git-graph",
+        // "donjayamanne.githistory",
+        // "adam-bender.commit-message-editor",
+        // "howardzuo.vscode-git-tags",
+
+        // Syntax
+        "redhat.vscode-yaml",
+        // "tamasfe.even-better-toml",
+
+        // Productivity
+        // "aaron-bond.better-comments",
+        // "christian-kohler.path-intellisense",
+        "davidanson.vscode-markdownlint"
+        // "mushan.vscode-paste-image",
+        // "usernamehw.errorlens"
+      ]
+    }
+  }
+}
