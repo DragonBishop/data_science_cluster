@@ -35,21 +35,21 @@ These are the resources that make up the database core of the cluster. It is eng
 | Component | Version | Description |
 | --- | --- | --- |
 | k3s | `v1.36.2+k3s1` | Core control plane and execution environment. Host-installed, unpinned by this repo. |
-| PostgreSQL / PostGIS image | `18.3-3.6.2-system-trixie` | Image the CNPG `Cluster` runs. |
-| SeaweedFS | `4.40` | In-cluster S3-compatible object store with TLS issued by `vault-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
-| Flux | `v2.9.3` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. CLI-installed, unpinned by this repo. |
+| PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` | Image the CNPG `Cluster` runs. |
+| SeaweedFS | `4.44` | In-cluster S3-compatible object store with TLS issued by `vault-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
+| Flux | `v2.9.4` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. CLI-installed, unpinned by this repo. |
 | Barman Cloud Plugin | `v0.14.0` | WAL archiving and base backups for CNPG, via the `ObjectStore` resource rather than in-tree `spec.backup.barmanObjectStore`. |
 | cert-manager | `v1.21.1` | Manages local edge CA, provisions Vault TLS, and mints leaf certificates via `vault-pki-issuer`. |
-| Cilium | `1.20.0` | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
+| Cilium | `1.20.1` | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
 | CloudNativePG (CNPG) | `1.30.0` | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
 | DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with an `internal` zone via a `coredns-custom` ConfigMap (`infrastructure/coredns-custom/`). Resolves `*.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
 | Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`) every tool attaches a `Route` to: an HTTPS listener (443, wildcard cert) for web UIs, a raw TCP listener (5432) for Postgres. |
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
 | Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay/UI run their own cert-manager mTLS trust domain; UI exposed at `hubble.internal` on the shared Gateway. |
-| HashiCorp Vault (in-cluster) | `2.0.3` | Main Vault; auto-unseals against the host's native Transit Vault at pod start. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
-| Vault Secrets Operator (VSO) | `1.5.0` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. |
+| HashiCorp Vault (in-cluster) | `2.0.4` | Main Vault; auto-unseals against the host's native Transit Vault at pod start. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
+| Vault Secrets Operator (VSO) | `1.5.1` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. |
 | Vault Database & PKI Engines | Same as Vault | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
-| Headlamp | `0.44.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
+| Headlamp | `0.45.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
 
 ### Cluster Monitoring Module
 
@@ -57,11 +57,11 @@ These are the set of operators that need to be deployed in addition to the core 
 
 | Component | Version | Description | Alternatives |
 | --- | --- | --- | --- |
-| kube-prometheus-stack | `88.1.5` (chart, latest; not yet deployed) | Deploys the industry-standard Prometheus, Grafana, and Alertmanager bundle for comprehensive metric aggregation and dashboarding, to debug resource spikes and workload bottlenecks. | `victoria-metrics-k8s-stack` uses VictoriaMetrics instead of Prometheus. Lower footprint, but more work to customize. |
-| Loki | `v3.7.5` (latest; not yet deployed) | Log aggregation and processing, paired with kube-prometheus-stack to round out metrics + logs observability. | `VictoriaLogs` particularly if using the same stack as above. |
-| Tetragon | `v1.7.0` (latest release; not yet deployed) | Real-time, eBPF-based detection of anomalous behavior at the syscall level. Detects unexpected shell spawns inside a container, unauthorized reads of sensitive files, privilege escalation attempts. Shares the eBPF datapath Cilium uses, and comes from the same developer. | Falco is the more battle-tested choice, with a larger existing rule/policy ecosystem, if Tetragon's policy library proves too thin in practice. |
-| Tekton Pipelines | `v1.13.0` (latest; not yet deployed) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. | Woodpecker CI, if a single self-hosted binary with GitHub-Actions-like YAML is preferred over Tekton's CRD model. |
-| Tekton Triggers | `v0.33.0` (latest; not yet deployed) | EventListener reacting to GitHub webhook events (push/PR), starting the matching PipelineRun. | GitHubs Actions is the standard for ci workflow, and can offer basic complimentary CI services on github. |
+| kube-prometheus-stack | `88.5.4` (chart, latest; not yet deployed) | Deploys the industry-standard Prometheus, Grafana, and Alertmanager bundle for comprehensive metric aggregation and dashboarding, to debug resource spikes and workload bottlenecks. | `victoria-metrics-k8s-stack` uses VictoriaMetrics instead of Prometheus. Lower footprint, but more work to customize. |
+| Loki | `v3.7.6` (latest; not yet deployed) | Log aggregation and processing, paired with kube-prometheus-stack to round out metrics + logs observability. | `VictoriaLogs` particularly if using the same stack as above. |
+| Tetragon | `v1.7.1` (latest release; not yet deployed) | Real-time, eBPF-based detection of anomalous behavior at the syscall level. Detects unexpected shell spawns inside a container, unauthorized reads of sensitive files, privilege escalation attempts. Shares the eBPF datapath Cilium uses, and comes from the same developer. | Falco is the more battle-tested choice, with a larger existing rule/policy ecosystem, if Tetragon's policy library proves too thin in practice. |
+| Tekton Pipelines | `v1.15.0` (latest; not yet deployed) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. | Woodpecker CI, if a single self-hosted binary with GitHub-Actions-like YAML is preferred over Tekton's CRD model. |
+| Tekton Triggers | `v0.37.0` (latest; not yet deployed) | EventListener reacting to GitHub webhook events (push/PR), starting the matching PipelineRun. | GitHubs Actions is the standard for ci workflow, and can offer basic complimentary CI services on github. |
 
 ### ETL Pipeline Module
 
@@ -69,9 +69,9 @@ The ETL pipeline rollout focuses on data ingestion, declarative orchestration, a
 
 | Component | Version | Description | Alternatives |
 | --- | --- | --- | --- |
-| dbt (dbt-core, dbt-postgres) | `1.12.0` | Executes complex SQL-based transformations natively within the CloudNativePG database, ensuring compute remains close to the data. | Apache Spark is the industry standard for massive-scale, distributed data transformation, but heavier and more appropriate for spinning up dedicated compute clusters rather than pushing compute down in a bare-metal development environment. and more appropriate for pushing compute down into a local database rather than spinning up dedicated compute clusters. |
-| dlt | `1.29.1` | Open-source Python library (data load tool) for building declarative data pipelines that load data from REST APIs, databases, and other sources. | Airbyte is a fallback option if a UI-driven ecosystem of pre-built connectors is eventually needed. |
-| Prefect | `3.8.1` | Replaces heavy legacy schedulers with a Python-native, highly observable orchestration engine for triggering data pipelines. | Apache Airflow is the industry-standard alternative for data orchestration, but its heavy infrastructure footprint (requiring multiple dedicated scheduler, webserver, and worker pods) makes it overly complex for a lightweight local cluster. |
+| dbt (dbt-core, dbt-postgres) | `1.12.3` | Executes complex SQL-based transformations natively within the CloudNativePG database, ensuring compute remains close to the data. | Apache Spark is the industry standard for massive-scale, distributed data transformation, but heavier and more appropriate for spinning up dedicated compute clusters rather than pushing compute down in a bare-metal development environment. and more appropriate for pushing compute down into a local database rather than spinning up dedicated compute clusters. |
+| dlt | `1.30.0` | Open-source Python library (data load tool) for building declarative data pipelines that load data from REST APIs, databases, and other sources. | Airbyte is a fallback option if a UI-driven ecosystem of pre-built connectors is eventually needed. |
+| Prefect | `3.8.4` | Replaces heavy legacy schedulers with a Python-native, highly observable orchestration engine for triggering data pipelines. | Apache Airflow is the industry-standard alternative for data orchestration, but its heavy infrastructure footprint (requiring multiple dedicated scheduler, webserver, and worker pods) makes it overly complex for a lightweight local cluster. |
 
 ### Machine Learning Module
 
@@ -80,7 +80,7 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Component | Version | Description | Alternatives |
 | --- | --- | --- | --- |
 | BentoML | `v1.4.39` (latest; not yet installed) | Packages models into self-contained, production-ready services using a Python-first framework. | KServe offers Kubernetes-native inference features like scale-to-zero or advanced GPU scheduling. |
-| MLflow | `3.15.1` (latest; not yet installed) | Tracks code versions, hyperparameters, and experiment results, storing metadata in PostgreSQL and artifacts in the cluster's SeaweedFS object store. | Kubeflow is the standard for teams prepared for, and heavily invested in, Kubernetes orchestration. |
+| MLflow | `3.15.2` (latest; not yet installed) | Tracks code versions, hyperparameters, and experiment results, storing metadata in PostgreSQL and artifacts in the cluster's SeaweedFS object store. | Kubeflow is the standard for teams prepared for, and heavily invested in, Kubernetes orchestration. |
 
 ## Official Documentation
 
@@ -204,7 +204,7 @@ metadata:
 spec:
   instances: 1
   # imageName: match apps/databases/postgis-cluster.yaml
-  imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgis:18.6-3.6.4-system-trixie
   storage:
     size: 100Gi
     storageClass: local-path
@@ -349,10 +349,10 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
 │   ├── bash/
+│   │   ├── bootstrap-transit.sh         # Host Transit Vault install/init/unseal (see INSTALLATION.md)
+│   │   ├── bootstrap-cluster.sh         # First-time cluster bootstrap (see INSTALLATION.md)
 │   │   ├── start-cluster.sh             # Boot sequence: API, Transit Vault unseal, readiness checks
 │   │   └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
-│   ├── k3s/
-│   │   └── config.yaml                  # k3s server config, installed via `just bootstrap`
 │   └── clusterpgis/                     # The installable clusterpgis package (src layout)
 │       ├── data/
 │       │   └── __init__.py

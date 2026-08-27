@@ -80,7 +80,7 @@ if [ -f terraform.tfvars ]; then
     echo "✅ terraform.tfvars already present, applying as-is."
 else
     DETECTED_HOST_IP=$(hostname -I | awk '{print $1}')
-    printf 'gateway_ip     = "192.0.2.240"\ncoredns_lan_ip = "192.0.2.242"\nhost_ip        = "%s"\ncilium_version = "1.20.0"\n' "$DETECTED_HOST_IP" > terraform.tfvars
+    printf 'gateway_ip     = "192.0.2.240"\ncoredns_lan_ip = "192.0.2.242"\nhost_ip        = "%s"\ncilium_version = "1.20.1"\n' "$DETECTED_HOST_IP" > terraform.tfvars
     echo "📝 Wrote terraform.tfvars with defaults (host_ip=${DETECTED_HOST_IP}). Edit this file later if your LAN needs different values, then re-run 'tofu apply' here."
 fi
 tofu init
