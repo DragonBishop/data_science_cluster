@@ -109,8 +109,8 @@
   * **How to fix it:** Run `start-cluster.sh` to regenerate `~/.kube/config`, then reconnect Headlamp.
 
 * **Hubble Relay never becomes Ready (`Startup probe failed: service unhealthy, responded with "NOT_SERVING"`)**
-  * **What's happening:** Hubble Relay is a pod, but it reaches cilium-agent's Hubble gRPC port on the **host's own IP** (cilium-agent runs `hostNetwork: true`), so that connection is pod→host traffic, not pod→pod. If `ufw` is active without the rules from `INSTALLATION.md`'s Prerequisites, its default-deny `INPUT` policy drops it silently, Relay just times out with no useful error on either side.
-  * **How to fix it:** Confirm it's actually this: `sudo iptables -L INPUT -n -v | head` a large, growing packet count against the final `DROP` policy confirms it. Apply the `ufw` rules in `INSTALLATION.md`'s Prerequisites, then see the next entry, a firewall fix alone does not retry an already-failed HelmRelease.
+  * **What's happening:** Hubble Relay is a pod, but it reaches cilium-agent's Hubble gRPC port on the **host's own IP** (cilium-agent runs `hostNetwork: true`), so that connection is pod→host traffic, not pod→pod. If `ufw` is active without the rules from `INSTALLATION.md`'s Requirements, its default-deny `INPUT` policy drops it silently, Relay just times out with no useful error on either side.
+  * **How to fix it:** Confirm it's actually this: `sudo iptables -L INPUT -n -v | head` a large, growing packet count against the final `DROP` policy confirms it. Apply the `ufw` rules in `INSTALLATION.md`'s Requirements, then see the next entry, a firewall fix alone does not retry an already-failed HelmRelease.
 
 * **`flux reconcile helmrelease cilium` reports `RetriesExceeded` / `Stalled` and does nothing**
   * **What's happening:** After enough failed upgrade attempts (e.g. from the Hubble issue above), `helm-controller` hits its retry budget and marks the release `Stalled` with a **terminal** error. A plain reconcile re-checks that same exhausted state and fails instantly; it does not attempt a new upgrade.
