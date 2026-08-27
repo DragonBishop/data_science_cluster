@@ -59,6 +59,9 @@ dist/
 [Uu]ntitled*
 scratch*
 
+# Copier answers (managed separately, not part of this project)
+.copier-answers.yml
+
 # Editor and OS files
 .DS_Store
 *.swp

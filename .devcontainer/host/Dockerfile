@@ -1,6 +1,6 @@
 # Host devcontainer image for this repo.
 
-FROM python:3.14-slim
+FROM python:3.14.7-slim
 
 # git/ca-certificates/curl for the installs below; postgresql-client for
 # interactive database access; just, this repo's command runner; sudo for

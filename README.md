@@ -35,21 +35,21 @@ These are the resources that make up the database core of the cluster. It is eng
 | Component | Version | Description |
 | --- | --- | --- |
 | k3s | `v1.36.2+k3s1` | Core control plane and execution environment. Host-installed, unpinned by this repo. |
-| PostgreSQL / PostGIS image | `18.3-3.6.2-system-trixie` | Image the CNPG `Cluster` runs. |
-| SeaweedFS | `4.40` | In-cluster S3-compatible object store with TLS issued by `vault-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
-| Flux | `v2.9.3` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. CLI-installed, unpinned by this repo. |
+| PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` | Image the CNPG `Cluster` runs. |
+| SeaweedFS | `4.44` | In-cluster S3-compatible object store with TLS issued by `vault-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
+| Flux | `v2.9.4` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. CLI-installed, unpinned by this repo. |
 | Barman Cloud Plugin | `v0.14.0` | WAL archiving and base backups for CNPG, via the `ObjectStore` resource rather than in-tree `spec.backup.barmanObjectStore`. |
 | cert-manager | `v1.21.1` | Manages local edge CA, provisions Vault TLS, and mints leaf certificates via `vault-pki-issuer`. |
-| Cilium | `1.20.0` | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
+| Cilium | `1.20.1` | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
 | CloudNativePG (CNPG) | `1.30.0` | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
 | DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with an `internal` zone via a `coredns-custom` ConfigMap (`infrastructure/coredns-custom/`). Resolves `*.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
 | Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`) every tool attaches a `Route` to: an HTTPS listener (443, wildcard cert) for web UIs, a raw TCP listener (5432) for Postgres. |
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
 | Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay/UI run their own cert-manager mTLS trust domain; UI exposed at `hubble.internal` on the shared Gateway. |
-| HashiCorp Vault (in-cluster) | `2.0.3` | Main Vault; auto-unseals against the host's native Transit Vault at pod start. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
-| Vault Secrets Operator (VSO) | `1.5.0` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. |
+| HashiCorp Vault (in-cluster) | `2.0.4` | Main Vault; auto-unseals against the host's native Transit Vault at pod start. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
+| Vault Secrets Operator (VSO) | `1.5.1` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. |
 | Vault Database & PKI Engines | Same as Vault | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
-| Headlamp | `0.44.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
+| Headlamp | `0.45.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
 
 ### Cluster Monitoring Module
 
@@ -57,11 +57,11 @@ These are the set of operators that need to be deployed in addition to the core 
 
 | Component | Version | Description | Alternatives |
 | --- | --- | --- | --- |
-| kube-prometheus-stack | `88.1.5` (chart, latest; not yet deployed) | Deploys the industry-standard Prometheus, Grafana, and Alertmanager bundle for comprehensive metric aggregation and dashboarding, to debug resource spikes and workload bottlenecks. | `victoria-metrics-k8s-stack` uses VictoriaMetrics instead of Prometheus. Lower footprint, but more work to customize. |
-| Loki | `v3.7.5` (latest; not yet deployed) | Log aggregation and processing, paired with kube-prometheus-stack to round out metrics + logs observability. | `VictoriaLogs` particularly if using the same stack as above. |
-| Tetragon | `v1.7.0` (latest release; not yet deployed) | Real-time, eBPF-based detection of anomalous behavior at the syscall level. Detects unexpected shell spawns inside a container, unauthorized reads of sensitive files, privilege escalation attempts. Shares the eBPF datapath Cilium uses, and comes from the same developer. | Falco is the more battle-tested choice, with a larger existing rule/policy ecosystem, if Tetragon's policy library proves too thin in practice. |
-| Tekton Pipelines | `v1.13.0` (latest; not yet deployed) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. | Woodpecker CI, if a single self-hosted binary with GitHub-Actions-like YAML is preferred over Tekton's CRD model. |
-| Tekton Triggers | `v0.33.0` (latest; not yet deployed) | EventListener reacting to GitHub webhook events (push/PR), starting the matching PipelineRun. | GitHubs Actions is the standard for ci workflow, and can offer basic complimentary CI services on github. |
+| kube-prometheus-stack | `88.5.4` (chart, latest; not yet deployed) | Deploys the industry-standard Prometheus, Grafana, and Alertmanager bundle for comprehensive metric aggregation and dashboarding, to debug resource spikes and workload bottlenecks. | `victoria-metrics-k8s-stack` uses VictoriaMetrics instead of Prometheus. Lower footprint, but more work to customize. |
+| Loki | `v3.7.6` (latest; not yet deployed) | Log aggregation and processing, paired with kube-prometheus-stack to round out metrics + logs observability. | `VictoriaLogs` particularly if using the same stack as above. |
+| Tetragon | `v1.7.1` (latest release; not yet deployed) | Real-time, eBPF-based detection of anomalous behavior at the syscall level. Detects unexpected shell spawns inside a container, unauthorized reads of sensitive files, privilege escalation attempts. Shares the eBPF datapath Cilium uses, and comes from the same developer. | Falco is the more battle-tested choice, with a larger existing rule/policy ecosystem, if Tetragon's policy library proves too thin in practice. |
+| Tekton Pipelines | `v1.15.0` (latest; not yet deployed) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. | Woodpecker CI, if a single self-hosted binary with GitHub-Actions-like YAML is preferred over Tekton's CRD model. |
+| Tekton Triggers | `v0.37.0` (latest; not yet deployed) | EventListener reacting to GitHub webhook events (push/PR), starting the matching PipelineRun. | GitHubs Actions is the standard for ci workflow, and can offer basic complimentary CI services on github. |
 
 ### ETL Pipeline Module
 
@@ -69,9 +69,9 @@ The ETL pipeline rollout focuses on data ingestion, declarative orchestration, a
 
 | Component | Version | Description | Alternatives |
 | --- | --- | --- | --- |
-| dbt (dbt-core, dbt-postgres) | `1.12.0` | Executes complex SQL-based transformations natively within the CloudNativePG database, ensuring compute remains close to the data. | Apache Spark is the industry standard for massive-scale, distributed data transformation, but heavier and more appropriate for spinning up dedicated compute clusters rather than pushing compute down in a bare-metal development environment. and more appropriate for pushing compute down into a local database rather than spinning up dedicated compute clusters. |
-| dlt | `1.29.1` | Open-source Python library (data load tool) for building declarative data pipelines that load data from REST APIs, databases, and other sources. | Airbyte is a fallback option if a UI-driven ecosystem of pre-built connectors is eventually needed. |
-| Prefect | `3.8.1` | Replaces heavy legacy schedulers with a Python-native, highly observable orchestration engine for triggering data pipelines. | Apache Airflow is the industry-standard alternative for data orchestration, but its heavy infrastructure footprint (requiring multiple dedicated scheduler, webserver, and worker pods) makes it overly complex for a lightweight local cluster. |
+| dbt (dbt-core, dbt-postgres) | `1.12.3` | Executes complex SQL-based transformations natively within the CloudNativePG database, ensuring compute remains close to the data. | Apache Spark is the industry standard for massive-scale, distributed data transformation, but heavier and more appropriate for spinning up dedicated compute clusters rather than pushing compute down in a bare-metal development environment. and more appropriate for pushing compute down into a local database rather than spinning up dedicated compute clusters. |
+| dlt | `1.30.0` | Open-source Python library (data load tool) for building declarative data pipelines that load data from REST APIs, databases, and other sources. | Airbyte is a fallback option if a UI-driven ecosystem of pre-built connectors is eventually needed. |
+| Prefect | `3.8.4` | Replaces heavy legacy schedulers with a Python-native, highly observable orchestration engine for triggering data pipelines. | Apache Airflow is the industry-standard alternative for data orchestration, but its heavy infrastructure footprint (requiring multiple dedicated scheduler, webserver, and worker pods) makes it overly complex for a lightweight local cluster. |
 
 ### Machine Learning Module
 
@@ -80,7 +80,7 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Component | Version | Description | Alternatives |
 | --- | --- | --- | --- |
 | BentoML | `v1.4.39` (latest; not yet installed) | Packages models into self-contained, production-ready services using a Python-first framework. | KServe offers Kubernetes-native inference features like scale-to-zero or advanced GPU scheduling. |
-| MLflow | `3.15.1` (latest; not yet installed) | Tracks code versions, hyperparameters, and experiment results, storing metadata in PostgreSQL and artifacts in the cluster's SeaweedFS object store. | Kubeflow is the standard for teams prepared for, and heavily invested in, Kubernetes orchestration. |
+| MLflow | `3.15.2` (latest; not yet installed) | Tracks code versions, hyperparameters, and experiment results, storing metadata in PostgreSQL and artifacts in the cluster's SeaweedFS object store. | Kubeflow is the standard for teams prepared for, and heavily invested in, Kubernetes orchestration. |
 
 ## Official Documentation
 
@@ -137,66 +137,57 @@ Organized to match the justfile's own section layout (`just --list` shows every 
 
 ### Bootstrap
 
-One-time, first-install steps - see `INSTALLATION.md` for the full sequence and context.
+One-time, first-install setup — see `INSTALLATION.md` for Requirements and what the script does.
 
-| Operation | Command |
+| Command | Operation |
 | --- | --- |
-| Write `/etc/rancher/k3s/config.yaml` | `just k3s-config` |
-| Write and apply `terraform/cluster-config` | `just cluster-config` |
-| Install/reinstall Cilium | `just cilium-install` |
-| Generate the host Transit Vault's TLS certificate | `just vault-host-tls` |
-| Enable, initialize, unseal, and log into the host Transit Vault | `just vault-host-init` |
-| Create the GPG-encrypted unseal keyfile | `just vault-keyfile` |
-| Unseal the host Transit Vault and apply `terraform/vault-transit-bootstrap` | `just vault-transit-bootstrap` |
-| Install the `vault-agent-autounseal` systemd service | `just vault-autounseal-agent` |
-| Apply `terraform/vault` and verify it | `just vault-engines` |
+| `just bootstrap` | Run the full first-time cluster bootstrap |
 
 ### Cluster Lifecycle
 
-| Operation | Command | When |
+| Command | Operation | When |
 | --- | --- | --- |
-| Start the cluster | `just start` | Each work session |
-| Stop the cluster | `just stop` (`just stop --force` if a stuck stop needs it) | Each work session |
-| Interactively inspect a pod | `just fuzzypods` | Ad hoc troubleshooting; fuzzy-select a pod from all namespaces and describe it |
-| Check overall cluster health | `just status` | Post-install verification, or a periodic sanity check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
-| Check Flux sync state | `flux get kustomizations -A` | Confirming the GitOps install graph is Ready end to end |
+| `just start` | Start the cluster | Each work session |
+| `just stop` (`just stop --force` if a stuck stop needs it) | Stop the cluster | Each work session |
+| `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting; fuzzy-select a pod from all namespaces and describe it |
+| `just status` | Check overall cluster health | Post-install verification, or a periodic sanity check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
+| `flux get kustomizations -A` | Check Flux sync state | Confirming the GitOps install graph is Ready end to end |
 
 ### Database
 
-| Operation | Command | When |
+| Command | Operation | When |
 | --- | --- | --- |
-| Connect via psql (app role, host) | `just db-connect` (`just db-connect localhost` from the node itself) | Application-level access with Vault-issued credentials |
-| Connect via psql (superuser, in-cluster) | `kubectl cnpg psql postgis-cluster -n databases` | Ad hoc query access as the superuser |
-| Trigger a manual DB backup | `kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io` | Before a risky schema change, outside the nightly automated backup |
-| Check scheduled backups aren't suspended | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Confirming nightly backups are actually running |
-| Verify CNPG state | `kubectl cnpg status postgis-cluster -n databases` | Troubleshooting only |
+| `just db-connect` (`just db-connect localhost` from the node itself) | Connect via psql (app role, host) | Application-level access with Vault-issued credentials |
+| `kubectl cnpg psql postgis-cluster -n databases` | Connect via psql (superuser, in-cluster) | Ad hoc query access as the superuser |
+| `kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io` | Trigger a manual DB backup | Before a risky schema change, outside the nightly automated backup |
+| `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Check scheduled backups aren't suspended | Confirming nightly backups are actually running |
+| `kubectl cnpg status postgis-cluster -n databases` | Verify CNPG state | Troubleshooting only |
 
 ### Observability (Hubble)
 
-| Operation | Command | When |
+| Command | Operation | When |
 | --- | --- | --- |
-| Open Hubble UI | `just hubble-ui` | Quick local access; starts its own port-forward and opens the browser |
-| View Hubble flows (CLI) | `just hubble observe --follow` (or any other `hubble` subcommand) | Ad hoc network observability, independent of the web UI |
-| Port-forward Hubble Relay only | `just hubble-pf` | Lower-level primitive `just hubble` uses internally; no TLS cert setup |
+| `just hubble-ui` | Open Hubble UI | Quick local access; starts its own port-forward and opens the browser |
+| `just hubble observe --follow` (or any other `hubble` subcommand) | View Hubble flows (CLI) | Ad hoc network observability, independent of the web UI |
+| `just hubble-pf` | Port-forward Hubble Relay only | Lower-level primitive `just hubble` uses internally; no TLS cert setup |
 
 ### Vault
 
-| Operation | Command | When |
+| Command | Operation | When |
 | --- | --- | --- |
-| Open a Vault shell | `just vault-shell` | Interactive Vault work inside the `vault-0` pod, where addressing already works; inherited `VAULT_TOKEN` is unset first |
-| Log into Vault | `just vault-login` | Same as `just vault-shell`, then runs `vault login`; drops into the shell already authenticated |
-| Port-forward in-cluster Vault to the host | `just vault-pf` | Internal plumbing `just vault-engines` uses; prefer `just vault-shell`/`vault-login` for ad hoc CLI work instead of using this directly |
-| Verify Vault state | `kubectl exec -n vault vault-0 -- vault status` | Troubleshooting only |
+| `just vault-shell` | Open a Vault shell | Interactive Vault work inside the `vault-0` pod, where addressing already works; inherited `VAULT_TOKEN` is unset first, run `vault login` once inside to authenticate |
+| `just vault-pf` | Port-forward in-cluster Vault to the host | Internal plumbing `just bootstrap` uses; prefer `just vault-shell` for ad hoc CLI work instead of using this directly |
+| `kubectl exec -n vault vault-0 -- vault status` | Verify Vault state | Troubleshooting only |
 
 ### Development
 
-| Operation | Command |
+| Command | Operation |
 | --- | --- |
-| Install dependencies | `just install` |
-| Set up the dev environment (install + git filters) | `just setup` |
-| Run tests with coverage | `just test-cov` |
-| Update packages and the lockfile | `just update` |
-| Configure the `nbwipers` git filter | `just git-setup` |
+| `just install` | Install dependencies |
+| `just setup` | Set up the dev environment (install + git filters) |
+| `just test-cov` | Run tests with coverage |
+| `just update` | Update packages and the lockfile |
+| `just git-setup` | Configure the `nbwipers` git filter |
 
 ---
 
@@ -213,7 +204,7 @@ metadata:
 spec:
   instances: 1
   # imageName: match apps/databases/postgis-cluster.yaml
-  imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgis:18.6-3.6.4-system-trixie
   storage:
     size: 100Gi
     storageClass: local-path
@@ -268,7 +259,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── feature-proposal.yml
 │   │   └── technical-debt-resolution.yml
 │   └── workflows/
-│       └── ci.yml                       # pytest + coverage
+│       └── ci.yml                       # ruff lint/format + pytest + coverage
 ├── apps/
 │   └── databases/                       # PostGIS cluster + dependencies, one Flux Kustomization
 │       ├── kustomization.yaml
@@ -358,10 +349,10 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
 │   ├── bash/
+│   │   ├── bootstrap-transit.sh         # Host Transit Vault install/init/unseal (see INSTALLATION.md)
+│   │   ├── bootstrap-cluster.sh         # First-time cluster bootstrap (see INSTALLATION.md)
 │   │   ├── start-cluster.sh             # Boot sequence: API, Transit Vault unseal, readiness checks
 │   │   └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
-│   ├── k3s/
-│   │   └── config.yaml                  # k3s server config, installed via `just k3s-config`
 │   └── clusterpgis/                     # The installable clusterpgis package (src layout)
 │       ├── data/
 │       │   └── __init__.py
@@ -405,7 +396,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 ├── .gitattributes
 ├── .gitignore
 ├── .python-version
-├── INSTALLATION.md                      # First-time cluster bootstrap, run sequentially
+├── INSTALLATION.md                      # First-time cluster bootstrap: Requirements, then `just bootstrap`
 ├── justfile                             # `just setup` (review for more commands)
 ├── pyproject.toml                       # uv-managed clusterpgis package + dev tooling
 ├── README.md                            # Architecture, setup, and operations reference
@@ -420,10 +411,10 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`Dockerfile`** contains build instructions to provision a Data Science focused Dev Container.
 * **`.github/`**
   * **`ISSUE_TEMPLATE/`** - Issue templates for bug reports, documentation updates, feature proposals, and technical-debt resolution.
-  * **`workflows/ci.yml`** - Runs `pytest` with coverage against `src/clusterpgis` on pull requests, via `astral-sh/setup-uv`.
+  * **`workflows/ci.yml`** - On pull requests, via `astral-sh/setup-uv`: a `lint` job runs `ruff check`/`ruff format --check`, and a `tests` job runs `pytest` with coverage against `src/clusterpgis`.
 * **`apps/databases/`** the PostGIS cluster and everything it depends on, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`** - every resource this Kustomization builds, in one pass.
-  * **`vso-setup.yaml`** - Creates the `databases` namespace and the `VaultConnection`/`VaultAuth`/`ServiceAccount` VSO uses to authenticate to Vault.
+  * **`vso-setup.yaml`** - Creates the `VaultConnection`/`VaultAuth`/`ServiceAccount` VSO uses to authenticate to Vault.
   * **`postgis-tls.yaml`** - cert-manager `Certificate` requesting the Postgres server certificate from `vault-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
   * **`postgis-cluster.yaml`** - The CNPG `Cluster`, its static and dynamic Vault secrets, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`) and `ScheduledBackup` used for backups.
   * **`postgis-tcproute.yaml`** - `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
@@ -485,7 +476,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * **`vso-release.yaml`** - `HelmRepository`/`HelmRelease` for the Vault Secrets Operator.
     * **`vso-networkpolicy.yaml`** - Scopes VSO egress to kube-dns, kube-apiserver, and Vault API (`vault.vault.svc:8200`).
     * **`kustomization.yaml`**
-* **`terraform/`** OpenTofu modules configuring cluster-config and Vault's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine, host Transit Vault autounseal token). State is local and gitignored throughout; the Vault-facing modules additionally encrypt state at rest via OpenTofu's own `encryption` block, since they handle credentials. These modules are applied by hand following the instructions in `INSTALLATION.md`.
+* **`terraform/`** OpenTofu modules configuring cluster-config and Vault's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine, host Transit Vault autounseal token). State is local and gitignored throughout; the Vault-facing modules additionally encrypt state at rest via OpenTofu's own `encryption` block, since they handle credentials. These modules are applied by `just bootstrap`; see `INSTALLATION.md` for what it does and how to apply them by hand if needed.
   * **`cluster-config/`** - Creates the `cluster-config` Secret in `flux-system` (`GATEWAY_IP`, `COREDNS_LAN_IP`, `HOST_IP`, `CILIUM_VERSION`), read by `gateway`, `coredns-custom`, `cilium`, `vault`, and `databases` via Flux's `postBuild.substituteFrom`. Values come from a `terraform.tfvars` you provide (gitignored), never committed. Applied first, right after k3s is installed
   * **`vault/`** - Unified module targeting the **in-cluster** Vault: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic role (`postgis-cluster`, `postgis-app-role`).
   * **`vault-transit-bootstrap/`** - The transit engine/key, `autounseal-policy`, and the periodic orphan token the in-cluster Vault uses for auto-unseal. Targets the **host** Transit Vault (port 8200).

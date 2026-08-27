@@ -1,6 +1,6 @@
 # In-cluster ETL/pipeline runtime image for this repo.
 
-FROM python:3.14-slim
+FROM python:3.14.7-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates curl \
