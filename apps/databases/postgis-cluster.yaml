@@ -68,7 +68,7 @@ spec:
   instances: 1
   smartShutdownTimeout: 15
   stopDelay: 60
-  imageName: ghcr.io/cloudnative-pg/postgis:18.3-3.6.2-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgis:18.6-3.6.4-system-trixie
 
   resources:
     requests:
