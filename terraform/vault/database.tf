@@ -12,7 +12,7 @@ resource "vault_database_secret_backend_connection" "postgis_cluster" {
     connection_url      = "postgresql://{{username}}:{{password}}@postgis-cluster-rw.databases.svc.cluster.local:5432/postgres?sslmode=require"
     username             = "postgres"
     password_wo         = var.postgres_superuser_password
-    password_wo_version = 1
+    password_wo_version = var.secrets_wo_version
   }
 }
 

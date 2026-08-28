@@ -61,6 +61,23 @@
   # Ensure cilium_host, cilium_net, cilium_vxlan, and lxc+ are ALLOW IN
   ```
 
+  **Fedora (`firewalld`)** — `ufw` isn't present on Fedora; `firewalld` serves the same role. Cilium's per-pod interfaces get random names each time (`lxcXXXX`), which `firewalld` can't wildcard-match the way `ufw` does, so allow forwarding/masquerade on your active zone instead of trying to allow interfaces by name:
+
+  ```bash
+  sudo firewall-cmd --permanent --zone="$(firewall-cmd --get-default-zone)" --add-port=443/tcp
+  sudo firewall-cmd --permanent --zone="$(firewall-cmd --get-default-zone)" --add-masquerade
+  sudo firewall-cmd --reload
+  ```
+
+  This is best-effort, not a guarantee — desktop-oriented zones (e.g. Fedora Workstation's default zone) are usually already permissive enough (`forward: yes`, wide ephemeral-port ranges) that this is the only real gap. If LAN clients still can't reach the Gateway after bootstrap, check `firewall-cmd --list-all` against what Cilium actually opened at runtime.
+
+  Verify:
+
+  ```bash
+  sudo firewall-cmd --list-all
+  # Ensure forward: yes, masquerade: yes, and 443/tcp is listed under ports
+  ```
+
 * [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `terraform/cluster-config/terraform.tfvars` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
 
   ```bash
@@ -125,7 +142,6 @@ flowchart TD
     ns["namespaces"] --> cilium
 
     %% Core Services & PKI
-    cilium --> coredns["coredns-custom"]
     cilium --> fluxpolicies["flux-system-policies"]
     cilium --> certmgr["cert-manager"]
     certmgr --> vault["vault"]
@@ -145,7 +161,7 @@ flowchart TD
 ```
 
 * `cilium` requires `gateway-api-crds` and `namespaces`.
-* `coredns-custom`, `flux-system-policies`, and `cert-manager` depend on `cilium`.
+* `flux-system-policies` and `cert-manager` depend on `cilium`.
 * `vault` depends on `cert-manager` (for `vault-server-cert` TLS bootstrap).
 * `vault-secrets-operator` and `gateway` depend on `vault` (for PKI and secrets sync).
 * `cnpg-operator` depends on `vault-secrets-operator`, and `barman-cloud` depends on `cnpg-operator`.

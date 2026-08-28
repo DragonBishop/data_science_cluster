@@ -75,11 +75,15 @@ echo "✅ k3s node present (NotReady is expected until Cilium is installed)."
 echo ""
 
 # --- Step 3: cluster-config Terraform (network values) -----------------------
+kubectl create namespace flux-system --dry-run=client -o yaml | kubectl apply -f -
 cd terraform/cluster-config
 if [ -f terraform.tfvars ]; then
     echo "✅ terraform.tfvars already present, applying as-is."
 else
-    DETECTED_HOST_IP=$(hostname -I | awk '{print $1}')
+    DETECTED_HOST_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}')
+    if [ -z "$DETECTED_HOST_IP" ]; then
+        DETECTED_HOST_IP=$(hostname -I | awk '{print $1}')
+    fi
     printf 'gateway_ip     = "192.0.2.240"\ncoredns_lan_ip = "192.0.2.242"\nhost_ip        = "%s"\ncilium_version = "1.20.1"\n' "$DETECTED_HOST_IP" > terraform.tfvars
     echo "📝 Wrote terraform.tfvars with defaults (host_ip=${DETECTED_HOST_IP}). Edit this file later if your LAN needs different values, then re-run 'tofu apply' here."
 fi
@@ -91,7 +95,7 @@ echo ""
 
 # --- Step 4: Cilium -----------------------------------------------------------
 kubectl apply --server-side -f infrastructure/gateway-api-crds/standard-install.yaml
-CILIUM_VERSION=$(grep 'version:' infrastructure/cilium/cilium-release.yaml | tr -d ' "' | cut -d: -f2)
+CILIUM_VERSION=$(grep '^cilium_version' terraform/cluster-config/terraform.tfvars | cut -d'"' -f2)
 echo "🚀 Installing Cilium ${CILIUM_VERSION}..."
 helm upgrade --install cilium oci://quay.io/cilium/charts/cilium --version "$CILIUM_VERSION" \
     --namespace kube-system --create-namespace \
@@ -167,6 +171,11 @@ tofu init
 tofu apply -auto-approve
 cd ../..
 
+if ! systemctl is-active --quiet vault-agent-autounseal; then
+    sudo systemctl start vault-agent-autounseal
+    echo "✅ vault-agent-autounseal started."
+fi
+
 unset VAULT_ADDR VAULT_CACERT VAULT_TOKEN
 echo "✅ terraform/vault-transit-bootstrap applied."
 echo ""
@@ -200,12 +209,37 @@ fi
 export VAULT_ADDR="https://127.0.0.1:8210"
 export VAULT_CACERT="$HOME/.vault-certs/vault-internal-ca.crt"
 export VAULT_TOKEN="$incluster_root_token"
-export TF_VAR_postgres_superuser_password
-TF_VAR_postgres_superuser_password=$(openssl rand -base64 24)
-export TF_VAR_s3_access_key
-TF_VAR_s3_access_key=$(openssl rand -hex 10)
-export TF_VAR_s3_secret_key
-TF_VAR_s3_secret_key=$(openssl rand -hex 20)
+SECRETS_ENV_FILE="$HOME/.config/data_science_cluster/vault-secrets.env"
+if [ -f "$SECRETS_ENV_FILE" ] && [ "${ROTATE_VAULT_SECRETS:-false}" != "true" ]; then
+    echo "✅ Reusing persisted app secrets from $SECRETS_ENV_FILE (set ROTATE_VAULT_SECRETS=true to rotate)."
+    # shellcheck disable=SC1090
+    . "$SECRETS_ENV_FILE"
+else
+    if [ -f "$SECRETS_ENV_FILE" ]; then
+        # shellcheck disable=SC1090
+        . "$SECRETS_ENV_FILE"
+        SECRETS_WO_VERSION=$((SECRETS_WO_VERSION + 1))
+        echo "🔄 ROTATE_VAULT_SECRETS=true — generating new app secrets (version ${SECRETS_WO_VERSION})..."
+    else
+        SECRETS_WO_VERSION=1
+        echo "🔑 Generating app secrets (first run)..."
+    fi
+    TF_VAR_postgres_superuser_password=$(openssl rand -base64 24)
+    TF_VAR_s3_access_key=$(openssl rand -hex 10)
+    TF_VAR_s3_secret_key=$(openssl rand -hex 20)
+    mkdir -p "$(dirname "$SECRETS_ENV_FILE")"
+    (
+        umask 077
+        {
+            printf 'TF_VAR_postgres_superuser_password=%q\n' "$TF_VAR_postgres_superuser_password"
+            printf 'TF_VAR_s3_access_key=%q\n' "$TF_VAR_s3_access_key"
+            printf 'TF_VAR_s3_secret_key=%q\n' "$TF_VAR_s3_secret_key"
+            printf 'SECRETS_WO_VERSION=%s\n' "$SECRETS_WO_VERSION"
+        } > "$SECRETS_ENV_FILE"
+    )
+fi
+export TF_VAR_postgres_superuser_password TF_VAR_s3_access_key TF_VAR_s3_secret_key
+export TF_VAR_secrets_wo_version="$SECRETS_WO_VERSION"
 cd terraform/vault
 tofu init
 tofu apply -auto-approve
@@ -216,13 +250,15 @@ vault kv get secret/seaweedfs
 vault read pki_int/roles/internal-server
 vault read auth/kubernetes/role/cert-manager-pki-role
 
-unset VAULT_ADDR VAULT_CACERT VAULT_TOKEN TF_VAR_state_encryption_passphrase TF_VAR_postgres_superuser_password TF_VAR_s3_access_key TF_VAR_s3_secret_key
+unset VAULT_ADDR VAULT_CACERT VAULT_TOKEN TF_VAR_state_encryption_passphrase TF_VAR_postgres_superuser_password TF_VAR_s3_access_key TF_VAR_s3_secret_key TF_VAR_secrets_wo_version
 echo "✅ terraform/vault applied and verified."
 echo ""
 
 # --- Step 10: Flux kustomization rollout + verification ----------------------
 echo "🚀 Reconciling remaining Flux kustomizations..."
 flux reconcile kustomization flux-system --with-source || { echo "⚠️  flux-system reconcile reported an issue, continuing."; had_warnings=true; }
+flux reconcile kustomization gateway || { echo "⚠️  gateway not yet converged (expected until vault-pki-issuer settles); it will retry automatically."; had_warnings=true; }
+flux reconcile kustomization databases || { echo "⚠️  databases not yet converged (expected until vault-pki-issuer settles); it will retry automatically."; had_warnings=true; }
 flux get kustomizations || had_warnings=true
 
 kubectl rollout restart deployment coredns -n kube-system || true
