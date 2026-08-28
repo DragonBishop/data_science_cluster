@@ -13,11 +13,26 @@ export VAULT_ADDR VAULT_CACERT
 
 # --- Step 1: Package, TLS, service -------------------------------------------
 echo "🚀 Deploying host Transit Vault..."
-if ! command -v vault >/dev/null 2>&1 || [ ! -f /etc/apt/sources.list.d/hashicorp.list ]; then
+if command -v vault >/dev/null 2>&1; then
+    echo "✅ vault already installed, skipping."
+elif command -v apt >/dev/null 2>&1; then
     echo "📦 Installing HashiCorp apt repo and vault package..."
-    wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-    sudo apt update && sudo apt install -y vault
+    if [ ! -f /etc/apt/sources.list.d/hashicorp.list ]; then
+        wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+        sudo apt update
+    fi
+    sudo apt install -y vault
+elif command -v dnf >/dev/null 2>&1; then
+    echo "📦 Installing HashiCorp dnf repo and vault package..."
+    if [ ! -f /etc/yum.repos.d/hashicorp.repo ]; then
+        sudo dnf install -y dnf5-plugins
+        sudo dnf config-manager addrepo --from-repofile=https://rpm.releases.hashicorp.com/fedora/hashicorp.repo
+    fi
+    sudo dnf install -y vault
+else
+    echo "❌ ERROR: No supported package manager (apt or dnf) found. Install 'vault' manually: https://developer.hashicorp.com/vault/install"
+    exit 1
 fi
 
 if [ -f "$VAULT_CACERT" ]; then
@@ -38,7 +53,9 @@ fi
 grep -q "vault.local" /etc/hosts || echo "127.0.0.1 vault.local" | sudo tee -a /etc/hosts > /dev/null
 
 sudo mkdir -p /etc/vault.d
-printf 'api_addr = "https://vault.local:8200"\n\nlistener "tcp" {\n  address       = "0.0.0.0:8200"\n  tls_cert_file = "/opt/vault/tls/tls.crt"\n  tls_key_file  = "/opt/vault/tls/tls.key"\n}\n' | sudo tee /etc/vault.d/vault.hcl > /dev/null
+sudo mkdir -p /opt/vault/data
+sudo chown vault:vault /opt/vault/data
+printf 'api_addr = "https://vault.local:8200"\n\nstorage "file" {\n  path = "/opt/vault/data"\n}\n\nlistener "tcp" {\n  address       = "0.0.0.0:8200"\n  tls_cert_file = "/opt/vault/tls/tls.crt"\n  tls_key_file  = "/opt/vault/tls/tls.key"\n}\n' | sudo tee /etc/vault.d/vault.hcl > /dev/null
 sudo systemctl enable --now vault
 echo "✅ Host Transit Vault service ready."
 echo ""
@@ -63,7 +80,7 @@ elif [ "$state" = "False" ]; then
     root_token=$(echo "$init_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['root_token'])")
     fresh_init=true
     for k in "${unseal_keys[@]}"; do
-        printf '%s\n' "$k" | vault operator unseal - > /dev/null
+        printf '%s\n' "$k" | vault write sys/unseal key=- > /dev/null
     done
     vault login -no-print "$root_token"
     echo ""
@@ -110,8 +127,13 @@ echo ""
 printf 'vault {\n  address = "%s"\n  ca_cert = "%s"\n}\nauto_auth {\n  method "token_file" {\n    config = { token_file_path = "%s/.vault-agent/autounseal-token" }\n  }\n}\n' "$VAULT_ADDR" "$VAULT_CACERT" "$HOME" | sudo tee /etc/vault-agent-autounseal.hcl > /dev/null
 printf '[Unit]\nDescription=Vault Agent - transit auto-unseal token renewal\nAfter=vault.service\nRequires=vault.service\n\n[Service]\nExecStart=/usr/bin/vault agent -config=/etc/vault-agent-autounseal.hcl\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n' | sudo tee /etc/systemd/system/vault-agent-autounseal.service > /dev/null
 sudo systemctl daemon-reload
-sudo systemctl enable --now vault-agent-autounseal
-echo "✅ vault-agent-autounseal running."
+sudo systemctl enable vault-agent-autounseal
+if [ -f "$HOME/.vault-agent/autounseal-token" ]; then
+    sudo systemctl start vault-agent-autounseal
+    echo "✅ vault-agent-autounseal enabled and running."
+else
+    echo "✅ vault-agent-autounseal enabled — will be started by bootstrap-cluster.sh Step 7 once its token file exists."
+fi
 echo ""
 
 if [ "$had_warnings" = true ]; then
