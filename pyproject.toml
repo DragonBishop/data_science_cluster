@@ -10,7 +10,6 @@ dependencies = [
   "geoalchemy2>=0.20.0",
   "geopandas>=1.1.4",
   "hvac>=2.4.0",
-  "ipykernel>=7.3.0",
   "matplotlib>=3.11.1",
   "pandas>=3.0.5",
   "plotly>=7.0.0",
@@ -26,7 +25,6 @@ dynamic = ["version"]
 dev = [
   "pytest>=9.1.1",
   "pytest-cov>=7.1.0",
-  "nbwipers>=0.7.1",
   "prek>=0.4.14",
 ]
 lint = [
@@ -59,16 +57,12 @@ packages = ["src/clusterpgis"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [
-  "*.ipynb",
   ".venv",
   "uv.lock",
 ]
 
-[tool.nbwipers]
-strip-kernel-info = true
-
 [tool.rumdl]
-disabled-rules = ["MD013"]
+disable = ["MD013"]
 
 [tool.rumdl.MD024]
 siblings-only = true

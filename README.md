@@ -187,7 +187,7 @@ One-time, first-install setup — see `INSTALLATION.md` for Requirements and wha
 | `just setup` | Set up the dev environment (install + git filters) |
 | `just test-cov` | Run tests with coverage |
 | `just update` | Update packages and the lockfile |
-| `just git-setup` | Configure the `nbwipers` git filter |
+| `just git-setup` | Configure pre-commit hooks |
 
 ---
 
@@ -275,7 +275,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       └── vso-setup.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
-│       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap` 
+│       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap`
 │       │   ├── gotk-components.yaml
 │       │   ├── gotk-sync.yaml
 │       │   └── kustomization.yaml
@@ -344,9 +344,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── kustomization.yaml
 │       ├── vso-networkpolicy.yaml
 │       └── vso-release.yaml
-├── notebooks/
-│   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
-│   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
 │   ├── bash/
 │   │   ├── bootstrap-transit.sh         # Host Transit Vault install/init/unseal (see INSTALLATION.md)

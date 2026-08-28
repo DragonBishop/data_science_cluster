@@ -12,7 +12,7 @@ resource "vault_kv_secret_v2" "postgis" {
     username = "postgres"
     password = var.postgres_superuser_password
   })
-  data_json_wo_version = 1
+  data_json_wo_version = var.secrets_wo_version
 }
 
 resource "vault_kv_secret_v2" "seaweedfs" {
@@ -32,5 +32,5 @@ resource "vault_kv_secret_v2" "seaweedfs" {
       }]
     })
   })
-  data_json_wo_version = 1
+  data_json_wo_version = var.secrets_wo_version
 }
