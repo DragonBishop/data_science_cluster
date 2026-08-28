@@ -18,3 +18,8 @@ spec:
     substituteFrom:
       - kind: Secret
         name: cluster-config
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: vault
+      namespace: vault
