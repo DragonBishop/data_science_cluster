@@ -1,0 +1,15 @@
+---
+- name: Install Hashicorp repo and vault package (Debian distros)
+  ansible.builtin.include_tasks: debian.yml
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Install Hashicorp repo and vault package (RedHat distros)
+  ansible.builtin.include_tasks: redhat.yaml
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Fail on unsupported distro family
+  ansible.builtin.fail:
+    msg: "Distro family '{{ ansible_facts['os_family'] }}' unsupported at this time"
+  when: ansible_facts['os_family'] not in ["Debian", "RedHat"]
+
+- name:
