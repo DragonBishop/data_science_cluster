@@ -132,7 +132,7 @@ if [ -f "$HOME/.vault-agent/autounseal-token" ]; then
     sudo systemctl start vault-agent-autounseal
     echo "✅ vault-agent-autounseal enabled and running."
 else
-    echo "✅ vault-agent-autounseal enabled — will be started by bootstrap-cluster.sh Step 7 once its token file exists."
+    echo "✅ vault-agent-autounseal enabled — will be started by bootstrap-cluster.sh Step 6 once its token file exists."
 fi
 echo ""
 

@@ -8,16 +8,7 @@ had_warnings=false
 
 # --- Step 0: Preflight -------------------------------------------------------
 echo "🚀 Starting cluster bootstrap..."
-for bin in vault tofu helm flux gh gpg openssl python3 just; do
-    if ! command -v "$bin" >/dev/null 2>&1; then
-        echo "❌ ERROR: '$bin' not found. See INSTALLATION.md Requirements."
-        exit 1
-    fi
-done
-if ! gh auth status >/dev/null 2>&1; then
-    echo "❌ ERROR: GitHub CLI not authenticated. Run: gh auth login"
-    exit 1
-fi
+./src/bash/preflight.sh
 export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_CACERT="/opt/vault/tls/tls.crt"
 transit_initialized=$(vault status -format=json 2>/dev/null | python3 -c "import json,sys
@@ -74,28 +65,9 @@ fi
 echo "✅ k3s node present (NotReady is expected until Cilium is installed)."
 echo ""
 
-# --- Step 3: cluster-config Terraform (network values) -----------------------
-kubectl create namespace flux-system --dry-run=client -o yaml | kubectl apply -f -
-cd terraform/cluster-config
-if [ -f terraform.tfvars ]; then
-    echo "✅ terraform.tfvars already present, applying as-is."
-else
-    DETECTED_HOST_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}')
-    if [ -z "$DETECTED_HOST_IP" ]; then
-        DETECTED_HOST_IP=$(hostname -I | awk '{print $1}')
-    fi
-    printf 'gateway_ip     = "192.0.2.240"\ncoredns_lan_ip = "192.0.2.242"\nhost_ip        = "%s"\ncilium_version = "1.20.1"\n' "$DETECTED_HOST_IP" > terraform.tfvars
-    echo "📝 Wrote terraform.tfvars with defaults (host_ip=${DETECTED_HOST_IP}). Edit this file later if your LAN needs different values, then re-run 'tofu apply' here."
-fi
-tofu init
-tofu apply -auto-approve
-cd ../..
-echo "✅ cluster-config applied."
-echo ""
-
-# --- Step 4: Cilium -----------------------------------------------------------
+# --- Step 3: Cilium -----------------------------------------------------------
 kubectl apply --server-side -f infrastructure/gateway-api-crds/standard-install.yaml
-CILIUM_VERSION=$(grep '^cilium_version' terraform/cluster-config/terraform.tfvars | cut -d'"' -f2)
+CILIUM_VERSION=$(grep 'version:' infrastructure/cilium/cilium-release.yaml | cut -d'"' -f2)
 echo "🚀 Installing Cilium ${CILIUM_VERSION}..."
 helm upgrade --install cilium oci://quay.io/cilium/charts/cilium --version "$CILIUM_VERSION" \
     --namespace kube-system --create-namespace \
@@ -113,7 +85,7 @@ done
 echo "✅ Cilium ${CILIUM_VERSION} installed, node Ready."
 echo ""
 
-# --- Step 5: Bootstrap Flux ---------------------------------------------------
+# --- Step 4: Bootstrap Flux ---------------------------------------------------
 if flux get kustomizations >/dev/null 2>&1; then
     echo "✅ Flux already bootstrapped, skipping."
 else
@@ -130,7 +102,7 @@ fi
 echo "✅ Flux reconciling."
 echo ""
 
-# --- Step 6: Reconcile vault kustomization, wait for vault-0 -----------------
+# --- Step 5: Reconcile vault kustomization, wait for vault-0 -----------------
 flux reconcile kustomization vault
 retries=0
 until kubectl get pods -n vault vault-0 2>/dev/null | grep -q "Running"; do
@@ -144,7 +116,7 @@ until kubectl get pods -n vault vault-0 2>/dev/null | grep -q "Running"; do
 done
 echo ""
 
-# --- Step 7: vault-transit-bootstrap Terraform --------------------------------
+# --- Step 6: vault-transit-bootstrap Terraform --------------------------------
 export VAULT_ADDR="https://127.0.0.1:8200"
 export VAULT_CACERT="/opt/vault/tls/tls.crt"
 
@@ -180,7 +152,7 @@ unset VAULT_ADDR VAULT_CACERT VAULT_TOKEN
 echo "✅ terraform/vault-transit-bootstrap applied."
 echo ""
 
-# --- Step 8: In-cluster Vault init --------------------------------------------
+# --- Step 7: In-cluster Vault init --------------------------------------------
 incluster_root_token=""
 
 incluster_status_json=$(kubectl exec -n vault vault-0 -- vault status -format=json 2>/dev/null) || incluster_status_json=""
@@ -201,7 +173,7 @@ else
 fi
 echo ""
 
-# --- Step 9: vault Terraform (engines, policies) -----------------------------
+# --- Step 8: vault Terraform (engines, policies) -----------------------------
 just vault-pf
 if [ -z "$incluster_root_token" ]; then
     read -rs -p "In-cluster Vault root token (this run resumed after init already ran — paste it): " incluster_root_token; echo
@@ -254,7 +226,7 @@ unset VAULT_ADDR VAULT_CACERT VAULT_TOKEN TF_VAR_state_encryption_passphrase TF_
 echo "✅ terraform/vault applied and verified."
 echo ""
 
-# --- Step 10: Flux kustomization rollout + verification ----------------------
+# --- Step 9: Flux kustomization rollout + verification ----------------------
 echo "🚀 Reconciling remaining Flux kustomizations..."
 flux reconcile kustomization flux-system --with-source || { echo "⚠️  flux-system reconcile reported an issue, continuing."; had_warnings=true; }
 flux reconcile kustomization gateway || { echo "⚠️  gateway not yet converged (expected until vault-pki-issuer settles); it will retry automatically."; had_warnings=true; }
@@ -272,7 +244,7 @@ if ! helm get values cilium -n kube-system 2>/dev/null | grep -q hubble; then
 fi
 echo ""
 
-# --- Step 11: Summary ---------------------------------------------------------
+# --- Step 10: Summary ---------------------------------------------------------
 echo "Generated app secrets (postgres/S3) are stored in Vault — retrieve anytime with:"
 echo "  vault kv get secret/postgis"
 echo "  vault kv get secret/seaweedfs"

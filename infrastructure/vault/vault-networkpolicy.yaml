@@ -8,8 +8,8 @@ spec:
     matchLabels:
       app.kubernetes.io/name: vault
   egress:
-    - toCIDR:
-        - "${HOST_IP}/32"
+    - toEntities:
+        - host
       toPorts:
         - ports:
             - port: "8200"

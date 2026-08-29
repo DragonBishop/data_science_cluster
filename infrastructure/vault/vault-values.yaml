@@ -48,7 +48,7 @@ server:
       }
 
       seal "transit" {
-        address         = "https://${HOST_IP}:8200"
+        address         = "https://HOST_IP:8200"
         disable_renewal = "false"
         key_name        = "autounseal"
         mount_path      = "transit/"
