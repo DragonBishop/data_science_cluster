@@ -1,0 +1,14 @@
+---
+- name: Add Hashicorp apt repo
+  ansible.builtin.shell:
+    cmd: curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    creates: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    mode: "0644"
+  become: true
+
+- name: Install Vault
+  ansible.builtin.apt:
+    name: vault
+    stats: present
+    update_cache: true
+  become: true
