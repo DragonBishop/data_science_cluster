@@ -4,7 +4,7 @@
   when: ansible_facts['os_family'] == "Debian"
 
 - name: Install Hashicorp repo and vault package (RedHat distros)
-  ansible.builtin.include_tasks: redhat.yaml
+  ansible.builtin.include_tasks: redhat.yml
   when: ansible_facts['os_family'] == "RedHat"
 
 - name: Fail on unsupported distro family
@@ -12,4 +12,100 @@
     msg: "Distro family '{{ ansible_facts['os_family'] }}' unsupported at this time"
   when: ansible_facts['os_family'] not in ["Debian", "RedHat"]
 
-- name:
+- name: Create /opt/vault/tls directory
+  ansible.builtin.file:
+    path: /opt/vault/tls
+    state: directory
+    owner: vault
+    mode: "0755"
+  become: true
+
+- name: Generate /opt/vault/tls/tls.key
+  community.crypto.openssl_privatekey:
+    path: /opt/vault/tls/tls.key
+    type: RSA
+    size: 4096
+    owner: vault
+    group: vault
+    mode: "0640"
+  become: true
+
+- name: Generate /opt/vault/tls/tls.csr
+  community.crypto.openssl_csr:
+    common_name: vault.local
+    subject_alt_name:
+      - "DNS:vault.local"
+      - "DNS:localhost"
+      - "IP:127.0.0.1"
+    privatekey_path: /opt/vault/tls/tls.key
+    owner: vault
+    group: vault
+    mode: "0644"
+    path: /opt/vault/tls/tls.csr
+  become: true
+
+- name: Generate tls.crt from tls.key
+  community.crypto.x509_certificate:
+    csr_path: /opt/vault/tls/tls.csr
+    privatekey_path: /opt/vault/tls/tls.key
+    owner: vault
+    group: vault
+    mode: "0644"
+    provider: selfsigned
+    path: /opt/vault/tls/tls.crt
+  become: true
+
+- name: Check localhost resolves to 127.0.0.1
+  ansible.builtin.command: grep -qE '^127\.0\.0\.1[[:space:]].*\blocalhost\b' /etc/hosts
+  changed_when: false
+  failed_when: false
+  register: transit_vault_localhost
+
+- name: Alert localhost resolution error
+  ansible.builtin.fail:
+    msg: Unable to resolve localhost alias in /etc/hosts.
+  when: transit_vault_localhost.rc != 0
+
+- name: Check vault.local resolves to 127.0.0.1
+  ansible.builtin.command: grep -qE '^127\.0\.0\.1[[:space:]].*\bvault\.local\b' /etc/hosts
+  register: transit_vault_alias
+  changed_when: false
+  failed_when: false
+
+- name: Ensure vault.local in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    backrefs: true
+    regexp: '^(127\.0\.0\.1[[:space:]].*\blocalhost\b.*)$'
+    line: '\1 vault.local'
+  become: true
+  when: transit_vault_alias.rc != 0
+
+# - name: Verify vault.local now resolves to 127.0.0.1 in /etc/hosts (preserve for tests)
+#   ansible.builtin.command: grep -qE '^127\.0\.0\.1[[:space:]].*\bvault\.local\b' /etc/hosts
+#   changed_when: false
+#   register: vault_verified
+#   failed_when: vault_verified.rc != 0
+
+- name: Create /etc/vault.d
+  ansible.builtin.file:
+    path: /etc/vault.d
+    state: directory
+    owner: vault
+    group: vault
+    mode: "0750"
+  become: true
+
+- name: Create /opt/vault/data
+  ansible.builtin.file:
+    path: /opt/vault/data
+    state: directory
+    owner: vault
+    group: vault
+    mode: "0700"
+  become: true
+
+printf 'api_addr = "https://vault.local:8200"\n\nstorage "file" {\n  path = \
+  "/opt/vault/data"\n}\n\nlistener "tcp" {\n  address       = "0.0.0.0:8200"\n \
+   tls_cert_file = "/opt/vault/tls/tls.crt"\n  tls_key_file  = "/opt/vault/tls/tls.key"\n}\n' \
+   | sudo tee /etc/vault.d/vault.hcl > /dev/null
