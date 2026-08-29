@@ -8,7 +8,7 @@ This cluster uses `FluxCD`, Helm, and `Kustomization` to structure the rollout o
 * Helm offers a trusted repository of resources for Kubernetes that allow Secrets and ConfigMaps to pass specific values to public, professionally maintained Kubernetes manifests, allowing for complex, custom resources to be easily deployed, moved between different production environments, and still allow most of their maintenance to be handled by the developers.
 * `Kustomization` Breaks the complex resources of Kubernetes down into manageable pieces, organizing them according to a consistent, hierarchical structure whose `dependsOn` option `FluxCD` automatically follows in its reconciliations.
 
-This cluster's architecture relies on a system-installed HashiCorp Vault acting as a transit to unseal a cluster-situated Vault. This cluster Vault is the primary store for all secrets in the cluster. Secure provisioning of environment variables from this vault allows users to combine ease of use and best practices for Secrets Management, intended for local use but scalable for enterprises if necessary. OpenTofu is used to declaratively structure and implement secrets in the cluster.
+This cluster's architecture centers on a cluster-situated HashiCorp Vault, unsealed at boot via a GPG-encrypted keyfile. This cluster Vault is the primary store for all secrets in the cluster. Secure provisioning of environment variables from this vault allows users to combine ease of use and best practices for Secrets Management, intended for local use but scalable for enterprises if necessary. OpenTofu is used to declaratively structure and implement secrets in the cluster.
 
 The resources that make up the cluster are modularized to allow for easy pivoting between tasks and managing compute efficiently. The Core Database Architecture has been implemented, and the cluster monitoring services only become necessary to roll out when completing either ETL pipelines, or ML workflows. In theory, one can add the necessary modules to complete a Data Science task, then strip down to the Core Architecture afterwards.
 
@@ -46,7 +46,7 @@ These are the resources that make up the database core of the cluster. It is eng
 | Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`) every tool attaches a `Route` to: an HTTPS listener (443, wildcard cert) for web UIs, a raw TCP listener (5432) for Postgres. |
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
 | Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay/UI run their own cert-manager mTLS trust domain; UI exposed at `hubble.internal` on the shared Gateway. |
-| HashiCorp Vault (in-cluster) | `2.0.4` | Main Vault; auto-unseals against the host's native Transit Vault at pod start. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
+| HashiCorp Vault (in-cluster) | `2.0.4` | Main Vault; unseals itself at pod start via a GPG-encrypted keyfile on the host. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
 | Vault Secrets Operator (VSO) | `1.5.1` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. |
 | Vault Database & PKI Engines | Same as Vault | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
 | Headlamp | `0.45.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
@@ -349,9 +349,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
 │   ├── bash/
-│   │   ├── bootstrap-transit.sh         # Host Transit Vault install/init/unseal (see INSTALLATION.md)
 │   │   ├── bootstrap-cluster.sh         # First-time cluster bootstrap (see INSTALLATION.md)
-│   │   ├── start-cluster.sh             # Boot sequence: API, Transit Vault unseal, readiness checks
+│   │   ├── start-cluster.sh             # Boot sequence: API, in-cluster Vault unseal, readiness checks
 │   │   └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
 │   └── clusterpgis/                     # The installable clusterpgis package (src layout)
 │       ├── data/
@@ -369,24 +368,15 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── provider.tf
 │   │   ├── variables.tf
 │   │   └── versions.tf
-│   ├── vault/                           # Unified in-cluster Vault: KV mounts, Kubernetes auth, 2-tier PKI engine, DB secrets
-│   │   ├── .gitignore
-│   │   ├── database.tf
-│   │   ├── encryption.tf
-│   │   ├── kubernetes-auth.tf
-│   │   ├── kv.tf
-│   │   ├── pki.tf
-│   │   ├── provider.tf
-│   │   ├── variables.tf
-│   │   └── versions.tf
-│   └── vault-transit-bootstrap/         # Host Transit Vault: autounseal policy/token, vault-transit-secret/-ca
+│   └── vault/                           # Unified in-cluster Vault: KV mounts, Kubernetes auth, 2-tier PKI engine, DB secrets
 │       ├── .gitignore
-│       ├── agent-token-file.tf
+│       ├── database.tf
 │       ├── encryption.tf
-│       ├── kubernetes-secrets.tf
-│       ├── policy.tf
+│       ├── kubernetes-auth.tf
+│       ├── kv.tf
+│       ├── pki.tf
 │       ├── provider.tf
-│       ├── token.tf
+│       ├── variables.tf
 │       └── versions.tf
 ├── tests/
 │   ├── __init__.py
@@ -469,14 +459,13 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`vault/`**
     * **`vault-tls.yaml`** - Creates local CA (`vault-local-ca`), `vault-ca-issuer`, server certificate (`vault-server-cert`), cross-namespace CA bundle for VSO (`vault-ca-databases`), and the `vault-pki-issuer` ClusterIssuer backed by Vault's intermediate PKI engine with tokenrequest RBAC.
     * **`vault-release.yaml`** - `HelmRepository`/`HelmRelease` for the in-cluster Vault.
-    * **`vault-values.yaml`** - Helm values for transit auto-unseal against the host-level Vault, the Agent Injector disabled (VSO syncs secrets instead of sidecar injection).
-    * **`vault-networkpolicy.yaml`** - Scopes Vault ingress to `vso-system` and `cert-manager`, and egress to the host Transit Vault (`${HOST_IP}:8200`) and Postgres (`5432`).
+    * **`vault-values.yaml`** - Helm values for the in-cluster Vault (Shamir-sealed), the Agent Injector disabled (VSO syncs secrets instead of sidecar injection).
+    * **`vault-networkpolicy.yaml`** - Scopes Vault ingress to `vso-system` and `cert-manager`, and egress to Postgres (`5432`).
     * **`kustomization.yaml`** - Bundles the release, TLS resources, and values ConfigMap.
   * **`vault-secrets-operator/`**
     * **`vso-release.yaml`** - `HelmRepository`/`HelmRelease` for the Vault Secrets Operator.
     * **`vso-networkpolicy.yaml`** - Scopes VSO egress to kube-dns, kube-apiserver, and Vault API (`vault.vault.svc:8200`).
     * **`kustomization.yaml`**
-* **`terraform/`** OpenTofu modules configuring cluster-config and Vault's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine, host Transit Vault autounseal token). State is local and gitignored throughout; the Vault-facing modules additionally encrypt state at rest via OpenTofu's own `encryption` block, since they handle credentials. These modules are applied by `just bootstrap`; see `INSTALLATION.md` for what it does and how to apply them by hand if needed.
+* **`terraform/`** OpenTofu modules configuring cluster-config and Vault's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored throughout; the Vault-facing module additionally encrypts state at rest via OpenTofu's own `encryption` block, since it handles credentials. These modules are applied by `just bootstrap`; see `INSTALLATION.md` for what it does and how to apply them by hand if needed.
   * **`cluster-config/`** - Creates the `cluster-config` Secret in `flux-system` (`GATEWAY_IP`, `COREDNS_LAN_IP`, `HOST_IP`, `CILIUM_VERSION`), read by `gateway`, `coredns-custom`, `cilium`, `vault`, and `databases` via Flux's `postBuild.substituteFrom`. Values come from a `terraform.tfvars` you provide (gitignored), never committed. Applied first, right after k3s is installed
   * **`vault/`** - Unified module targeting the **in-cluster** Vault: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic role (`postgis-cluster`, `postgis-app-role`).
-  * **`vault-transit-bootstrap/`** - The transit engine/key, `autounseal-policy`, and the periodic orphan token the in-cluster Vault uses for auto-unseal. Targets the **host** Transit Vault (port 8200).

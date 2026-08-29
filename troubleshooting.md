@@ -27,24 +27,24 @@
 ## Vault
 
 * **Vault reports as "sealed" when it isn't (or prompts for a GPG password on every run)**
-  * **What's happening:** `vault status` returns `0` for unsealed, `2` for sealed, and another code if the command itself failed. Might be a bad certificate or a dead service. A check that greps the output for "false" treats a failed connection as sealed and goes looking for unseal keys.
+  * **What's happening:** `vault status` returns `0` for unsealed, `2` for sealed, and another code if the command itself failed. Might be a dead pod. A check that greps the output for "false" treats a failed connection as sealed and goes looking for unseal keys.
   * **How to fix it:** Diagnose using the exit code rather than the text output:
 
     ```bash
-    VAULT_ADDR=https://127.0.0.1:8200 VAULT_CACERT=/opt/vault/tls/tls.crt vault status; echo "exit=$?"
+    kubectl exec -n vault vault-0 -- vault status; echo "exit=$?"
     ```
 
-    Confirm the certificate path (`/opt/vault/tls/tls.crt`) is correct and readable (`sudo stat -c "%a %U:%G %n" /opt/vault/tls`). The certificate must include an `IP:127.0.0.1` SAN. If Vault is re-sealing without a reboot, check `systemctl status vault` for a crashing service.
+    If Vault is re-sealing without a pod restart, check `kubectl get pods -n vault` for a crashing container.
 
 * **GPG decryption fails**
   * **What's happening:** The script cannot read or decrypt the unseal keys.
   * **How to fix it:**
     1. Confirm `~/.vault-keys.gpg` exists and is mode `600` (`ls -l ~/.vault-keys.gpg`).
-    2. Confirm the passphrase matches the one set in Step 3.
-    3. *Technical note:* `vault operator unseal` does not accept piped input, so the script passes the key via `vault write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | vault write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
+    2. Confirm the passphrase matches the one used to create the keyfile.
+    3. *Technical note:* `vault operator unseal` does not accept piped input, so the script passes the key via `vault write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | kubectl exec -i -n vault vault-0 -- vault write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
 
 * **Vault throws a "permission denied" error**
-  * **How to fix it:** Check the policies and roles applied from `terraform/vault/`. `vault policy read postgis-policy` and `vault policy read cert-manager-pki-policy` show the paths granted; `vault read auth/kubernetes/role/postgis-role` and `vault read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
+  * **How to fix it:** Check the policies and roles applied from `terraform/vault/`. `kubectl exec -n vault vault-0 -- vault policy read postgis-policy` and `... vault policy read cert-manager-pki-policy` show the paths granted; `... vault read auth/kubernetes/role/postgis-role` and `... vault read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
 
 * **Secrets or certificates are failing to issue/mount into Kubernetes**
   * **How to fix it:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for dynamic credentials). For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why VSO or cert-manager could not pull or mint the resource.

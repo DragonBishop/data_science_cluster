@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# start-cluster.sh: Starts k3s, unseals host Transit Vault, and resumes CNPG cluster.
+# start-cluster.sh: Starts k3s, unseals the in-cluster Vault, and resumes CNPG cluster.
 #
 set -eu
 had_warnings=false
@@ -58,8 +58,7 @@ until kubectl get nodes | grep -q " Ready"; do
         echo "❌ ERROR: Node did not reach Ready within 5 minutes."
         echo "💡 TROUBLESHOOTING: A node with no CNI stays NotReady indefinitely."
         echo "   1. Is Cilium installed?  cilium status --wait"
-        echo "   2. On a first-time build, install it now (INSTALLATION.md Section 2,"
-        echo "      version pinned in infrastructure/cilium/cilium-release.yaml):"
+        echo "   2. On a first-time build, install it now:"
         echo "      helm upgrade --install cilium oci://quay.io/cilium/charts/cilium \\"
         echo "        --version <chart-version> --namespace kube-system -f infrastructure/cilium/cilium-values.yaml"
         exit 1
@@ -113,15 +112,13 @@ if changed:
         yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
 EOF
 
-# --- Step 6: Unseal Host Transit Vault ------------------------------------
+# --- Step 6: Unseal in-cluster Vault ------------------------------------
 # Check seal state and unseal via GPG keyfile if necessary
-export VAULT_ADDR="https://127.0.0.1:8200"
-export VAULT_CACERT="/opt/vault/tls/tls.crt"
 
 # Returns seal status: unsealed, sealed, or unreachable
-transit_seal_state() {
+incluster_seal_state() {
     local rc=0
-    vault status -format=json > /dev/null 2>&1 || rc=$?
+    kubectl exec -n vault vault-0 -- vault status -format=json > /dev/null 2>&1 || rc=$?
     if [ "$rc" -eq 0 ]; then
         echo unsealed
     elif [ "$rc" -eq 2 ]; then
@@ -131,31 +128,28 @@ transit_seal_state() {
     fi
 }
 
-echo "⏳ Checking host Transit Vault seal status..."
-seal_state=$(transit_seal_state)
+echo "⏳ Checking in-cluster Vault seal status..."
+seal_state=$(incluster_seal_state)
 if [ "$seal_state" = unsealed ]; then
-    echo "✅ Host Transit Vault already unsealed."
+    echo "✅ In-cluster Vault already unsealed."
 elif [ "$seal_state" = unreachable ]; then
-    echo "❌ ERROR: Cannot reach the host Transit Vault at $VAULT_ADDR. Continuing..."
-    vault status 2>&1 | sed 's/^/   /'
-    echo "💡 TROUBLESHOOTING: This is a connection or certificate failure, not a seal."
-    echo "   1. Does the CA file exist?  ls -l $VAULT_CACERT"
-    echo "   2. Does the cert cover this address? It needs an IP:127.0.0.1 SAN."
-    echo "   3. Is the service up?  systemctl status vault"
+    echo "❌ ERROR: Cannot reach vault-0. Continuing..."
+    kubectl exec -n vault vault-0 -- vault status 2>&1 | sed 's/^/   /'
+    echo "💡 TROUBLESHOOTING: Is the pod up?  kubectl get pods -n vault"
     had_warnings=true
 else
-    echo "🔒 Host Transit Vault is sealed."
+    echo "🔒 In-cluster Vault is sealed."
     KEYFILE="$HOME/.vault-keys.gpg"
     if [ ! -f "$KEYFILE" ]; then
-        echo "❌ ERROR: $KEYFILE not found. Cannot unseal Transit Vault."
-        echo "💡 TROUBLESHOOTING: Did you create the GPG keyfile (INSTALLATION.md Section 3)?. Continuing..."
+        echo "❌ ERROR: $KEYFILE not found. Cannot unseal Vault."
+        echo "💡 TROUBLESHOOTING: Did the GPG keyfile get created during 'just bootstrap' (INSTALLATION.md)?. Continuing..."
         had_warnings=true
     else
         # Decrypts keys and writes to Vault unseal endpoint via stdin
         decrypt_and_unseal() {
             gpg --quiet --decrypt "$KEYFILE" | while IFS= read -r key; do
                 [ -n "$key" ] || continue
-                if ! err=$(printf '%s\n' "$key" | vault write -format=json sys/unseal key=- 2>&1 >/dev/null); then
+                if ! err=$(printf '%s\n' "$key" | kubectl exec -i -n vault vault-0 -- vault write -format=json sys/unseal key=- 2>&1 >/dev/null); then
                     echo "   ⚠️ Key rejected by Vault: $err"
                 fi
             done
@@ -164,19 +158,19 @@ else
 
         echo "🔑 Enter GPG passphrase to decrypt unseal keys:"
         if ! decrypt_and_unseal; then
-            echo "❌ ERROR: GPG decryption failed or was cancelled. Transit Vault remains sealed. Continuing..."
+            echo "❌ ERROR: GPG decryption failed or was cancelled. Vault remains sealed. Continuing..."
             had_warnings=true
         fi
 
-        seal_state=$(transit_seal_state)
+        seal_state=$(incluster_seal_state)
         if [ "$seal_state" = unsealed ]; then
-            echo "✅ Host Transit Vault unsealed successfully."
+            echo "✅ In-cluster Vault unsealed successfully."
         elif [ "$seal_state" = sealed ]; then
-            echo "❌ ERROR: Transit Vault still sealed after applying keys from $KEYFILE. Continuing..."
+            echo "❌ ERROR: Vault still sealed after applying keys from $KEYFILE. Continuing..."
             had_warnings=true
         else
-            echo "❌ ERROR: Transit Vault unreachable after applying keys from $KEYFILE. Continuing..."
-            vault status 2>&1 | sed 's/^/   /'
+            echo "❌ ERROR: Vault unreachable after applying keys from $KEYFILE. Continuing..."
+            kubectl exec -n vault vault-0 -- vault status 2>&1 | sed 's/^/   /'
             had_warnings=true
         fi
     fi
