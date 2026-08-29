@@ -78,7 +78,7 @@
   # Ensure forward: yes, masquerade: yes, and 443/tcp is listed under ports
   ```
 
-* [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `terraform/cluster-config/terraform.tfvars` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
+* [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `infrastructure/cluster-config/cluster-config.yaml` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
 
   ```bash
   ping -c 2 -W 1 192.0.2.240
@@ -117,7 +117,7 @@ It fires one native prompt (a GPG passphrase, to encrypt the unseal keyfile).
 > [!NOTE]
 > The GPG keyfile's `~/.gnupg/gpg-agent.conf` cache-TTL setting only governs gpg-agent's own memory cache. On desktops with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be saved to the OS keyring, which bypasses that setting. Add `no-allow-external-cache` to the same file to stop that.
 
-Then run the bootstrap. `just bootstrap` (`src/bash/bootstrap-cluster.sh`) names the cluster (optional), installs k3s, applies `terraform/cluster-config`, installs Cilium, bootstraps Flux, unseals the host Transit Vault and applies `terraform/vault-transit-bootstrap`, initializes the in-cluster Vault and applies `terraform/vault`, then reconciles the remaining Flux Kustomizations. It's also idempotent:
+Then run the bootstrap. `just bootstrap` (`src/bash/bootstrap-cluster.sh`) names the cluster (optional), installs k3s, installs Cilium, bootstraps Flux (which picks up `infrastructure/cluster-config` along with everything else), unseals the host Transit Vault and applies `terraform/vault-transit-bootstrap`, initializes the in-cluster Vault and applies `terraform/vault`, then reconciles the remaining Flux Kustomizations. It's also idempotent:
 
 ```bash
 just bootstrap
@@ -140,6 +140,7 @@ flowchart TD
     %% Base Foundations
     crds["gateway-api-crds"] --> cilium["cilium"]
     ns["namespaces"] --> cilium
+    cc["cluster-config"] --> cilium
 
     %% Core Services & PKI
     cilium --> fluxpolicies["flux-system-policies"]
@@ -152,15 +153,17 @@ flowchart TD
     cnpg --> barman["barman-cloud"]
 
     vault --> gw["gateway"]
+    cc --> gw
     gw --> hubble["hubble"]
 
     %% Applications
     barman --> db["databases"]
     vault --> db
     gw --> db
+    cc --> db
 ```
 
-* `cilium` requires `gateway-api-crds` and `namespaces`.
+* `cilium` requires `gateway-api-crds`, `namespaces`, and `cluster-config` (for `GATEWAY_IP`/`COREDNS_LAN_IP` substitution).
 * `flux-system-policies` and `cert-manager` depend on `cilium`.
 * `vault` depends on `cert-manager` (for `vault-server-cert` TLS bootstrap).
 * `vault-secrets-operator` and `gateway` depend on `vault` (for PKI and secrets sync).
