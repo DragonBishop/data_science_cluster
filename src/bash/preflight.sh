@@ -13,7 +13,7 @@ echo ""
 
 # --- Required host tooling ---------------------------------------------------
 echo "== Host tooling =="
-for bin in vault tofu helm flux gh gpg openssl python3 just; do
+for bin in tofu helm flux gh gpg openssl python3 just; do
     if command -v "$bin" >/dev/null 2>&1; then
         echo "✅ $bin"
     else
@@ -114,24 +114,6 @@ for ip in 192.0.2.240 192.0.2.242; do
         echo "✅ $ip free"
     fi
 done
-echo ""
-
-# --- Host Transit Vault state (informational) ---------------------------------
-echo "== Host Transit Vault =="
-if command -v vault >/dev/null 2>&1 && [ -f /opt/vault/tls/tls.crt ]; then
-    transit_state=$(VAULT_ADDR="https://127.0.0.1:8200" VAULT_CACERT="/opt/vault/tls/tls.crt" vault status -format=json 2>/dev/null | python3 -c "import json,sys
-try:
-    print(json.load(sys.stdin).get('initialized', False))
-except Exception:
-    print('unknown')" 2>/dev/null || echo unknown)
-    case "$transit_state" in
-        True) echo "✅ initialized" ;;
-        False) echo "⚠️  installed but not yet initialized. Run: just bootstrap-transit" ;;
-        *) echo "⚠️  installed but status unreachable/unknown" ;;
-    esac
-else
-    echo "ℹ️  not yet deployed. Run: just bootstrap-transit"
-fi
 echo ""
 
 if [ "$had_errors" = true ]; then

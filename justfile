@@ -6,13 +6,9 @@ default:
 
 # --- Bootstrap (first-time install, see INSTALLATION.md) -------------------
 
-# Read-only host readiness check (tooling, gh auth, firewall, reserved IPs, transit Vault state)
+# Read-only host readiness check (tooling, gh auth, firewall, reserved IPs)
 preflight:
   ./src/bash/preflight.sh
-
-# Deploy and initialize the host Transit Vault
-bootstrap-transit:
-  ./src/bash/bootstrap-transit.sh
 
 # Run the full first-time cluster bootstrap
 bootstrap:

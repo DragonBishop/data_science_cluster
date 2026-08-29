@@ -9,18 +9,6 @@ had_warnings=false
 # --- Step 0: Preflight -------------------------------------------------------
 echo "🚀 Starting cluster bootstrap..."
 ./src/bash/preflight.sh
-export VAULT_ADDR="https://127.0.0.1:8200"
-export VAULT_CACERT="/opt/vault/tls/tls.crt"
-transit_initialized=$(vault status -format=json 2>/dev/null | python3 -c "import json,sys
-try:
-    print(json.load(sys.stdin).get('initialized', False))
-except Exception:
-    print('unknown')" 2>/dev/null || echo unknown)
-unset VAULT_ADDR VAULT_CACERT
-if [ "$transit_initialized" != "True" ]; then
-    echo "❌ ERROR: Host Transit Vault not found or not initialized. Run: ./src/bash/bootstrap-transit.sh"
-    exit 1
-fi
 echo "✅ Preflight checks passed."
 echo ""
 
@@ -116,44 +104,9 @@ until kubectl get pods -n vault vault-0 2>/dev/null | grep -q "Running"; do
 done
 echo ""
 
-# --- Step 6: vault-transit-bootstrap Terraform --------------------------------
-export VAULT_ADDR="https://127.0.0.1:8200"
-export VAULT_CACERT="/opt/vault/tls/tls.crt"
-
-rc=0
-vault status > /dev/null 2>&1 || rc=$?
-if [ "$rc" -eq 2 ]; then
-    echo "🔒 Host Transit Vault is sealed, unsealing via ~/.vault-keys.gpg..."
-    echo "🔑 Enter GPG passphrase to decrypt unseal keys:"
-    gpg --quiet --decrypt "$HOME/.vault-keys.gpg" | while IFS= read -r key; do
-        [ -n "$key" ] || continue
-        printf '%s\n' "$key" | vault write sys/unseal key=- > /dev/null
-    done
-elif [ "$rc" -ne 0 ]; then
-    echo "❌ ERROR: Cannot reach the host Transit Vault at $VAULT_ADDR."
-    vault status
-    exit 1
-fi
-export VAULT_TOKEN
-VAULT_TOKEN=$(cat ~/.vault-token)
-read -rs -p "State encryption passphrase (used for both Terraform state files): " TF_VAR_state_encryption_passphrase; echo
-export TF_VAR_state_encryption_passphrase
-cd terraform/vault-transit-bootstrap
-tofu init
-tofu apply -auto-approve
-cd ../..
-
-if ! systemctl is-active --quiet vault-agent-autounseal; then
-    sudo systemctl start vault-agent-autounseal
-    echo "✅ vault-agent-autounseal started."
-fi
-
-unset VAULT_ADDR VAULT_CACERT VAULT_TOKEN
-echo "✅ terraform/vault-transit-bootstrap applied."
-echo ""
-
-# --- Step 7: In-cluster Vault init --------------------------------------------
+# --- Step 6: In-cluster Vault init, unseal, GPG keyfile ----------------------
 incluster_root_token=""
+KEYFILE="$HOME/.vault-keys.gpg"
 
 incluster_status_json=$(kubectl exec -n vault vault-0 -- vault status -format=json 2>/dev/null) || incluster_status_json=""
 incluster_initialized=$(printf '%s' "$incluster_status_json" | python3 -c "import json,sys
@@ -164,20 +117,57 @@ except Exception:
 
 if [ "$incluster_initialized" = "True" ]; then
     echo "✅ In-cluster Vault already initialized."
+    rc=0
+    kubectl exec -n vault vault-0 -- vault status > /dev/null 2>&1 || rc=$?
+    if [ "$rc" -eq 2 ]; then
+        echo "🔒 In-cluster Vault is sealed, unsealing via $KEYFILE..."
+        echo "🔑 Enter GPG passphrase to decrypt unseal keys:"
+        gpg --quiet --decrypt "$KEYFILE" | while IFS= read -r key; do
+            [ -n "$key" ] || continue
+            printf '%s\n' "$key" | kubectl exec -i -n vault vault-0 -- vault write -format=json sys/unseal key=- > /dev/null
+        done
+        echo "✅ In-cluster Vault unsealed."
+    elif [ "$rc" -ne 0 ]; then
+        echo "❌ ERROR: Cannot reach vault-0."
+        kubectl exec -n vault vault-0 -- vault status
+        exit 1
+    fi
 else
     echo "🔑 Initializing in-cluster Vault (SAVE THESE — shown once)..."
     incluster_init_json=$(kubectl exec -n vault vault-0 -- vault operator init -format=json)
     echo "$incluster_init_json" | python3 -m json.tool
+    mapfile -t incluster_unseal_keys < <(echo "$incluster_init_json" | python3 -c "import json,sys; [print(k) for k in json.load(sys.stdin)['unseal_keys_b64'][:3]]")
     incluster_root_token=$(echo "$incluster_init_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['root_token'])")
-    echo "✅ In-cluster Vault initialized."
+
+    for k in "${incluster_unseal_keys[@]}"; do
+        printf '%s\n' "$k" | kubectl exec -i -n vault vault-0 -- vault write -format=json sys/unseal key=- > /dev/null
+    done
+    echo "✅ In-cluster Vault initialized and unsealed."
+
+    echo "🔑 Enter a GPG passphrase to encrypt the unseal keyfile:"
+    WORKDIR=/dev/shm/vault-setup
+    mkdir -p "$WORKDIR"
+    printf '%s\n' "${incluster_unseal_keys[@]}" > "$WORKDIR/keys.txt"
+    gpg --batch --yes --cipher-algo AES256 --s2k-mode 3 --s2k-count 65011712 --s2k-digest-algo SHA512 --symmetric "$WORKDIR/keys.txt"
+    mv "$WORKDIR/keys.txt.gpg" "$KEYFILE"
+    chmod 600 "$KEYFILE"
+    rm -rf "$WORKDIR"
+    mkdir -p ~/.gnupg
+    if ! grep -q "^default-cache-ttl 0$" ~/.gnupg/gpg-agent.conf 2>/dev/null; then
+        printf 'default-cache-ttl 0\nmax-cache-ttl 0\n' >> ~/.gnupg/gpg-agent.conf
+    fi
+    gpgconf --reload gpg-agent
+    echo "✅ Wrote $KEYFILE."
 fi
 echo ""
 
-# --- Step 8: vault Terraform (engines, policies) -----------------------------
+# --- Step 7: vault Terraform (engines, policies) -----------------------------
 just vault-pf
 if [ -z "$incluster_root_token" ]; then
     read -rs -p "In-cluster Vault root token (this run resumed after init already ran — paste it): " incluster_root_token; echo
 fi
+read -rs -p "State encryption passphrase (used for terraform/vault's state file): " TF_VAR_state_encryption_passphrase; echo
+export TF_VAR_state_encryption_passphrase
 export VAULT_ADDR="https://127.0.0.1:8210"
 export VAULT_CACERT="$HOME/.vault-certs/vault-internal-ca.crt"
 export VAULT_TOKEN="$incluster_root_token"
@@ -217,16 +207,17 @@ tofu init
 tofu apply -auto-approve
 cd ../..
 echo "== Verify Vault Configuration =="
-vault kv get secret/postgis
-vault kv get secret/seaweedfs
-vault read pki_int/roles/internal-server
-vault read auth/kubernetes/role/cert-manager-pki-role
+printf '%s\n' "$incluster_root_token" | kubectl exec -i -n vault vault-0 -- vault login -no-print -
+kubectl exec -n vault vault-0 -- vault kv get secret/postgis
+kubectl exec -n vault vault-0 -- vault kv get secret/seaweedfs
+kubectl exec -n vault vault-0 -- vault read pki_int/roles/internal-server
+kubectl exec -n vault vault-0 -- vault read auth/kubernetes/role/cert-manager-pki-role
 
 unset VAULT_ADDR VAULT_CACERT VAULT_TOKEN TF_VAR_state_encryption_passphrase TF_VAR_postgres_superuser_password TF_VAR_s3_access_key TF_VAR_s3_secret_key TF_VAR_secrets_wo_version
 echo "✅ terraform/vault applied and verified."
 echo ""
 
-# --- Step 9: Flux kustomization rollout + verification ----------------------
+# --- Step 8: Flux kustomization rollout + verification ----------------------
 echo "🚀 Reconciling remaining Flux kustomizations..."
 flux reconcile kustomization flux-system --with-source || { echo "⚠️  flux-system reconcile reported an issue, continuing."; had_warnings=true; }
 flux reconcile kustomization gateway || { echo "⚠️  gateway not yet converged (expected until vault-pki-issuer settles); it will retry automatically."; had_warnings=true; }
@@ -244,10 +235,10 @@ if ! helm get values cilium -n kube-system 2>/dev/null | grep -q hubble; then
 fi
 echo ""
 
-# --- Step 10: Summary ---------------------------------------------------------
+# --- Step 9: Summary ---------------------------------------------------------
 echo "Generated app secrets (postgres/S3) are stored in Vault — retrieve anytime with:"
-echo "  vault kv get secret/postgis"
-echo "  vault kv get secret/seaweedfs"
+echo "  kubectl exec -n vault vault-0 -- vault kv get secret/postgis"
+echo "  kubectl exec -n vault vault-0 -- vault kv get secret/seaweedfs"
 echo ""
 echo "If migrating existing data, see INSTALLATION.md Requirements for the pg_restore command."
 echo ""

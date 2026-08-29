@@ -103,30 +103,22 @@ git clone https://github.com/DragonBishop/data_science_cluster.git
 cd data_science_cluster
 ```
 
-Deploy the host Transit Vault first — `just bootstrap` requires it and checks for it at startup. `just bootstrap-transit` (`src/bash/bootstrap-transit.sh`) installs `vault`, generates the host Transit Vault's TLS cert, enables the systemd service, initializes and unseals it, writes a GPG-encrypted unseal keyfile for `start-cluster.sh` to use on future starts, and installs the `vault-agent-autounseal` systemd service. It's idempotent — safe to re-run:
-
-```bash
-just bootstrap-transit
-```
-
-It fires one native prompt (a GPG passphrase, to encrypt the unseal keyfile).
-
-> [!IMPORTANT]
-> Store the generated 5 unseal keys and initial root token in a secure password manager immediately. Data cannot be recovered if these keys are lost.
-
-> [!NOTE]
-> The GPG keyfile's `~/.gnupg/gpg-agent.conf` cache-TTL setting only governs gpg-agent's own memory cache. On desktops with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be saved to the OS keyring, which bypasses that setting. Add `no-allow-external-cache` to the same file to stop that.
-
-Then run the bootstrap. `just bootstrap` (`src/bash/bootstrap-cluster.sh`) names the cluster (optional), installs k3s, installs Cilium, bootstraps Flux (which picks up `infrastructure/cluster-config` along with everything else), unseals the host Transit Vault and applies `terraform/vault-transit-bootstrap`, initializes the in-cluster Vault and applies `terraform/vault`, then reconciles the remaining Flux Kustomizations. It's also idempotent:
+`just bootstrap` (`src/bash/bootstrap-cluster.sh`) runs the full first-time setup — k3s, Cilium, Flux, the in-cluster Vault, `terraform/vault`. It's idempotent — safe to re-run:
 
 ```bash
 just bootstrap
 ```
 
-It fires one native prompt (an OpenTofu state-encryption passphrase), then a final summary reprints the in-cluster Vault's recovery keys and root token — **printed the moment they're generated and unrecoverable if lost.**
+It fires two native prompts (a GPG passphrase, an OpenTofu state-encryption passphrase), then reprints the in-cluster Vault's unseal keys and root token — **printed the moment they're generated and unrecoverable if lost.**
 
 > [!IMPORTANT]
-> Save the in-cluster Vault's recovery keys and root token in your password manager immediately.
+> Store the generated unseal keys and root token in a secure password manager immediately. Data cannot be recovered if these keys are lost.
+
+> [!NOTE]
+> The in-cluster Vault unseals itself on future starts via a GPG-encrypted keyfile (`~/.vault-keys.gpg`) written during this step — see `start-cluster.sh`.
+
+> [!NOTE]
+> The GPG keyfile's `~/.gnupg/gpg-agent.conf` cache-TTL setting only governs gpg-agent's own memory cache. On desktops with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be saved to the OS keyring, which bypasses that setting. Add `no-allow-external-cache` to the same file to stop that.
 
 > [!NOTE]
 > If reinstalling on a host with an existing k3s installation, run `/usr/local/bin/k3s-uninstall.sh` and verify Cilium BPF mounts are unmounted (`mount | grep bpf`; see `troubleshooting.md`) before re-running `just bootstrap`. Reinstalling wipes in-cluster Vault and PVC data.
