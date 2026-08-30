@@ -9,13 +9,13 @@ injector:
 server:
   image:
     repository: "hashicorp/vault"
-    tag: "2.0.4"
+    tag: "${VAULT_IMAGE_TAG}"
   resources:
     requests:
-      cpu: 14m
-      memory: 350Mi
+      cpu: ${VAULT_CPU_REQUEST}
+      memory: ${VAULT_MEM_REQUEST}
     limits:
-      memory: 800Mi
+      memory: ${VAULT_MEM_LIMIT}
   extraEnvironmentVars:
     VAULT_CACERT: /vault/userconfig/vault-server-cert/ca.crt
 

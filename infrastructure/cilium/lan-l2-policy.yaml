@@ -5,6 +5,6 @@ metadata:
   name: lan-l2-policy
 spec:
   interfaces:
-    - ^enp9s0$
+    - "^${LAN_INTERFACE}$"
   externalIPs: false
   loadBalancerIPs: true
