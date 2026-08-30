@@ -30,6 +30,10 @@
 
 - name: Install k3s
   ansible.builtin.shell: set -o pipefail && curl -sFL https://get.k3s.io | sh -
+  args:
+    executable: /bin/bash
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
   changed_when: false
   failed_when: false
   when: k3s_installed.rc != 0

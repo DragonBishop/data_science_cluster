@@ -1,0 +1,89 @@
+---
+# Absolute repo root; file lookups below need it since plain relative paths
+# don't reliably resolve regardless of invocation cwd.
+repo_root: "{{ playbook_dir }}/../.."
+
+# Parsed from infrastructure/cluster-config/cluster-config.yaml
+cluster_config: "{{ (lookup('file', repo_root + '/infrastructure/cluster-config/cluster-config.yaml') | from_yaml).data }}"
+
+# Every value routed from cluster_config, mirrors its grouping.
+
+# --- Networking ---
+gateway_ip: "{{ cluster_config.GATEWAY_IP }}"
+coredns_lan_ip: "{{ cluster_config.COREDNS_LAN_IP }}"
+lan_lb_pool_stop: "{{ cluster_config.LAN_LB_POOL_STOP }}"
+lan_interface: "{{ cluster_config.LAN_INTERFACE }}"
+k3s_api_host: "{{ cluster_config.K3S_API_HOST }}"
+k3s_api_port: "{{ cluster_config.K3S_API_PORT }}"
+pod_cidr: "{{ cluster_config.POD_CIDR }}"
+git_forge_host: "{{ cluster_config.GIT_FORGE_HOST }}"
+
+# --- Versions ---
+k3s_version: "{{ cluster_config.K3S_VERSION }}"
+gateway_api_version: "{{ cluster_config.GATEWAY_API_VERSION }}"
+cilium_version: "{{ cluster_config.CILIUM_VERSION }}"
+cert_manager_version: "{{ cluster_config.CERT_MANAGER_VERSION }}"
+cnpg_version: "{{ cluster_config.CNPG_VERSION }}"
+barman_cloud_version: "{{ cluster_config.BARMAN_CLOUD_VERSION }}"
+vault_version: "{{ cluster_config.VAULT_VERSION }}"
+vso_version: "{{ cluster_config.VSO_VERSION }}"
+vault_image_tag: "{{ cluster_config.VAULT_IMAGE_TAG }}"
+seaweedfs_version: "{{ cluster_config.SEAWEEDFS_VERSION }}"
+postgres_version: "{{ cluster_config.POSTGRES_VERSION }}"
+postgis_version: "{{ cluster_config.POSTGIS_VERSION }}"
+
+# --- Topology ---
+cilium_operator_replicas: "{{ cluster_config.CILIUM_OPERATOR_REPLICAS }}"
+postgis_instances: "{{ cluster_config.POSTGIS_INSTANCES }}"
+
+# --- Resource sizing: Cilium / Hubble ---
+cilium_cpu_request: "{{ cluster_config.CILIUM_CPU_REQUEST }}"
+cilium_mem_request: "{{ cluster_config.CILIUM_MEM_REQUEST }}"
+cilium_mem_limit: "{{ cluster_config.CILIUM_MEM_LIMIT }}"
+cilium_operator_cpu_request: "{{ cluster_config.CILIUM_OPERATOR_CPU_REQUEST }}"
+cilium_operator_mem_request: "{{ cluster_config.CILIUM_OPERATOR_MEM_REQUEST }}"
+cilium_operator_mem_limit: "{{ cluster_config.CILIUM_OPERATOR_MEM_LIMIT }}"
+cilium_envoy_cpu_request: "{{ cluster_config.CILIUM_ENVOY_CPU_REQUEST }}"
+cilium_envoy_mem_request: "{{ cluster_config.CILIUM_ENVOY_MEM_REQUEST }}"
+hubble_relay_mem_request: "{{ cluster_config.HUBBLE_RELAY_MEM_REQUEST }}"
+hubble_relay_mem_limit: "{{ cluster_config.HUBBLE_RELAY_MEM_LIMIT }}"
+hubble_ui_frontend_mem_request: "{{ cluster_config.HUBBLE_UI_FRONTEND_MEM_REQUEST }}"
+hubble_ui_frontend_mem_limit: "{{ cluster_config.HUBBLE_UI_FRONTEND_MEM_LIMIT }}"
+hubble_ui_backend_mem_request: "{{ cluster_config.HUBBLE_UI_BACKEND_MEM_REQUEST }}"
+hubble_ui_backend_mem_limit: "{{ cluster_config.HUBBLE_UI_BACKEND_MEM_LIMIT }}"
+
+# --- Resource sizing: Vault ---
+vault_cpu_request: "{{ cluster_config.VAULT_CPU_REQUEST }}"
+vault_mem_request: "{{ cluster_config.VAULT_MEM_REQUEST }}"
+vault_mem_limit: "{{ cluster_config.VAULT_MEM_LIMIT }}"
+
+# --- Resource sizing: cert-manager ---
+cert_manager_cpu_request: "{{ cluster_config.CERT_MANAGER_CPU_REQUEST }}"
+cert_manager_mem_request: "{{ cluster_config.CERT_MANAGER_MEM_REQUEST }}"
+cert_manager_mem_limit: "{{ cluster_config.CERT_MANAGER_MEM_LIMIT }}"
+cert_manager_webhook_cpu_request: "{{ cluster_config.CERT_MANAGER_WEBHOOK_CPU_REQUEST }}"
+cert_manager_webhook_mem_request: "{{ cluster_config.CERT_MANAGER_WEBHOOK_MEM_REQUEST }}"
+cert_manager_webhook_mem_limit: "{{ cluster_config.CERT_MANAGER_WEBHOOK_MEM_LIMIT }}"
+cert_manager_cainjector_cpu_request: "{{ cluster_config.CERT_MANAGER_CAINJECTOR_CPU_REQUEST }}"
+cert_manager_cainjector_mem_request: "{{ cluster_config.CERT_MANAGER_CAINJECTOR_MEM_REQUEST }}"
+cert_manager_cainjector_mem_limit: "{{ cluster_config.CERT_MANAGER_CAINJECTOR_MEM_LIMIT }}"
+cert_manager_startupapicheck_cpu_request: "{{ cluster_config.CERT_MANAGER_STARTUPAPICHECK_CPU_REQUEST }}"
+cert_manager_startupapicheck_mem_request: "{{ cluster_config.CERT_MANAGER_STARTUPAPICHECK_MEM_REQUEST }}"
+cert_manager_startupapicheck_mem_limit: "{{ cluster_config.CERT_MANAGER_STARTUPAPICHECK_MEM_LIMIT }}"
+
+# --- Resource sizing: CNPG operator / barman-cloud plugin ---
+cnpg_cpu_request: "{{ cluster_config.CNPG_CPU_REQUEST }}"
+cnpg_mem_request: "{{ cluster_config.CNPG_MEM_REQUEST }}"
+cnpg_mem_limit: "{{ cluster_config.CNPG_MEM_LIMIT }}"
+barman_cloud_cpu_request: "{{ cluster_config.BARMAN_CLOUD_CPU_REQUEST }}"
+barman_cloud_mem_request: "{{ cluster_config.BARMAN_CLOUD_MEM_REQUEST }}"
+barman_cloud_mem_limit: "{{ cluster_config.BARMAN_CLOUD_MEM_LIMIT }}"
+
+# --- Resource sizing: PostGIS cluster ---
+postgis_cpu_request: "{{ cluster_config.POSTGIS_CPU_REQUEST }}"
+postgis_mem_request: "{{ cluster_config.POSTGIS_MEM_REQUEST }}"
+postgis_mem_limit: "{{ cluster_config.POSTGIS_MEM_LIMIT }}"
+
+# --- Storage sizing ---
+postgis_storage_size: "{{ cluster_config.POSTGIS_STORAGE_SIZE }}"
+postgis_storage_class: "{{ cluster_config.POSTGIS_STORAGE_CLASS }}"
