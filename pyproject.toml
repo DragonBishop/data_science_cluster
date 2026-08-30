@@ -8,7 +8,6 @@ dependencies = [
   "geoalchemy2>=0.20.0",
   "geopandas>=1.1.4",
   "hvac>=2.4.0",
-  "ipykernel>=7.3.0",
   "kubernetes>=32.0.1",
   "pandas>=3.0.5",
   "prefect>=3.8.4",
@@ -33,7 +32,6 @@ ml = [
 dev = [
   "pytest>=9.1.1",
   "pytest-cov>=7.1.0",
-  "nbwipers>=0.7.1",
   "prek>=0.4.14",
   "molecule>=26.8.0",
 ]
@@ -67,13 +65,9 @@ packages = ["src/clusterpgis"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [
-  "*.ipynb",
   ".venv",
   "uv.lock",
 ]
-
-[tool.nbwipers]
-strip-kernel-info = true
 
 [tool.rumdl]
 disable = ["MD013"]

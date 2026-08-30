@@ -179,10 +179,9 @@ install:
 update:
   uv sync -U --all-groups --all-extras --inexact
 
-# Set up git filters (nbwipers) and pre-commit hooks (prek)
+# Set up git pre-commit hooks (prek)
 git-setup:
   @[ -d .git ] || git init
-  uv run nbwipers install local
   uv run prek install
 
 # Run tests and generate coverage reports

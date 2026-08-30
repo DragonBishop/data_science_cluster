@@ -5,6 +5,7 @@ repos:
     -   id: trailing-whitespace
     -   id: end-of-file-fixer
     -   id: check-yaml
+        args: [--allow-multiple-documents]
     -   id: check-merge-conflict
 -   repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
@@ -12,10 +13,10 @@ repos:
     hooks:
       # Run the linter.
     -   id: ruff-check
-        types_or: [python, pyi, jupyter]
+        types_or: [python, pyi]
         # Run the formatter.
     -   id: ruff-format
-        types_or: [python, pyi, jupyter]
+        types_or: [python, pyi]
 -   repo: https://github.com/rvben/rumdl-pre-commit
     rev: v0.1.58
     hooks:

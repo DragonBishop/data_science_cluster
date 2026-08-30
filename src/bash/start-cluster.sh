@@ -22,7 +22,7 @@ start_k3s_service() {
         exit 1
     fi
 }
-# 
+#
 k3s_alive() {
     systemctl is-active --quiet k3s 2>/dev/null
 }

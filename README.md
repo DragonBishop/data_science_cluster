@@ -238,7 +238,7 @@ One-time, first-install setup: see `INSTALLATION.md` for Requirements and what t
 | `just setup` | Set up development environment | Runs `install` and configures repository git filters |
 | `just install` | Install Python dependencies | Syncs local virtual environment using `uv sync` |
 | `just update` | Update dependencies & lockfile | Upgrades packages to latest compatible versions and updates `uv.lock` |
-| `just git-setup` | Configure git filters & hooks | Installs `nbwipers` notebook clean filters and `prek` pre-commit hooks |
+| `just git-setup` | Configure git filters & hooks | Installs `prek` pre-commit hooks |
 | `just test-cov` | Run tests with coverage | Executes pytest suite and generates lcov, terminal, HTML, and XML coverage reports |
 
 ---
@@ -415,9 +415,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── vault-release.yaml
 │       ├── vault-tls.yaml
 │       └── vault-values.yaml
-├── notebooks/
-│   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
-│   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
 │   ├── bash/
 │   │   ├── preflight.sh                 # Read-only host readiness checks
@@ -514,9 +511,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
   * **`vault-secrets-operator/`**: `kustomization.yaml`, `vso-networkpolicy.yaml`, `vso-release.yaml`
   * **`vault/`**: `kustomization.yaml`, `kustomizeconfig.yaml`, `vault-networkpolicy.yaml`, `vault-release.yaml`, `vault-tls.yaml`, `vault-values.yaml`
-* **`notebooks/`**
-  * **`data_analysis_notebook.ipynb`**: Exploratory analysis and findings.
-  * **`data_processing_notebook.ipynb`**: Data cleaning and integrity checks.
 * **`src/`**
   * **`src/bash/`**:
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).

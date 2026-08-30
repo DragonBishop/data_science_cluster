@@ -26,4 +26,3 @@ spec:
         - ports:
             - port: "8200"
               protocol: TCP
-
