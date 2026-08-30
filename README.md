@@ -2,19 +2,18 @@
 
 This repository provisions a self-contained local Kubernetes cluster tailored for Data Science development using a PostgreSQL server with the PostGIS extension enabled. It provides a scalable foundation for data science projects, such as Extract, Transform, and Load (ETL) pipelines and Machine Learning (ML).
 
-This cluster uses `FluxCD`, Helm, and `Kustomization` to structure the rollout of the cluster:
+This cluster utilizes Ansible, `FluxCD`, `Kustomization`, and Helm to structure and manage the rollout of the environment:
 
-* Flux provides the GitOps controller that monitors the cluster for any state drift, using git as the source of truth and running periodic reconciliation checks.
-* Helm offers a trusted repository of resources for Kubernetes that allow Secrets and ConfigMaps to pass specific values to public, professionally maintained Kubernetes manifests, allowing for complex, custom resources to be easily deployed, moved between different production environments, and still allow most of their maintenance to be handled by the developers.
-* `Kustomization` Breaks the complex resources of Kubernetes down into manageable pieces, organizing them according to a consistent, hierarchical structure whose `dependsOn` option `FluxCD` automatically follows in its reconciliations.
+* **Ansible:** Automates idempotent host-level bootstrapping, system dependencies, and initial cluster initialization.
+* **Flux CD:** Continuously reconciles cluster state against this Git repository as the single source of truth to prevent configuration drift.
+* **Helm:** Manages third-party packages via `HelmRelease` manifests, allowing clean parameterization through ConfigMaps and Secrets while preserving upstream maintainability.
+* **Kustomization:** Breaks down complex Kubernetes resources into manageable, hierarchical modules whose explicit dependency chains (`dependsOn`) Flux follows during reconciliation.
 
-This cluster's architecture centers on a cluster-situated HashiCorp Vault, unsealed at boot via a GPG-encrypted keyfile. This cluster Vault is the primary store for all secrets in the cluster. Secure provisioning of environment variables from this vault allows users to combine ease of use and best practices for Secrets Management, intended for local use but scalable for enterprises if necessary. OpenTofu is used to declaratively structure and implement secrets in the cluster.
+Cluster secrets and security rely on an in-cluster HashiCorp Vault, unsealed automatically at boot via a host-managed GPG-encrypted keyfile. OpenTofu declaratively configures Vault's internal engines, access policies, and Kubernetes authentication backend. Integrated with `cert-manager`, Vault's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, while the Vault Secrets Operator (VSO) securely injects static configuration and short-lived, dynamic database credentials directly into application workloads.
 
-The resources that make up the cluster are modularized to allow for easy pivoting between tasks and managing compute efficiently. The Core Database Architecture has been implemented, and the cluster monitoring services only become necessary to roll out when completing either ETL pipelines, or ML workflows. In theory, one can add the necessary modules to complete a Data Science task, then strip down to the Core Architecture afterwards.
+Workloads are structured modularly to maximize compute efficiency on local hardware. The cluster maintains an always-on core database architecture, powered by PostgreSQL/PostGIS (CloudNativePG), Cilium eBPF networking and Gateway routing, and SeaweedFS S3-compatible storage. Specialized modules for cluster observability, ETL data pipelines, and machine learning workflows can be deployed dynamically when performing specific data science tasks and torn down afterward to conserve memory and CPU.
 
-*Note* A DevContainer template for managing the cluster through VSCode is provided, as a bare-bones skeleton for you customize as you wish.
-
-**Developed and tested on Ubuntu.**
+Customizable VS Code DevContainer configurations are provided in `.devcontainer/` for both host-side cluster administration and in-cluster runtime workloads. The entire platform has been developed and tested on both **Ubuntu** and **Fedora**.
 
 ## Table of Contents
 
@@ -302,9 +301,13 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 ## Repository Structure
 
 ```text
-├── .devcontainer/                       # VSCode Dev Container to manage the cluster
-│   ├── devcontainer.json
-│   └── Dockerfile
+├── .devcontainer/                       # VS Code Dev Container configurations
+│   ├── cluster/                         # In-cluster ETL/pipeline runtime container
+│   │   ├── devcontainer.json
+│   │   └── Dockerfile
+│   └── host/                            # Host-level cluster management container
+│       ├── devcontainer.json
+│       └── Dockerfile
 ├── .github/
 │   ├── ISSUE_TEMPLATE/                  # Bug/documentation/feature/tech-debt issue forms
 │   │   ├── bug_report.yml
@@ -459,9 +462,13 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 
 ### File Descriptions
 
-* **`.devcontainer/`** - Provision a VSCode Dev Container
-  * **`devcontainer.json`**: Configuration file for a devcontainer designed to be platform and engine agnostic.
-  * **`Dockerfile`**: Contains build instructions to provision a Data Science focused Dev Container.
+* **`.devcontainer/`** - VS Code Dev Container configurations providing isolated development environments.
+  * **`cluster/`**: In-cluster ETL and pipeline runtime environment.
+    * **`devcontainer.json`**: Devcontainer configuration targeting the in-cluster runtime image with DataOps, Jupyter, and Python tooling.
+    * **`Dockerfile`**: Builds the in-cluster runtime image with Python 3.14, `uv`, and the VS Code CLI tunnel daemon (`code tunnel`).
+  * **`host/`**: Host-level cluster management container with host networking (`--network=host`) and mounted Kubernetes contexts.
+    * **`devcontainer.json`**: Devcontainer configuration mounting host `~/.kube/config` and `~/.config/helm` with direct access to local k3s services.
+    * **`Dockerfile`**: Builds the host management environment including `kubectl`, `helm`, `kubectl-cnpg`, `cilium`, `hubble`, `flux`, `postgresql-client`, `just`, and `uv`.
 * **`.github/`**
   * **`ISSUE_TEMPLATE/`**: Issue templates for bug reports, documentation updates, feature proposals, and technical-debt resolution.
   * **`workflows/ci.yml`**: On pull requests, via `astral-sh/setup-uv`: a `lint` job runs `ruff check`/`ruff format --check`, and a `tests` job runs `pytest` with coverage against `src/clusterpgis`.
