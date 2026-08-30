@@ -8,4 +8,4 @@
     - { role: cilium, tags: [cilium, bootstrap] }
     - { role: opentofu, tags: [vault, bootstrap]}
     - { role: vault, tags: [vault, bootstrap]}
-    - { role: fluxcd, tags: [flux, bootstrap]}
+    - { role: flux, tags: [flux, bootstrap]}
