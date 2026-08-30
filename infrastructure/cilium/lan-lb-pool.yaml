@@ -6,4 +6,4 @@ metadata:
 spec:
   blocks:
     - start: "${GATEWAY_IP}"
-      stop: "192.0.2.250"
+      stop: "${LAN_LB_POOL_STOP}"

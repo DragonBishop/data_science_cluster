@@ -39,12 +39,17 @@ dumps/
 backups/
 
 # Python tooling
+.venv
 .venv/
 __pycache__/
 .ipynb_checkpoints/
+.ruff_cache
 .ruff_cache/
+.rumdl_cache
+.rumdl_cache/
 
 # Test coverage and build artifacts
+.pytest_cache
 .pytest_cache/
 .coverage
 .coverage.*

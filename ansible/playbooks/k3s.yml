@@ -1,0 +1,11 @@
+---
+- name: Provision k3s Data Science Cluster
+  hosts: localhost
+  become: false
+
+  roles:
+    - { role: k3s, tags: [k3s] }
+    - { role: cilium, tags: [cilium] }
+    - { role: flux, tags: [flux] }
+    - { role: vault, tags: [vault] }
+    - { role: opentofu, tags: [opentofu, vault] }

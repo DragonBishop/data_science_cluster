@@ -1,0 +1,5 @@
+---
+vault_namespace: vault
+vault_pod: vault-0
+vault_keyfile: "{{ ansible_env.HOME }}/.vault-keys.gpg"
+vault_root_token: ""

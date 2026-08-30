@@ -1,0 +1,135 @@
+---
+- name: Ensure secrets directory exists
+  ansible.builtin.file:
+    path: "{{ opentofu_secrets_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Remove secrets write-only version to force S3 key rotation
+  ansible.builtin.file:
+    path: "{{ opentofu_secrets_wo_version_file }}"
+    state: absent
+  when: opentofu_rotate_vault_secrets | bool
+
+- name: Check whether a secrets write-only version is already recorded
+  ansible.builtin.stat:
+    path: "{{ opentofu_secrets_wo_version_file }}"
+  register: opentofu_secrets_wo_version_stat
+
+- name: Record a new secrets write-only version
+  ansible.builtin.copy:
+    dest: "{{ opentofu_secrets_wo_version_file }}"
+    content: "{{ ansible_date_time.epoch }}"
+    mode: "0600"
+  when: not opentofu_secrets_wo_version_stat.stat.exists
+
+- name: Read secrets write-only version
+  ansible.builtin.slurp:
+    src: "{{ opentofu_secrets_wo_version_file }}"
+  register: opentofu_secrets_wo_version_raw
+
+# /dev/null: ansible.builtin.password's no-persist form.
+- name: Resolve secrets to feed Terraform
+  ansible.builtin.set_fact:
+    opentofu_secrets_wo_version: "{{ opentofu_secrets_wo_version_raw.content | b64decode | trim }}"
+    opentofu_s3_access_key: "{{ lookup('ansible.builtin.password', '/dev/null', length=20, chars=['hexdigits']) }}"
+    opentofu_s3_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null', length=40, chars=['hexdigits']) }}"
+  no_log: true
+
+- name: Resolve in-cluster Vault root token
+  when: vault_root_token | default('') | length == 0
+  block:
+    - name: Prompt for in-cluster Vault root token
+      ansible.builtin.pause:
+        prompt: "In-cluster Vault root token"
+        echo: false
+      register: opentofu_root_token_prompt
+      no_log: true
+
+    # vault_root_token is shared with the vault role's default, not opentofu-local.
+    - name: Store in-cluster Vault root token  # noqa: var-naming[no-role-prefix]
+      ansible.builtin.set_fact:
+        vault_root_token: "{{ opentofu_root_token_prompt.user_input }}"
+      no_log: true
+
+- name: Prompt for the Terraform state encryption passphrase
+  ansible.builtin.pause:
+    prompt: "State encryption passphrase for terraform/vault's state file"
+    echo: false
+  register: opentofu_state_encryption_prompt
+  no_log: true
+
+- name: Prompt for the Postgres superuser password
+  ansible.builtin.pause:
+    prompt: "Postgres superuser password"
+    echo: false
+  register: opentofu_postgres_superuser_prompt
+  no_log: true
+
+- name: Set up local port-forward and CA cert for in-cluster Vault
+  ansible.builtin.command: just vault-pf
+  args:
+    chdir: "{{ repo_root }}"
+  changed_when: true
+
+- name: Apply terraform/vault
+  cloud.terraform.terraform:
+    project_path: "{{ repo_root }}/terraform/vault"
+    binary_path: "{{ opentofu_binary }}"
+    state: present
+  environment:
+    VAULT_TOKEN: "{{ vault_root_token }}"
+    TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_prompt.user_input }}"
+    TF_VAR_postgres_superuser_password: "{{ opentofu_postgres_superuser_prompt.user_input }}"
+    TF_VAR_s3_access_key: "{{ opentofu_s3_access_key }}"
+    TF_VAR_s3_secret_key: "{{ opentofu_s3_secret_key }}"
+    TF_VAR_secrets_wo_version: "{{ opentofu_secrets_wo_version }}"
+  no_log: true
+
+# Sanity checks.
+# - name: Log in to in-cluster Vault CLI
+#   ansible.builtin.command:
+#     cmd: kubectl exec -i -n {{ vault_namespace }} {{ vault_pod }} -- vault login -no-print -
+#     stdin: "{{ vault_root_token }}\n"
+#   environment:
+#     KUBECONFIG: "{{ ansible_env.HOME }}/.kube/config"
+#   no_log: true
+#   changed_when: true
+#
+# - name: Verify Postgres secret is readable
+#   kubernetes.core.k8s_exec:
+#     namespace: "{{ vault_namespace }}"
+#     pod: "{{ vault_pod }}"
+#     command: vault kv get secret/postgis
+#   register: opentofu_verify_postgis
+#   changed_when: false
+#   failed_when: opentofu_verify_postgis.rc != 0
+#   no_log: true
+#
+# - name: Verify SeaweedFS secret is readable
+#   kubernetes.core.k8s_exec:
+#     namespace: "{{ vault_namespace }}"
+#     pod: "{{ vault_pod }}"
+#     command: vault kv get secret/seaweedfs
+#   register: opentofu_verify_seaweedfs
+#   changed_when: false
+#   failed_when: opentofu_verify_seaweedfs.rc != 0
+#   no_log: true
+#
+# - name: Verify internal-server PKI role
+#   kubernetes.core.k8s_exec:
+#     namespace: "{{ vault_namespace }}"
+#     pod: "{{ vault_pod }}"
+#     command: vault read pki_int/roles/internal-server
+#   register: opentofu_verify_pki_role
+#   changed_when: false
+#   failed_when: opentofu_verify_pki_role.rc != 0
+#
+# - name: Verify cert-manager Kubernetes auth role
+#   kubernetes.core.k8s_exec:
+#     namespace: "{{ vault_namespace }}"
+#     pod: "{{ vault_pod }}"
+#     command: vault read auth/kubernetes/role/cert-manager-pki-role
+#   register: opentofu_verify_cert_manager_role
+#   changed_when: false
+#   failed_when: opentofu_verify_cert_manager_role.rc != 0
