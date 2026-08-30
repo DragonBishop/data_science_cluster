@@ -167,6 +167,8 @@ if [ -z "$incluster_root_token" ]; then
 fi
 read -rs -p "State encryption passphrase (used for terraform/vault's state file): " TF_VAR_state_encryption_passphrase; echo
 export TF_VAR_state_encryption_passphrase
+read -rs -p "Postgres superuser password (never written to disk, entered fresh each run): " TF_VAR_postgres_superuser_password; echo
+export TF_VAR_postgres_superuser_password
 export VAULT_ADDR="https://127.0.0.1:8210"
 export VAULT_CACERT="$HOME/.vault-certs/vault-internal-ca.crt"
 export VAULT_TOKEN="$incluster_root_token"
@@ -185,21 +187,19 @@ else
         SECRETS_WO_VERSION=1
         echo "🔑 Generating app secrets (first run)..."
     fi
-    TF_VAR_postgres_superuser_password=$(openssl rand -base64 24)
     TF_VAR_s3_access_key=$(openssl rand -hex 10)
     TF_VAR_s3_secret_key=$(openssl rand -hex 20)
     mkdir -p "$(dirname "$SECRETS_ENV_FILE")"
     (
         umask 077
         {
-            printf 'TF_VAR_postgres_superuser_password=%q\n' "$TF_VAR_postgres_superuser_password"
             printf 'TF_VAR_s3_access_key=%q\n' "$TF_VAR_s3_access_key"
             printf 'TF_VAR_s3_secret_key=%q\n' "$TF_VAR_s3_secret_key"
             printf 'SECRETS_WO_VERSION=%s\n' "$SECRETS_WO_VERSION"
         } > "$SECRETS_ENV_FILE"
     )
 fi
-export TF_VAR_postgres_superuser_password TF_VAR_s3_access_key TF_VAR_s3_secret_key
+export TF_VAR_s3_access_key TF_VAR_s3_secret_key
 export TF_VAR_secrets_wo_version="$SECRETS_WO_VERSION"
 cd terraform/vault
 tofu init

@@ -1,8 +1,7 @@
 #!/bin/bash
 #
 # preflight.sh: Read-only host readiness checks (see INSTALLATION.md
-# Requirements). Makes no changes to the system: firewall rules and the
-# reserved IP range are checked, never modified, here or anywhere else.
+# Requirements). Makes no changes to the system.
 #
 set -eu
 had_warnings=false
@@ -40,8 +39,7 @@ fi
 echo ""
 
 # --- Host firewall (advisory only) -------------------------------------------
-# Distro is classified explicitly so an unrecognized/unverified distro is
-# never mistaken for "no firewall, you're fine"; every outcome outside the
+# Distro is classified explicitly so every outcome outside the
 # two verified families is a visible warning, never a silent pass.
 echo "== Host firewall =="
 distro_family="unknown"
