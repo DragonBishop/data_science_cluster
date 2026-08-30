@@ -73,7 +73,7 @@ done
 echo "✅ Cilium ${CILIUM_VERSION} installed, node Ready."
 echo ""
 
-# --- Step 4: Bootstrap Flux ---------------------------------------------------
+# --- Step 4: Bootstrap Flux, reconcile vault kustomization, wait for vault-0 -
 if flux get kustomizations >/dev/null 2>&1; then
     echo "✅ Flux already bootstrapped, skipping."
 else
@@ -90,7 +90,6 @@ fi
 echo "✅ Flux reconciling."
 echo ""
 
-# --- Step 5: Reconcile vault kustomization, wait for vault-0 -----------------
 flux reconcile kustomization vault
 retries=0
 until kubectl get pods -n vault vault-0 2>/dev/null | grep -q "Running"; do
@@ -104,7 +103,7 @@ until kubectl get pods -n vault vault-0 2>/dev/null | grep -q "Running"; do
 done
 echo ""
 
-# --- Step 6: In-cluster Vault init, unseal, GPG keyfile ----------------------
+# --- Step 5: In-cluster Vault init, unseal, GPG keyfile ----------------------
 incluster_root_token=""
 KEYFILE="$HOME/.vault-keys.gpg"
 
@@ -161,7 +160,7 @@ else
 fi
 echo ""
 
-# --- Step 7: vault Terraform (engines, policies) -----------------------------
+# --- Step 6: vault Terraform (engines, policies) -----------------------------
 just vault-pf
 if [ -z "$incluster_root_token" ]; then
     read -rs -p "In-cluster Vault root token (this run resumed after init already ran, paste it): " incluster_root_token; echo
@@ -217,25 +216,10 @@ unset VAULT_ADDR VAULT_CACERT VAULT_TOKEN TF_VAR_state_encryption_passphrase TF_
 echo "✅ terraform/vault applied and verified."
 echo ""
 
-# --- Step 8: Flux kustomization rollout + verification ----------------------
-echo "🚀 Reconciling remaining Flux kustomizations..."
-flux reconcile kustomization flux-system --with-source || { echo "⚠️  flux-system reconcile reported an issue, continuing."; had_warnings=true; }
-flux reconcile kustomization gateway || { echo "⚠️  gateway not yet converged (expected until vault-pki-issuer settles); it will retry automatically."; had_warnings=true; }
-flux reconcile kustomization databases || { echo "⚠️  databases not yet converged (expected until vault-pki-issuer settles); it will retry automatically."; had_warnings=true; }
-flux get kustomizations || had_warnings=true
+# Reference only, superseded by the Ansible flux role:
+# kubectl rollout restart deployment coredns -n kube-system || true
 
-kubectl rollout restart deployment coredns -n kube-system || true
-kubectl wait --for=condition=Available --timeout=120s -n cert-manager deployment --all || { echo "⚠️  cert-manager deployments not all Available yet."; had_warnings=true; }
-kubectl get clusterissuer vault-pki-issuer || had_warnings=true
-kubectl rollout status deployment -n cnpg-system plugin-barman-cloud --timeout=60s || { echo "⚠️  barman-cloud rollout not finished yet."; had_warnings=true; }
-
-if ! helm get values cilium -n kube-system 2>/dev/null | grep -q hubble; then
-    echo "⏳ Hubble config not yet reflected, reconciling cilium HelmRelease..."
-    flux reconcile helmrelease cilium -n kube-system --timeout 5m || { echo "⚠️  Could not reconcile Hubble config."; had_warnings=true; }
-fi
-echo ""
-
-# --- Step 9: Summary ---------------------------------------------------------
+# --- Step 7: Summary ---------------------------------------------------------
 echo "Generated app secrets (postgres/S3) are stored in Vault. Retrieve anytime with:"
 echo "  kubectl exec -n vault vault-0 -- vault kv get secret/postgis"
 echo "  kubectl exec -n vault vault-0 -- vault kv get secret/seaweedfs"

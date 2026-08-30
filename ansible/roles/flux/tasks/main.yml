@@ -1,0 +1,47 @@
+- name: Obtain token for github bootstrap
+  ansible.builtin.command: gh auth token
+  register: flux_auth_token
+  changed_when: false
+
+- name: Flux bootstrap to github repo
+  ansible.builtin.command: >
+    flux bootstrap github
+    --owner=DragonBishop
+    --repository=data_science_cluster
+    --branch=main
+    --path=clusters/local
+    --personal
+  environment:
+    GITHUB_TOKEN: "{{ flux_auth_token.stdout }}"
+  register: flux_bootstrap_result
+  changed_when: true
+
+- name: Flux reconcile vault kustomization
+  kubernetes.core.k8s:
+    state: patched
+    kind: Kustomization
+    api_version: kustomize.toolkit.fluxcd.io/v1
+    name: vault
+    namespace: flux-system
+    definition:
+      metadata:
+        annotations:
+          reconcile.fluxcd.io/requestedAt: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 60
+  register: flux_vault_kustomization
+  failed_when: false
+
+
+- name: Monitor reconciliation until clear.
+  kubernetes.core.k8s_info:
+    kind: Pod
+    name: vault-0
+    namespace: vault
+  until: flux_vault.resources[0].status.phase == "Running"
+  register: flux_vault
+  retries: 18
+  delay: 10
