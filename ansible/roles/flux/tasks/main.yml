@@ -11,6 +11,7 @@
     --branch=main
     --path=clusters/local
     --personal
+    --network-policy=false
   environment:
     GITHUB_TOKEN: "{{ flux_auth_token.stdout }}"
   register: flux_bootstrap_result

@@ -860,6 +860,8 @@ dependencies = [
     { name = "geopandas" },
     { name = "hvac" },
     { name = "ipykernel" },
+    { name = "jsonpatch" },
+    { name = "kubernetes" },
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "prefect" },
@@ -901,6 +903,8 @@ requires-dist = [
     { name = "geopandas", specifier = ">=1.1.4" },
     { name = "hvac", specifier = ">=2.4.0" },
     { name = "ipykernel", specifier = ">=7.3.0" },
+    { name = "jsonpatch", specifier = ">=1.33" },
+    { name = "kubernetes", specifier = ">=36.0.3" },
     { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "pandas", specifier = ">=3.0.5" },
     { name = "prefect", specifier = ">=3.8.4" },
@@ -1153,6 +1157,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e0/4d/f332313098c1de1b2d2ff91cf2674415cc7cddab2ca1b01ae29774bd5fdf/docstring_parser-0.18.0.tar.gz", hash = "sha256:292510982205c12b1248696f44959db3cdd1740237a968ea1e2e7a900eeb2015", size = 29341, upload-time = "2026-04-14T04:09:19.867Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/5f/ed01f9a3cdffbd5a008556fc7b2a08ddb1cc6ace7effa7340604b1d16699/docstring_parser-0.18.0-py3-none-any.whl", hash = "sha256:b3fcbed555c47d8479be0796ef7e19c2670d428d72e96da63f3a40122860374b", size = 22484, upload-time = "2026-04-14T04:09:18.638Z" },
+]
+
+[[package]]
+name = "durationpy"
+version = "0.11"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b0/5d/5f8571bd5dedc80863191621ac4be001f3f3dd8315d2ec078705dab7dec1/durationpy-0.11.tar.gz", hash = "sha256:181898e1ae282e288f0a2291829656bf1b6b3aadf30a97993b85db4943642905", size = 3582, upload-time = "2026-08-26T13:56:00.991Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/c4/ebdf7837bc4ef6fd98cfb013c28855bb358467bf86c1af011bbc21e21df0/durationpy-0.11-py3-none-any.whl", hash = "sha256:a739fe2b8972c250ff72f8e2c488d18cf25f7b852f49ee76048775d5171df30c", size = 4133, upload-time = "2026-08-26T13:55:59.456Z" },
 ]
 
 [[package]]
@@ -1854,6 +1867,27 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e3/9a/59a6f6ae6f938c15076be2c21b6cedea973d71bb1349ec84fa485fab82cf/kiwisolver-1.5.1-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:ab620eb663952455271ac37f9aaad86b73c969c02f11f53cea405b38e96a4300", size = 2395634, upload-time = "2026-08-28T10:28:03.977Z" },
     { url = "https://files.pythonhosted.org/packages/e9/2d/8982c1fb7926da5bb7ed60318c3665b5c3f941447271ac982960a11b8637/kiwisolver-1.5.1-cp315-cp315t-win_amd64.whl", hash = "sha256:cb6fae641357ed2f6e533c0d3c6504a4a5703621a50c89459e46051d56b61140", size = 75379, upload-time = "2026-08-28T10:28:06.307Z" },
     { url = "https://files.pythonhosted.org/packages/07/78/ba7b6dfa1708b82b373ac056928a30c545d5c1a627df9839dcec3c6c1881/kiwisolver-1.5.1-cp315-cp315t-win_arm64.whl", hash = "sha256:b390aec180a7c054919c04898835e1c77bced23ea8383eb2c570213bf25d1a86", size = 73011, upload-time = "2026-08-28T10:28:07.578Z" },
+]
+
+[[package]]
+name = "kubernetes"
+version = "36.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "certifi" },
+    { name = "durationpy" },
+    { name = "python-dateutil" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "requests-oauthlib" },
+    { name = "six" },
+    { name = "urllib3" },
+    { name = "websocket-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ca/57/b07b96353f902aa1bdbe00e878e3a12a137977d03a962479785576aa8ec9/kubernetes-36.0.3.tar.gz", hash = "sha256:36993ed25ce59b789c9341473a228fcf268504a2fec7c2b2b1531d73072e5ce7", size = 2337528, upload-time = "2026-07-13T20:38:12.128Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/30/a96d47df739689ac0001ade0afefc16e3b477fc2fb426b568515fdc8afce/kubernetes-36.0.3-py2.py3-none-any.whl", hash = "sha256:8fde9241c4b298e6374a069dcf728359b4e72c2fb29489a975ba4e1c047cf10f", size = 4618066, upload-time = "2026-07-13T20:38:10.172Z" },
 ]
 
 [[package]]
@@ -4144,6 +4178,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/36/57/ed58088fafdf4c55a0ad6bde846502567645424d7ebf325230b9237f4085/wcwidth-0.8.3.tar.gz", hash = "sha256:d128512515fbf4612e0ff21fd6380399210318b7b54a9af59dff8454cf9730eb", size = 1458450, upload-time = "2026-08-28T18:10:06.875Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c4/0e/57f6bb3024a597b2e8ec4aee710ffe62ddc95af2e2bb1ee7a7abdc22c68c/wcwidth-0.8.3-py3-none-any.whl", hash = "sha256:d5b73dba6158a595ec9370350e7f2637bcac8d6c5e4fde34f30fcffb6103a5e4", size = 331669, upload-time = "2026-08-28T18:10:04.909Z" },
+]
+
+[[package]]
+name = "websocket-client"
+version = "1.9.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/1d/ae61bca2a99d0735311b7b11b81931279b4a45c74a45034d31b39ad565d1/websocket_client-1.9.1.tar.gz", hash = "sha256:2e0916d2e28ccc82702f2f70aa7a654588e84a5cf2f5914099638b33547f2b7c", size = 82936, upload-time = "2026-08-29T13:45:40.346Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/0e/7b514f6eb4bf518a9af0285c1a78297467b95fd7d1ebab08b41f8889ab2f/websocket_client-1.9.1-py3-none-any.whl", hash = "sha256:19a871b81d0022589dd9e8e1b1891e0516d32113837dfb987d7691b6a425a1e2", size = 95460, upload-time = "2026-08-29T13:45:39.255Z" },
 ]
 
 [[package]]

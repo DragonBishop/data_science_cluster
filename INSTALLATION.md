@@ -138,6 +138,31 @@ tofu version
   # Ensure cilium_host, cilium_net, cilium_vxlan, and lxc+ are ALLOW IN
   ```
 
+* **Fedora / RHEL (`firewalld`)**:
+  `ufw` is not present on Fedora and RHEL; `firewalld` serves the same role. Allow forwarding, masquerading, DNS, and add Cilium interfaces/subnets to `trusted`:
+
+  ```bash
+  sudo firewall-cmd --zone=FedoraWorkstation --add-service=dns --permanent
+  sudo firewall-cmd --zone=FedoraWorkstation --add-port=443/tcp --permanent
+  sudo firewall-cmd --zone=FedoraWorkstation --add-masquerade --permanent
+  sudo firewall-cmd --zone=FedoraWorkstation --add-forward --permanent
+  sudo firewall-cmd --zone=trusted --add-service=dns --permanent
+  sudo firewall-cmd --zone=trusted --add-source=10.42.0.0/16 --permanent
+  sudo firewall-cmd --zone=trusted --add-source=10.43.0.0/16 --permanent
+  sudo firewall-cmd --zone=trusted --add-interface=cilium_host --permanent
+  sudo firewall-cmd --zone=trusted --add-interface=cilium_net --permanent
+  sudo firewall-cmd --zone=trusted --add-interface=cilium_vxlan --permanent
+  sudo firewall-cmd --zone=trusted --add-interface=lxc+ --permanent
+  sudo firewall-cmd --reload
+  ```
+
+  Verify rule status:
+
+  ```bash
+  sudo firewall-cmd --list-all
+  sudo firewall-cmd --zone=trusted --list-all
+  ```
+
 * [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `terraform/cluster-config/terraform.tfvars` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
 
 ```bash
