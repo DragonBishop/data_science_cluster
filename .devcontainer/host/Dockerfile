@@ -31,7 +31,7 @@ RUN curl -LsSfo /tmp/get-helm-3 https://raw.githubusercontent.com/helm/helm/main
  && rm /tmp/get-helm-3 \
  && helm version
 
-# cnpg plugin — `kubectl cnpg status`/`backup`/`psql`. Requires kubectl above.
+# cnpg plugin: `kubectl cnpg status`/`backup`/`psql`. Requires kubectl above.
 RUN curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/install-cnpg-plugin.sh \
       | sh -s -- -b /usr/local/bin \
  && kubectl cnpg version
@@ -44,7 +44,7 @@ RUN CILIUM_CLI_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/cil
  && rm /tmp/cilium-linux-amd64.tar.gz \
  && cilium version --client
 
-# Hubble CLI — separate binary from the Cilium CLI above.
+# Hubble CLI, separate binary from the Cilium CLI above.
 RUN HUBBLE_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/hubble/master/stable.txt) \
  && curl -LsSfo /tmp/hubble-linux-amd64.tar.gz \
       "https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-amd64.tar.gz" \

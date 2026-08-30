@@ -7,6 +7,46 @@
     server_side_apply:
       enabled: true
 
+- name: Create temp file for rendered Cilium Helm values
+  ansible.builtin.tempfile:
+    state: file
+    suffix: cilium-values.yaml
+  register: cilium_values_rendered
+
+# Test to ensure no leakage of envs.
+# - name: Verify every ${VAR} in cilium-values.yaml is a known cluster-config key
+#  ansible.builtin.assert:
+#    that:
+#      - (lookup('file', repo_root + '/infrastructure/cilium/cilium-values.yaml') | regex_findall('\$\{(\w+)\}') | difference(cluster_config.keys())) == []
+#    fail_msg: >-
+#      cilium-values.yaml references a ${VAR} not defined in cluster-config.yaml:
+#      envsubst would silently substitute it with an empty string.
+
+- name: Substitute cluster-config values into Cilium Helm values
+  ansible.builtin.command:
+    cmd: envsubst
+    stdin: "{{ lookup('file', repo_root + '/infrastructure/cilium/cilium-values.yaml') }}"
+  environment: "{{ cluster_config }}"
+  register: cilium_values_substituted
+  changed_when: false
+
+# Shell-builtin alternative (no envsubst dependency): comment out the task
+# above and uncomment this one to use it.
+# - name: Substitute cluster-config values into Cilium Helm values (shell builtin, no envsubst)
+#   ansible.builtin.shell:
+#     cmd: |
+#       while IFS= read -r line || [ -n "$line" ]; do eval "echo \"$line\""; done < "{{ repo_root }}/infrastructure/cilium/cilium-values.yaml"
+#     executable: /bin/bash
+#   environment: "{{ cluster_config }}"
+#   register: cilium_values_substituted
+#   changed_when: false
+
+- name: Write rendered Cilium Helm values
+  ansible.builtin.copy:
+    dest: "{{ cilium_values_rendered.path }}"
+    content: "{{ cilium_values_substituted.stdout }}"
+    mode: "0600"
+
 - name: Install Cilium
   kubernetes.core.helm:
     name: cilium
@@ -14,30 +54,9 @@
     chart_version: "{{ cilium_version }}"
     release_namespace: kube-system
     values_files:
-      - "{{ repo_root }}/infrastructure/cilium/cilium-values.yaml"
-    values:
-      k8sServiceHost: "{{ k3s_api_host }}"
-      k8sServicePort: "{{ k3s_api_port | int }}"
-      resources:
-        requests:
-          cpu: "{{ cilium_cpu_request }}"
-          memory: "{{ cilium_mem_request }}"
-        limits:
-          memory: "{{ cilium_mem_limit }}"
-      operator:
-        replicas: "{{ cilium_operator_replicas | int }}"
-        resources:
-          requests:
-            cpu: "{{ cilium_operator_cpu_request }}"
-            memory: "{{ cilium_operator_mem_request }}"
-          limits:
-            memory: "{{ cilium_operator_mem_limit }}"
-      envoy:
-        resources:
-          requests:
-            cpu: "{{ cilium_envoy_cpu_request }}"
-            memory: "{{ cilium_envoy_mem_request }}"
-      ipam:
-        operator:
-          clusterPoolIPv4PodCIDRList:
-            - "{{ pod_cidr }}"
+      - "{{ cilium_values_rendered.path }}"
+
+- name: Clean up rendered Cilium Helm values
+  ansible.builtin.file:
+    path: "{{ cilium_values_rendered.path }}"
+    state: absent

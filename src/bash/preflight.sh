@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # preflight.sh: Read-only host readiness checks (see INSTALLATION.md
-# Requirements). Makes no changes to the system — firewall rules and the
+# Requirements). Makes no changes to the system: firewall rules and the
 # reserved IP range are checked, never modified, here or anywhere else.
 #
 set -eu
@@ -13,7 +13,7 @@ echo ""
 
 # --- Required host tooling ---------------------------------------------------
 echo "== Host tooling =="
-for bin in tofu helm flux gh gpg openssl python3 just; do
+for bin in tofu helm flux gh gpg openssl python3 just envsubst; do
     if command -v "$bin" >/dev/null 2>&1; then
         echo "✅ $bin"
     else
@@ -41,7 +41,7 @@ echo ""
 
 # --- Host firewall (advisory only) -------------------------------------------
 # Distro is classified explicitly so an unrecognized/unverified distro is
-# never mistaken for "no firewall, you're fine" — every outcome outside the
+# never mistaken for "no firewall, you're fine"; every outcome outside the
 # two verified families is a visible warning, never a silent pass.
 echo "== Host firewall =="
 distro_family="unknown"
@@ -59,10 +59,10 @@ fi
 case "$distro_family" in
 debian)
     if ! command -v ufw >/dev/null 2>&1; then
-        echo "⚠️  ufw not found on a Debian/Ubuntu host — expected on this distro family. Verify firewall state manually (see INSTALLATION.md Requirements)."
+        echo "⚠️  ufw not found on a Debian/Ubuntu host (expected on this distro family). Verify firewall state manually (see INSTALLATION.md Requirements)."
         had_warnings=true
     elif ! sudo ufw status | grep -q "Status: active"; then
-        echo "✅ ufw present and inactive — no rules to check"
+        echo "✅ ufw present and inactive: no rules to check"
     else
         fwd_policy=$(grep -E '^DEFAULT_FORWARD_POLICY' /etc/default/ufw 2>/dev/null | cut -d'"' -f2)
         ufw_rules=$(sudo ufw status verbose 2>/dev/null)
@@ -82,10 +82,10 @@ debian)
     ;;
 fedora)
     if ! command -v firewall-cmd >/dev/null 2>&1; then
-        echo "⚠️  firewall-cmd not found on a Fedora/RHEL host — expected on this distro family. Verify firewall state manually (see INSTALLATION.md Requirements)."
+        echo "⚠️  firewall-cmd not found on a Fedora/RHEL host (expected on this distro family). Verify firewall state manually (see INSTALLATION.md Requirements)."
         had_warnings=true
     elif ! sudo firewall-cmd --state >/dev/null 2>&1; then
-        echo "✅ firewalld present and inactive — no rules to check"
+        echo "✅ firewalld present and inactive: no rules to check"
     else
         zone=$(firewall-cmd --get-default-zone)
         zone_info=$(firewall-cmd --zone="$zone" --list-all)
@@ -98,7 +98,7 @@ fedora)
     fi
     ;;
 *)
-    echo "⚠️  Unrecognized distro ('$distro_id') — firewall check is only verified for Ubuntu/Debian and Fedora/RHEL. Skipping automated check; verify manually per INSTALLATION.md Requirements."
+    echo "⚠️  Unrecognized distro ('$distro_id'): firewall check is only verified for Ubuntu/Debian and Fedora/RHEL. Skipping automated check; verify manually per INSTALLATION.md Requirements."
     had_warnings=true
     ;;
 esac
@@ -108,7 +108,7 @@ echo ""
 echo "== Reserved IP range (192.0.2.240-192.0.2.250) =="
 for ip in 192.0.2.240 192.0.2.242; do
     if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
-        echo "⚠️  $ip already answers on the LAN — check for a DHCP conflict (see INSTALLATION.md Requirements)."
+        echo "⚠️  $ip already answers on the LAN: check for a DHCP conflict (see INSTALLATION.md Requirements)."
         had_warnings=true
     else
         echo "✅ $ip free"
@@ -117,10 +117,10 @@ done
 echo ""
 
 if [ "$had_errors" = true ]; then
-    echo "❌ Preflight failed — resolve the errors above before bootstrapping."
+    echo "❌ Preflight failed: resolve the errors above before bootstrapping."
     exit 1
 elif [ "$had_warnings" = true ]; then
-    echo "⚠️  Preflight passed with warnings — review above."
+    echo "⚠️  Preflight passed with warnings: review above."
 else
     echo "✅ Preflight passed."
 fi

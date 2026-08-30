@@ -16,10 +16,10 @@
 
 ## Requirements
 
-* [ ] **Host tooling** — Flux CLI, OpenTofu, Helm, GitHub CLI (`gh`), PostgreSQL client (`psql`), `just`:
+* [ ] **Host tooling**: Flux CLI, OpenTofu, Helm, GitHub CLI (`gh`), PostgreSQL client (`psql`), `just`, `envsubst`:
 
   ```bash
-  sudo apt install -y postgresql-client-common postgresql-client just
+  sudo apt install -y postgresql-client-common postgresql-client just gettext-base
   curl -s https://fluxcd.io/install.sh | sudo bash
   flux check --pre
 
@@ -40,9 +40,15 @@
   sudo apt update && sudo apt install -y gh
   ```
 
-* [ ] **GitHub CLI authenticated** — `gh auth login`. Used by the bootstrap script for `flux bootstrap github`.
+  **Fedora/RHEL**: `envsubst` ships in the `gettext-envsubst` package (older releases: `gettext`):
 
-* [ ] **Host firewall (`ufw`)** — if `ufw` is active, allow Cilium's network interfaces and set the default forward policy to `ACCEPT`:
+  ```bash
+  sudo dnf install -y gettext-envsubst || sudo dnf install -y gettext
+  ```
+
+* [ ] **GitHub CLI authenticated**: `gh auth login`. Used by the bootstrap script for `flux bootstrap github`.
+
+* [ ] **Host firewall (`ufw`)**: if `ufw` is active, allow Cilium's network interfaces and set the default forward policy to `ACCEPT`:
 
   ```bash
   sudo ufw allow in on cilium_host
@@ -61,7 +67,7 @@
   # Ensure cilium_host, cilium_net, cilium_vxlan, and lxc+ are ALLOW IN
   ```
 
-  **Fedora (`firewalld`)** — `ufw` isn't present on Fedora; `firewalld` serves the same role. Cilium's per-pod interfaces get random names each time (`lxcXXXX`), which `firewalld` can't wildcard-match the way `ufw` does, so allow forwarding/masquerade on your active zone instead of trying to allow interfaces by name:
+  **Fedora (`firewalld`)**: `ufw` isn't present on Fedora; `firewalld` serves the same role. Cilium's per-pod interfaces get random names each time (`lxcXXXX`), which `firewalld` can't wildcard-match the way `ufw` does, so allow forwarding/masquerade on your active zone instead of trying to allow interfaces by name:
 
   ```bash
   sudo firewall-cmd --permanent --zone="$(firewall-cmd --get-default-zone)" --add-port=443/tcp
@@ -69,7 +75,7 @@
   sudo firewall-cmd --reload
   ```
 
-  This is best-effort, not a guarantee — desktop-oriented zones (e.g. Fedora Workstation's default zone) are usually already permissive enough (`forward: yes`, wide ephemeral-port ranges) that this is the only real gap. If LAN clients still can't reach the Gateway after bootstrap, check `firewall-cmd --list-all` against what Cilium actually opened at runtime.
+  This is best-effort, not a guarantee: desktop-oriented zones (e.g. Fedora Workstation's default zone) are usually already permissive enough (`forward: yes`, wide ephemeral-port ranges) that this is the only real gap. If LAN clients still can't reach the Gateway after bootstrap, check `firewall-cmd --list-all` against what Cilium actually opened at runtime.
 
   Verify:
 
@@ -78,7 +84,7 @@
   # Ensure forward: yes, masquerade: yes, and 443/tcp is listed under ports
   ```
 
-* [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `infrastructure/cluster-config/cluster-config.yaml` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
+* [ ] **Reserved IP range excluded from DHCP**: the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `infrastructure/cluster-config/cluster-config.yaml` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
 
   ```bash
   ping -c 2 -W 1 192.0.2.240
@@ -103,19 +109,19 @@ git clone https://github.com/DragonBishop/data_science_cluster.git
 cd data_science_cluster
 ```
 
-`just bootstrap` (`src/bash/bootstrap-cluster.sh`) runs the full first-time setup — k3s, Cilium, Flux, the in-cluster Vault, `terraform/vault`. It's idempotent — safe to re-run:
+`just bootstrap` (`src/bash/bootstrap-cluster.sh`) runs the full first-time setup: k3s, Cilium, Flux, the in-cluster Vault, `terraform/vault`. It's idempotent, safe to re-run:
 
 ```bash
 just bootstrap
 ```
 
-It fires two native prompts (a GPG passphrase, an OpenTofu state-encryption passphrase), then reprints the in-cluster Vault's unseal keys and root token — **printed the moment they're generated and unrecoverable if lost.**
+It fires two native prompts (a GPG passphrase, an OpenTofu state-encryption passphrase), then reprints the in-cluster Vault's unseal keys and root token: **printed the moment they're generated and unrecoverable if lost.**
 
 > [!IMPORTANT]
 > Store the generated unseal keys and root token in a secure password manager immediately. Data cannot be recovered if these keys are lost.
 
 > [!NOTE]
-> The in-cluster Vault unseals itself on future starts via a GPG-encrypted keyfile (`~/.vault-keys.gpg`) written during this step — see `start-cluster.sh`.
+> The in-cluster Vault unseals itself on future starts via a GPG-encrypted keyfile (`~/.vault-keys.gpg`) written during this step. See `start-cluster.sh`.
 
 > [!NOTE]
 > The GPG keyfile's `~/.gnupg/gpg-agent.conf` cache-TTL setting only governs gpg-agent's own memory cache. On desktops with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be saved to the OS keyring, which bypasses that setting. Add `no-allow-external-cache` to the same file to stop that.
@@ -135,8 +141,8 @@ flowchart TD
     cc["cluster-config"] --> cilium
 
     %% Core Services & PKI
-    cilium --> fluxpolicies["flux-system-policies"]
-    cilium --> certmgr["cert-manager"]
+    cilium --> flux
+    flux --> certmgr["cert-manager"]
     certmgr --> vault["vault"]
 
     %% Platform Services
@@ -145,18 +151,16 @@ flowchart TD
     cnpg --> barman["barman-cloud"]
 
     vault --> gw["gateway"]
-    cc --> gw
     gw --> hubble["hubble"]
 
     %% Applications
     barman --> db["databases"]
     vault --> db
     gw --> db
-    cc --> db
 ```
 
 * `cilium` requires `gateway-api-crds`, `namespaces`, and `cluster-config` (for `GATEWAY_IP`/`COREDNS_LAN_IP` substitution).
-* `flux-system-policies` and `cert-manager` depend on `cilium`.
+* `flux` depends on `cilium`, `cert-manager` depends on `flux`.
 * `vault` depends on `cert-manager` (for `vault-server-cert` TLS bootstrap).
 * `vault-secrets-operator` and `gateway` depend on `vault` (for PKI and secrets sync).
 * `cnpg-operator` depends on `vault-secrets-operator`, and `barman-cloud` depends on `cnpg-operator`.
