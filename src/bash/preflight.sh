@@ -9,7 +9,7 @@ check_host_tooling() {
     local has_errors=false
     local bin
 
-    for bin in tofu helm flux gh gpg openssl python3 just envsubst; do
+    for bin in tofu helm flux gh gpg openssl python3 just; do
         if command -v "$bin" >/dev/null 2>&1; then
             echo "✅ $bin"
         else
