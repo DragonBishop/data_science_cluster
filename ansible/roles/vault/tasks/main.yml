@@ -1,0 +1,114 @@
+---
+- name: Check whether the unseal keyfile exists
+  ansible.builtin.stat:
+    path: "{{ vault_keyfile }}"
+  register: vault_keyfile_stat
+
+- name: Ensure ~/.gnupg directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.gnupg"
+    state: directory
+    mode: "0700"
+
+# Required for gpg --pinentry-mode loopback (no TTY available for a real prompt).
+- name: Configure gpg-agent for loopback pinentry and zero caching
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.gnupg/gpg-agent.conf"
+    line: "{{ item }}"
+    create: true
+    mode: "0600"
+  loop:
+    - "allow-loopback-pinentry"
+    - "default-cache-ttl 0"
+    - "max-cache-ttl 0"
+
+- name: Reload gpg-agent
+  ansible.builtin.command: gpgconf --reload gpg-agent
+  changed_when: true
+
+- name: Prompt for the unseal-keyfile GPG passphrase
+  ansible.builtin.pause:
+    prompt: "GPG passphrase for {{ vault_keyfile }}"
+    echo: false
+  register: vault_gpg_passphrase_prompt
+  no_log: true
+
+- name: Store GPG passphrase
+  ansible.builtin.set_fact:
+    vault_gpg_passphrase: "{{ vault_gpg_passphrase_prompt.user_input }}"
+  no_log: true
+
+- name: Initialize Vault and write a new unseal keyfile
+  when: not vault_keyfile_stat.stat.exists
+  block:
+    - name: Initialize in-cluster Vault
+      kubernetes.core.k8s_exec:
+        namespace: "{{ vault_namespace }}"
+        pod: "{{ vault_pod }}"
+        command: vault operator init -format=json
+      register: vault_init_result
+      no_log: true
+
+    - name: Parse Vault init output
+      ansible.builtin.set_fact:
+        vault_root_token: "{{ (vault_init_result.stdout | from_json).root_token }}"
+        vault_fresh_unseal_keys: "{{ (vault_init_result.stdout | from_json).unseal_keys_b64[:3] }}"
+      no_log: true
+
+    - name: Create tmpfs workdir for unseal keyfile
+      ansible.builtin.tempfile:
+        state: directory
+        path: /dev/shm
+        prefix: vault-setup-
+      register: vault_setup_workdir
+
+    - name: Write unseal keys to tmpfs keyfile
+      ansible.builtin.copy:
+        dest: "{{ vault_setup_workdir.path }}/keys.txt"
+        content: "{{ (vault_fresh_unseal_keys | join('\n')) + '\n' }}"
+        mode: "0600"
+      no_log: true
+
+    - name: GPG-encrypt unseal keyfile
+      ansible.builtin.command:
+        cmd: >-
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0
+          --cipher-algo AES256 --s2k-mode 3 --s2k-count 65011712
+          --s2k-digest-algo SHA512 --symmetric --output {{ vault_keyfile }}
+          {{ vault_setup_workdir.path }}/keys.txt
+        stdin: "{{ vault_gpg_passphrase }}\n"
+      no_log: true
+      changed_when: true
+
+    - name: Set unseal keyfile permissions
+      ansible.builtin.file:
+        path: "{{ vault_keyfile }}"
+        mode: "0600"
+
+    - name: Remove tmpfs workdir
+      ansible.builtin.file:
+        path: "{{ vault_setup_workdir.path }}"
+        state: absent
+
+- name: Decrypt unseal keyfile
+  ansible.builtin.command:
+    cmd: gpg --quiet --batch --pinentry-mode loopback --passphrase-fd 0 --decrypt {{ vault_keyfile }}
+    stdin: "{{ vault_gpg_passphrase }}\n"
+  register: vault_decrypt_result
+  changed_when: false
+  no_log: true
+
+- name: Collect unseal keys from decrypted keyfile
+  ansible.builtin.set_fact:
+    vault_unseal_keys: "{{ vault_decrypt_result.stdout_lines | select('truthy') | list }}"
+  no_log: true
+
+- name: Unseal Vault
+  ansible.builtin.command:
+    cmd: kubectl exec -i -n {{ vault_namespace }} {{ vault_pod }} -- vault write -format=json sys/unseal key=-
+    stdin: "{{ item }}\n"
+  environment:
+    KUBECONFIG: "{{ ansible_env.HOME }}/.kube/config"
+  loop: "{{ vault_unseal_keys }}"
+  no_log: true
+  changed_when: true

@@ -65,17 +65,17 @@ metadata:
   name: postgis-cluster
   namespace: databases
 spec:
-  instances: 1
+  instances: ${POSTGIS_INSTANCES}
   smartShutdownTimeout: 15
   stopDelay: 60
-  imageName: ghcr.io/cloudnative-pg/postgis:18.6-3.6.4-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgis:${POSTGRES_VERSION}-${POSTGIS_VERSION}-system-trixie
 
   resources:
     requests:
-      cpu: "500m"
-      memory: "1Gi"
+      cpu: "${POSTGIS_CPU_REQUEST}"
+      memory: "${POSTGIS_MEM_REQUEST}"
     limits:
-      memory: "2Gi"
+      memory: "${POSTGIS_MEM_LIMIT}"
 
   enableSuperuserAccess: true
   superuserSecret:
@@ -93,8 +93,8 @@ spec:
         - GRANT pg_read_all_data, pg_write_all_data TO app_readwrite
 
   storage:
-    size: 100Gi
-    storageClass: local-path
+    size: ${POSTGIS_STORAGE_SIZE}
+    storageClass: ${POSTGIS_STORAGE_CLASS}
 
   # TLS server certificate and CA issued via cert-manager and Vault PKI
   certificates:

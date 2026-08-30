@@ -7,16 +7,16 @@ spec:
   values:
     resources:
       requests:
-        cpu: 10m
-        memory: 210Mi
+        cpu: ${BARMAN_CLOUD_CPU_REQUEST}
+        memory: ${BARMAN_CLOUD_MEM_REQUEST}
       limits:
-        memory: 630Mi
+        memory: ${BARMAN_CLOUD_MEM_LIMIT}
   interval: 1h
   releaseName: plugin-barman-cloud
   chart:
     spec:
       chart: plugin-barman-cloud
-      version: "0.7.1"
+      version: "${BARMAN_CLOUD_VERSION}"
       sourceRef:
         kind: HelmRepository
         name: cnpg

@@ -9,24 +9,17 @@ injector:
 server:
   image:
     repository: "hashicorp/vault"
-    tag: "2.0.4"
+    tag: "${VAULT_IMAGE_TAG}"
   resources:
     requests:
-      cpu: 14m
-      memory: 350Mi
+      cpu: ${VAULT_CPU_REQUEST}
+      memory: ${VAULT_MEM_REQUEST}
     limits:
-      memory: 800Mi
-  extraSecretEnvironmentVars:
-    - envName: VAULT_TOKEN
-      secretName: vault-transit-secret
-      secretKey: token
-
+      memory: ${VAULT_MEM_LIMIT}
   extraEnvironmentVars:
     VAULT_CACERT: /vault/userconfig/vault-server-cert/ca.crt
 
   extraVolumes:
-    - type: configMap
-      name: vault-transit-ca
     - type: secret
       name: vault-server-cert
 
@@ -45,13 +38,4 @@ server:
 
       storage "file" {
         path = "/vault/data"
-      }
-
-      seal "transit" {
-        address         = "https://${HOST_IP}:8200"
-        disable_renewal = "false"
-        key_name        = "autounseal"
-        mount_path      = "transit/"
-        tls_ca_cert     = "/vault/userconfig/vault-transit-ca/ca.crt"
-        tls_server_name = "vault.local"
       }

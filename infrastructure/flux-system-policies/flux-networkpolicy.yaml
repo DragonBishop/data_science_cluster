@@ -7,4 +7,4 @@ spec:
   endpointSelector: {}
   egress:
     - toFQDNs:
-        - matchName: "github.com"
+        - matchName: "${GIT_FORGE_HOST}"

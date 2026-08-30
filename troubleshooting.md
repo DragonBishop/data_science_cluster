@@ -1,6 +1,48 @@
 # Troubleshooting Guide
 
-## Startup and Shutdown
+Diagnostic procedures and remediation steps for issues across Ansible bootstrap, cluster lifecycle, networking, GitOps controllers, secrets management, and database storage.
+
+## Table of Contents
+
+* [Ansible Provisioning](#ansible-provisioning)
+* [Cluster Lifecycle](#cluster-lifecycle)
+* [Networking](#networking)
+* [GitOps](#gitops)
+* [Vault Secrets](#vault-secrets)
+* [Database Storage](#database-storage)
+
+---
+
+## Ansible Provisioning
+
+* **Ansible playbook fails with missing collection errors**
+  * **What's happening:** The required Ansible Galaxy collections (`kubernetes.core`, `community.general`) are missing from the host environment.
+  * **How to fix it:** Install Galaxy dependencies declared in the repository:
+
+    ```bash
+    ansible-galaxy collection install -r ansible/requirements.yml
+    ```
+
+* **Playbook fails during k3s installation or times out waiting for `/etc/rancher/k3s/k3s.yaml`**
+  * **What's happening:** Leftover state, containerd shims, or stale Cilium BPF mounts from a previous installation are preventing the k3s server from initializing cleanly.
+  * **How to fix it:** Run `/usr/local/bin/k3s-uninstall.sh`, unmount any lingering BPF filesystems (`mount | grep bpf`), and re-run `just bootstrap`.
+
+* **Playbook fails during Flux bootstrap with GitHub authentication errors**
+  * **What's happening:** `gh` CLI is either unauthenticated or lacks the required OAuth scopes to manage repository webhooks and deploy keys.
+  * **How to fix it:** Run `gh auth login` and select `GitHub.com`, `HTTPS`, and authenticate with your browser or a personal access token with repo privileges. Verify with `gh auth status`.
+
+* **OpenTofu role fails to apply Vault configuration**
+  * **What's happening:** Vault is sealed, port-forwarding failed, or OpenTofu state encryption passphrase was mistyped.
+  * **How to fix it:** Verify the `vault-0` pod is Running and unsealed (`kubectl exec -n vault vault-0 -- vault status`). Run OpenTofu manually to inspect verbose output:
+
+    ```bash
+    tofu -chdir=terraform/vault init
+    tofu -chdir=terraform/vault plan
+    ```
+
+---
+
+## Cluster Lifecycle
 
 * **`start-cluster.sh` refuses to start**
   * **What's happening:** The system's background k3s service (`k3s.service`) is already active. Running two k3s instances against the same data directory will corrupt your cluster.
@@ -20,31 +62,82 @@
 
 * **Port 6443 is still bound/in-use after running `stop-cluster.sh`**
   * **What's happening:** The API server stopped, but containerd shims are still running.
-  * **How to fix it:** Re-run `stop-cluster.sh --force` and once hibernation is confirmed, it prompts before running `k3s-killall.sh` for you (never runs it unattended). Or run `sudo k3s-killall.sh` yourself; it cleans up leftover processes and unmounts directories.
+  * **How to fix it:** Run `sudo k3s-killall.sh` manually; it cleans up leftover processes and unmounts directories.
 
 ---
 
-## Vault
+## Networking
+
+* **Pods are stuck in `ContainerCreating` indefinitely**
+  * **What's happening:** Cilium may still be initializing. Without the CNI, the container sandbox cannot be created.
+  * **How to fix it:** Run `cilium status --wait`. If it persists after Cilium is running, check that the BPF filesystem is mounted (`mount | grep bpf`); a hard shutdown can leave it unmounted. *(Note: `/var/run/cilium/cgroupv2` is an active mount and must be unmounted before running `rm -rf /var/run/cilium`)*.
+
+* **Pods are running but completely unreachable (Stale Cilium Endpoints)**
+  * **What's happening:** After a forced stop or an agent restart, pods can retain endpoints that no longer route.
+  * **How to fix it:** Run `kubectl exec -n kube-system ds/cilium -- cilium endpoint list` to view active endpoints. Delete the affected pods (`kubectl delete pod <pod_name>`); the controller recreates them with new network identities.
+
+* **Hubble Relay never becomes Ready (`Startup probe failed: service unhealthy, responded with "NOT_SERVING"`)**
+  * **What's happening:** Hubble Relay is a pod, but it reaches cilium-agent's Hubble gRPC port on the **host's own IP** (cilium-agent runs `hostNetwork: true`), so that connection is pod→host traffic, not pod→pod. If `ufw` (Ubuntu/Debian) or `firewalld` (Fedora/RHEL) is active without the required forward/port rules from `INSTALLATION.md`'s Requirements, the host firewall drops it silently and Relay times out.
+  * **How to fix it:** Confirm it's actually this: `sudo iptables -L INPUT -n -v | head` a large, growing packet count against the final `DROP` policy confirms it. Apply the `ufw` (Ubuntu/Debian) or `firewalld` (Fedora/RHEL) rules in `INSTALLATION.md`'s Requirements, then see the next entry, a firewall fix alone does not retry an already-failed HelmRelease.
+
+* **Gateway routing or TLS fails (`*.internal` domain unreachable)**
+  * **What's happening:** The client cannot resolve the domain or route traffic to the Gateway IP.
+  * **How to fix it:** Run `just gateway-check` to verify listener routing and TLS termination. Confirm CoreDNS custom zone is responding (`dig @192.0.2.242 hubble.internal`) and verify that Gateway listeners are programmed (`kubectl get gateway -n gateway internal-gateway`).
+
+---
+
+## GitOps
+
+* **`flux reconcile helmrelease cilium` reports `RetriesExceeded` / `Stalled` and does nothing**
+  * **What's happening:** After enough failed upgrade attempts (e.g. from the Hubble issue above), `helm-controller` hits its retry budget and marks the release `Stalled` with a **terminal** error. A plain reconcile re-checks that same exhausted state and fails instantly; it does not attempt a new upgrade.
+  * **How to fix it:** Clear the retry lock first, then it reconciles normally:
+
+    ```bash
+    flux suspend helmrelease cilium -n kube-system
+    flux resume helmrelease cilium -n kube-system
+    ```
+
+    `flux get helmrelease cilium -n kube-system` should show `Ready: True` after. If the underlying cause isn't actually fixed yet, this just produces a fresh failed attempt instead of a stuck one; check `helm history cilium -n kube-system` and pod events for the real error.
+
+* **Flux Kustomization reports `DependencyNotReady`**
+  * **What's happening:** A Kustomization's `dependsOn` prerequisite is failing its health checks or still reconciling.
+  * **How to fix it:** Check the dependency state with `flux get kustomizations -A` and trace the unready upstream Kustomization with `flux describe kustomization <name> -n flux-system`.
+
+* **Headlamp shows a stale or failed connection**
+  * **What's happening:** Headlamp reads `~/.kube/config`, which k3s rewrites directly (`--write-kubeconfig`) every time `start-cluster.sh` runs. A stale profile means the file predates the current cluster instance.
+  * **How to fix it:** Run `start-cluster.sh` to regenerate `~/.kube/config`, then reconnect Headlamp.
+
+---
+
+## Vault Secrets
 
 * **Vault reports as "sealed" when it isn't (or prompts for a GPG password on every run)**
-  * **What's happening:** `vault status` returns `0` for unsealed, `2` for sealed, and another code if the command itself failed. Might be a bad certificate or a dead service. A check that greps the output for "false" treats a failed connection as sealed and goes looking for unseal keys.
+  * **What's happening:** `vault status` returns `0` for unsealed, `2` for sealed, and another code if the command itself failed. Might be a dead pod. A check that greps the output for "false" treats a failed connection as sealed and goes looking for unseal keys.
   * **How to fix it:** Diagnose using the exit code rather than the text output:
 
     ```bash
-    VAULT_ADDR=https://127.0.0.1:8200 VAULT_CACERT=/opt/vault/tls/tls.crt vault status; echo "exit=$?"
+    kubectl exec -n vault vault-0 -- vault status; echo "exit=$?"
     ```
 
-    Confirm the certificate path (`/opt/vault/tls/tls.crt`) is correct and readable (`sudo stat -c "%a %U:%G %n" /opt/vault/tls`). The certificate must include an `IP:127.0.0.1` SAN. If Vault is re-sealing without a reboot, check `systemctl status vault` for a crashing service.
+    If Vault is re-sealing without a pod restart, check `kubectl get pods -n vault` for a crashing container.
 
 * **GPG decryption fails**
   * **What's happening:** The script cannot read or decrypt the unseal keys.
   * **How to fix it:**
     1. Confirm `~/.vault-keys.gpg` exists and is mode `600` (`ls -l ~/.vault-keys.gpg`).
-    2. Confirm the passphrase matches the one set in Step 3.
-    3. *Technical note:* `vault operator unseal` does not accept piped input, so the script passes the key via `vault write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | vault write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
+    2. Confirm the passphrase matches the one used to create the keyfile.
+    3. *Technical note:* `vault operator unseal` does not accept piped input, so the script passes the key via `vault write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | kubectl exec -i -n vault vault-0 -- vault write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
 
 * **Vault throws a "permission denied" error**
-  * **How to fix it:** Check the policies and roles applied from `terraform/vault/`. `vault policy read postgis-policy` and `vault policy read cert-manager-pki-policy` show the paths granted; `vault read auth/kubernetes/role/postgis-role` and `vault read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
+  * **How to fix it:** Check the policies and roles applied from `terraform/vault/`. `kubectl exec -n vault vault-0 -- vault policy read postgis-policy` and `... vault policy read cert-manager-pki-policy` show the paths granted; `... vault read auth/kubernetes/role/postgis-role` and `... vault read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
+
+* **`vault kv get secret/postgis` or `secret/seaweedfs` returns "No value found at secret/data/..."**
+  * **What's happening:** The `vault_kv_secret_v2` resources in `terraform/vault/kv.tf` that write this data have never been applied for this Vault instance.
+  * **How to fix it:** Re-run `just bootstrap` (or `tofu -chdir=terraform/vault apply` directly with the usual `TF_VAR_*` exported). If the resources exist in config but values still don't appear after that, see the next entry.
+
+* **A freshly-typed or corrected value (e.g. fixing a mistyped superuser password) doesn't reach Vault after re-running bootstrap**
+  * **What's happening:** `postgres_superuser_password`, `s3_access_key`, and `s3_secret_key` all share one write-only version counter (`secrets_wo_version`). Terraform only pushes a new write-only value when its version changes; an ordinary rerun leaves the version unchanged by design, so a differing typed value is silently not written.
+  * **How to fix it:** Re-run with `ROTATE_VAULT_SECRETS=true` to bump the version and force all three secrets to be rewritten (this also regenerates the S3 keys as a side effect).
 
 * **Secrets or certificates are failing to issue/mount into Kubernetes**
   * **How to fix it:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for dynamic credentials). For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why VSO or cert-manager could not pull or mint the resource.
@@ -58,7 +151,7 @@
 
 ---
 
-## Database
+## Database Storage
 
 * **Database pod fails to initialize**
   * **How to fix it:** Run `kubectl describe pod <pod_name> -n databases` and read the Events stream at the bottom. It reports scheduling failures, insufficient resources, and image pull failures.
@@ -67,12 +160,13 @@
   * **How to fix it:** Confirm both `enableSuperuserAccess: true` and `superuserSecret` are set in `postgis-cluster.yaml`. With the first missing, CNPG nulls the password on every reconciliation. Confirm the `username` field in `secret/postgis` is exactly `postgres`; CNPG rejects any other value before applying the password.
 
 * **A role issued by Vault cannot create tables in a schema**
-  * **What's happening:** the schema predates the `app_readwrite_new_schema` event trigger, so no `CREATE` grant was issued on it. `pg_read_all_data` and `pg_write_all_data` cover data access, not DDL.
+  * **What's happening:** The schema predates the `app_readwrite_new_schema` event trigger, so no `CREATE` grant was issued on it. `pg_read_all_data` and `pg_write_all_data` cover data access, not DDL.
   * **How to fix it:** `GRANT USAGE, CREATE ON SCHEMA <name> TO app_readwrite;`. Confirm the event trigger exists with `\dy`; without it, schemas created from now on have the same problem.
 
 * **Tables created by a lease are unreadable by the next one**
-  * **What's happening:** the lease was issued before `ALTER ROLE ... SET role = app_readwrite` was added to `creation_statements`, so it owns its objects. `DROP ROLE` at lease expiry also fails with `cannot be dropped because some objects depend on it`.
-  * **How to fix it:** update the role definition in `terraform/vault/database.tf`, then `vault lease revoke -prefix database/creds/postgis-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
+  * **What's happening:** The lease was issued before `ALTER ROLE ... SET role = app_readwrite` was added to `creation_statements`, so it owns its objects. `DROP ROLE` at lease expiry also fails with `cannot be dropped because some objects depend on it`.
+  * **How to fix it:** Update the role definition in `terraform/vault/database.tf`, then `vault lease revoke -prefix database/creds/postgis-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
+
 * **Application credentials stop working after a password rotation**
   * **What's happening:** App-role rotations (static or dynamic) reload automatically, as `postgis-app-credentials` and `postgis-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label in `postgis-cluster.yaml`, so CNPG picks up the new Secret on its own.
   * **How to fix it:** For the superuser password, update `database/config/postgis-cluster` in Vault (via `terraform/vault/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgis-app-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
@@ -91,34 +185,3 @@
     ```
 
     If it is missing, re-reconcile `apps/databases/seaweedfs-release.yaml` (`flux reconcile helmrelease seaweedfs -n databases`); `createBuckets` in that chart's values creates it at install.
-
----
-
-## Tooling
-
-* **Pods are stuck in `ContainerCreating` indefinitely**
-  * **What's happening:** Cilium may still initializing. Without the CNI, the container sandbox cannot be created.
-  * **How to fix it:** Run `cilium status --wait`. If it persists after Cilium is running, check that the BPF filesystem is mounted (`mount | grep bpf`); a hard shutdown can leave it unmounted. *(Note: `/var/run/cilium/cgroupv2` is an active mount and must be unmounted before running `rm -rf /var/run/cilium`)*.
-
-* **Pods are running but completely unreachable (Stale Cilium Endpoints)**
-  * **What's happening:** After a forced stop or an agent restart, pods can retain endpoints that no longer route.
-  * **How to fix it:** Run `kubectl exec -n kube-system ds/cilium -- cilium endpoint list` to view active endpoints. Delete the affected pods (`kubectl delete pod <pod_name>`); the controller recreates them with new network identities.
-
-* **Headlamp shows a stale or failed connection**
-  * **What's happening:** Headlamp reads `~/.kube/config`, which k3s rewrites directly (`--write-kubeconfig`) every time `start-cluster.sh` runs. A stale profile means the file predates the current cluster instance.
-  * **How to fix it:** Run `start-cluster.sh` to regenerate `~/.kube/config`, then reconnect Headlamp.
-
-* **Hubble Relay never becomes Ready (`Startup probe failed: service unhealthy, responded with "NOT_SERVING"`)**
-  * **What's happening:** Hubble Relay is a pod, but it reaches cilium-agent's Hubble gRPC port on the **host's own IP** (cilium-agent runs `hostNetwork: true`), so that connection is pod→host traffic, not pod→pod. If `ufw` is active without the rules from `INSTALLATION.md`'s Requirements, its default-deny `INPUT` policy drops it silently, Relay just times out with no useful error on either side.
-  * **How to fix it:** Confirm it's actually this: `sudo iptables -L INPUT -n -v | head` a large, growing packet count against the final `DROP` policy confirms it. Apply the `ufw` rules in `INSTALLATION.md`'s Requirements, then see the next entry, a firewall fix alone does not retry an already-failed HelmRelease.
-
-* **`flux reconcile helmrelease cilium` reports `RetriesExceeded` / `Stalled` and does nothing**
-  * **What's happening:** After enough failed upgrade attempts (e.g. from the Hubble issue above), `helm-controller` hits its retry budget and marks the release `Stalled` with a **terminal** error. A plain reconcile re-checks that same exhausted state and fails instantly; it does not attempt a new upgrade.
-  * **How to fix it:** Clear the retry lock first, then it reconciles normally:
-
-    ```bash
-    flux suspend helmrelease cilium -n kube-system
-    flux resume helmrelease cilium -n kube-system
-    ```
-
-    `flux get helmrelease cilium -n kube-system` should show `Ready: True` after. If the underlying cause isn't actually fixed yet, this just produces a fresh failed attempt instead of a stuck one; check `helm history cilium -n kube-system` and pod events for the real error.

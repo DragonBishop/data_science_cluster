@@ -20,12 +20,12 @@ EOT
 }
 
 resource "vault_kubernetes_auth_backend_role" "postgis" {
-  backend                           = vault_auth_backend.kubernetes.path
-  role_name                         = "postgis-role"
-  bound_service_account_names       = ["postgis-vault-auth"]
-  bound_service_account_namespaces  = ["databases"]
-  token_policies                    = [vault_policy.postgis.name]
-  token_ttl                         = 86400  # 24h
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "postgis-role"
+  bound_service_account_names      = ["postgis-vault-auth"]
+  bound_service_account_namespaces = ["databases"]
+  token_policies                   = [vault_policy.postgis.name]
+  token_ttl                        = 86400 # 24h
 }
 
 resource "vault_policy" "cert_manager_pki" {

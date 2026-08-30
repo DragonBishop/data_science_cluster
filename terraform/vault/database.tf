@@ -10,7 +10,7 @@ resource "vault_database_secret_backend_connection" "postgis_cluster" {
 
   postgresql {
     connection_url      = "postgresql://{{username}}:{{password}}@postgis-cluster-rw.databases.svc.cluster.local:5432/postgres?sslmode=require"
-    username             = "postgres"
+    username            = "postgres"
     password_wo         = var.postgres_superuser_password
     password_wo_version = var.secrets_wo_version
   }
@@ -23,6 +23,6 @@ resource "vault_database_secret_backend_role" "postgis_app_role" {
   creation_statements = [
     "CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}' IN ROLE app_readwrite; ALTER ROLE \"{{name}}\" SET role = app_readwrite;"
   ]
-  default_ttl = 10800   # 3h
-  max_ttl     = 86400   # 24h
+  default_ttl = 10800 # 3h
+  max_ttl     = 86400 # 24h
 }
