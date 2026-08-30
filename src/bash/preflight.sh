@@ -120,12 +120,14 @@ check_fedora_firewall() {
         missing+=("10.42.0.0/16 source in 'trusted' zone")
     fi
 
-    if ! echo "$trusted_info" | grep -qE "lxc(\+|_)"; then
-        missing+=("lxc+ interface in 'trusted' zone")
-    fi
+    local policies
+    policies=$(firewall-cmd --get-policies 2>/dev/null || true)
+    echo "$policies" | grep -q "k8s-host-to-pods" || missing+=("policy 'k8s-host-to-pods'")
+    echo "$policies" | grep -q "k8s-pods-to-host" || missing+=("policy 'k8s-pods-to-host'")
+    echo "$policies" | grep -q "k8s-pods-to-wan" || missing+=("policy 'k8s-pods-to-wan'")
 
     if [ ${#missing[@]} -gt 0 ]; then
-        echo "⚠️  firewalld is active but missing required rules for Kubernetes/Cilium (see INSTALLATION.md Requirements):"
+        echo "⚠️  firewalld is active but missing required rules/policies for Kubernetes/Cilium (see INSTALLATION.md Requirements):"
         for item in "${missing[@]}"; do
             echo "   - missing $item"
         done
@@ -133,7 +135,7 @@ check_fedora_firewall() {
         return 1
     fi
 
-    echo "✅ firewalld active and configured for Cilium (zone: $zone, trusted zone configured)"
+    echo "✅ firewalld active and configured for Cilium (zone: $zone, trusted zone and k8s policies configured)"
     return 0
 }
 
