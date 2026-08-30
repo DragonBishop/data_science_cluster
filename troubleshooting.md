@@ -46,6 +46,14 @@
 * **Vault throws a "permission denied" error**
   * **How to fix it:** Check the policies and roles applied from `terraform/vault/`. `kubectl exec -n vault vault-0 -- vault policy read postgis-policy` and `... vault policy read cert-manager-pki-policy` show the paths granted; `... vault read auth/kubernetes/role/postgis-role` and `... vault read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
 
+* **`vault kv get secret/postgis` or `secret/seaweedfs` returns "No value found at secret/data/..."**
+  * **What's happening:** The `vault_kv_secret_v2` resources in `terraform/vault/kv.tf` that write this data have never been applied for this Vault instance.
+  * **How to fix it:** Re-run `just bootstrap` (or `tofu -chdir=terraform/vault apply` directly with the usual `TF_VAR_*` exported). If the resources exist in config but values still don't appear after that, see the next entry.
+
+* **A freshly-typed or corrected value (e.g. fixing a mistyped superuser password) doesn't reach Vault after re-running bootstrap**
+  * **What's happening:** `postgres_superuser_password`, `s3_access_key`, and `s3_secret_key` all share one write-only version counter (`secrets_wo_version`). Terraform only pushes a new write-only value when its version changes; an ordinary rerun leaves the version unchanged by design, so a differing typed value is silently not written.
+  * **How to fix it:** Re-run with `ROTATE_VAULT_SECRETS=true` to bump the version and force all three secrets to be rewritten (this also regenerates the S3 keys as a side effect).
+
 * **Secrets or certificates are failing to issue/mount into Kubernetes**
   * **How to fix it:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for dynamic credentials). For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why VSO or cert-manager could not pull or mint the resource.
 
