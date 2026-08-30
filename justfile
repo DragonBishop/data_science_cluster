@@ -10,23 +10,15 @@ default:
 preflight:
   ./src/bash/preflight.sh
 
-# Run the full first-time cluster bootstrap
-bootstrap:
-  ./src/bash/bootstrap-cluster.sh
+# Run full cluster bootstrap via Ansible (accepts flags like --tags, --check, -v)
+bootstrap *ARGS:
+  ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/k3s.yml {{ARGS}}
 
 # --- Cluster lifecycle -------------------------------------------------
 
 # Start the cluster
 start:
   ./src/bash/start-cluster.sh
-
-# Stop the cluster (pass --force to skip confirmation on a stuck stop)
-stop *ARGS:
-  ./src/bash/stop-cluster.sh {{ARGS}}
-
-# Fuzzy-select a pod (all namespaces) and describe it
-fuzzypods:
-  kubectl get pods -A --no-headers | fzf | awk '{print $2, $1}' | xargs -n 2 sh -c 'kubectl describe pod $0 -n $1'
 
 # Read-only cluster health check (Flux, Gateway/DNS, cert-manager, database, backups, Hubble)
 status:
@@ -65,6 +57,14 @@ status:
   kubectl get pods -n kube-system -l 'k8s-app in (hubble-relay,hubble-ui)'
   echo -n "HTTPRoute: "; kubectl get httproute -n kube-system hubble-ui -o jsonpath='{.status.parents[*].conditions[*].message}'; echo
 
+# Fuzzy-select a pod (all namespaces) and describe it
+fuzzypods:
+  kubectl get pods -A --no-headers | fzf | awk '{print $2, $1}' | xargs -n 2 sh -c 'kubectl describe pod $0 -n $1'
+
+# Stop the cluster (pass --force to skip confirmation on a stuck stop)
+stop *ARGS:
+  ./src/bash/stop-cluster.sh {{ARGS}}
+
 # --- Database ------------------------------------------------------------
 
 # Connect via psql to postgis-cluster (HOST defaults to the live Gateway IP; pass `localhost` for the node-local path)
@@ -77,11 +77,41 @@ db-connect HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.
   [ -f ~/.postgresql/root.crt ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt
   PGPASSWORD="$LEASE_PASS" psql "host={{HOST}} port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full"
 
+# --- Gateway ---------------------------------------------------------------
+
+# Verify Gateway routing and TLS termination (HOST defaults to the live Gateway IP, DOMAIN defaults to hubble.internal)
+gateway-check HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null` DOMAIN="hubble.internal":
+  #!/usr/bin/env bash
+  set -uo pipefail
+  HOST="{{HOST}}"
+  if [ -z "$HOST" ]; then
+    HOST=$(kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || true)
+  fi
+  if [ -z "$HOST" ]; then
+    echo "Error: Could not determine Gateway IP. Pass it explicitly: just gateway-check <HOST>" >&2
+    exit 1
+  fi
+  curl -v --resolve "{{DOMAIN}}:443:$HOST" \
+    --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
+    "https://{{DOMAIN}}/"
+
 # --- Observability (Hubble) -----------------------------------------------
 
-# Port-forward to hubble-relay on localhost:4245
-hubble-pf:
-  kubectl port-forward -n kube-system svc/hubble-relay 4245:443
+# Open Hubble web UI
+hubble-ui:
+  #!/usr/bin/env bash
+  set -uo pipefail
+  mkdir -p ~/.hubble
+  if ! (exec 3<>/dev/tcp/127.0.0.1/12000) 2>/dev/null; then
+    nohup kubectl port-forward -n kube-system svc/hubble-ui 12000:80 >~/.hubble/ui-portforward.log 2>&1 &
+    disown
+    for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/12000) 2>/dev/null && break; sleep 0.1; done
+  else
+    exec 3<&- 3>&-
+  fi
+  echo "Hubble UI: http://localhost:12000"
+  command -v xdg-open >/dev/null 2>&1 && xdg-open http://localhost:12000 >/dev/null 2>&1 &
+  disown
 
 # Run Hubble CLI command against hubble-relay
 hubble *ARGS='status':
@@ -109,25 +139,17 @@ hubble *ARGS='status':
     --tls-client-key-file ~/.hubble/tls/tls.key \
     {{ARGS}} 2> >(grep -v --line-buffered "Hubble CLI version is lower than Hubble Relay" >&2)
 
-# Open Hubble web UI
-hubble-ui:
-  #!/usr/bin/env bash
-  set -uo pipefail
-  mkdir -p ~/.hubble
-  if ! (exec 3<>/dev/tcp/127.0.0.1/12000) 2>/dev/null; then
-    nohup kubectl port-forward -n kube-system svc/hubble-ui 12000:80 >~/.hubble/ui-portforward.log 2>&1 &
-    disown
-    for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/12000) 2>/dev/null && break; sleep 0.1; done
-  else
-    exec 3<&- 3>&-
-  fi
-  echo "Hubble UI: http://localhost:12000"
-  command -v xdg-open >/dev/null 2>&1 && xdg-open http://localhost:12000 >/dev/null 2>&1 &
-  disown
+# Port-forward to hubble-relay on localhost:4245
+hubble-pf:
+  kubectl port-forward -n kube-system svc/hubble-relay 4245:443
 
 # --- Vault -----------------------------------------------------------------
 
 vault_env := "unset VAULT_TOKEN"
+
+# Open interactive shell in vault-0 pod
+vault-shell:
+  kubectl exec -it vault-0 -n vault -- sh -c '{{vault_env}}; exec sh'
 
 # Port-forward in-cluster Vault to localhost:8210 and fetch its CA
 vault-pf:
@@ -144,28 +166,25 @@ vault-pf:
   fi
   echo "Vault (in-cluster): https://127.0.0.1:8210  (CA: ~/.vault-certs/vault-internal-ca.crt)"
 
-# Open interactive shell in vault-0 pod
-vault-shell:
-  kubectl exec -it vault-0 -n vault -- sh -c '{{vault_env}}; exec sh'
-
 # --- Development -------------------------------------------------------
+
+# Setup development environment
+setup: install git-setup
 
 # Install dependencies
 install:
   {{ if path_exists("uv.lock") == "true" { "uv sync --all-groups --all-extras --locked --inexact" } else { "uv sync --all-groups --all-extras --inexact" } }}
 
-# Setup development environment
-setup: install git-setup
-
-# Run tests and generate coverage reports
-test-cov:
-  uv run pytest --cov=src/clusterpgis --cov-report=lcov:lcov.info --cov-report=term-missing --cov-report html --cov-report xml
-
 # Update packages and lockfile
 update:
   uv sync -U --all-groups --all-extras --inexact
 
-# set up the nbwipers git filter so notebooks stay clean on commit
+# Set up git filters (nbwipers) and pre-commit hooks (prek)
 git-setup:
   @[ -d .git ] || git init
   uv run nbwipers install local
+  uv run prek install
+
+# Run tests and generate coverage reports
+test-cov:
+  uv run pytest --cov=src/clusterpgis --cov-report=lcov:lcov.info --cov-report=term-missing --cov-report html --cov-report xml
