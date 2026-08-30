@@ -79,7 +79,7 @@ db-connect HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.
 
 # --- Gateway ---------------------------------------------------------------
 
-# Verify Gateway routing and TLS termination (HOST defaults to the live Gateway IP, DOMAIN defaults to hubble.internal)
+# Verify Gateway routing (HOST defaults to the live Gateway IP, DOMAIN defaults to hubble.internal)
 gateway-check HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null` DOMAIN="hubble.internal":
   #!/usr/bin/env bash
   set -uo pipefail
