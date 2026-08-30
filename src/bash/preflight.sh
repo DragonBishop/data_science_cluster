@@ -98,21 +98,42 @@ check_fedora_firewall() {
         return 1
     fi
 
-    if ! sudo firewall-cmd --state >/dev/null 2>&1; then
+    if ! firewall-cmd --state >/dev/null 2>&1; then
         echo "✅ firewalld present and inactive: no rules to check"
         return 0
     fi
 
-    local zone zone_info
-    zone=$(firewall-cmd --get-default-zone 2>/dev/null)
+    local zone zone_info trusted_info missing=()
+    zone=$(firewall-cmd --get-default-zone 2>/dev/null || echo "FedoraWorkstation")
     zone_info=$(firewall-cmd --zone="$zone" --list-all 2>/dev/null)
+    trusted_info=$(firewall-cmd --zone=trusted --list-all 2>/dev/null)
 
-    if ! echo "$zone_info" | grep -q "forward: yes" || ! echo "$zone_info" | grep -q "443/tcp"; then
-        echo "⚠️  firewalld is active on zone '$zone' but may not be configured for Cilium (see INSTALLATION.md Requirements)."
+    echo "$zone_info" | grep -q "forward: yes" || missing+=("forward: yes in zone '$zone'")
+    echo "$zone_info" | grep -q "masquerade: yes" || missing+=("masquerade: yes in zone '$zone'")
+    echo "$zone_info" | grep -q "443/tcp" || missing+=("443/tcp port in zone '$zone'")
+
+    if ! echo "$zone_info" | grep -qE "(services:.*\bdns\b|53/(tcp|udp))" && ! echo "$trusted_info" | grep -qE "(services:.*\bdns\b|53/(tcp|udp))"; then
+        missing+=("dns service in zone '$zone' or 'trusted'")
+    fi
+
+    if ! echo "$trusted_info" | grep -q "10.42.0.0/16"; then
+        missing+=("10.42.0.0/16 source in 'trusted' zone")
+    fi
+
+    if ! echo "$trusted_info" | grep -qE "lxc(\+|_)"; then
+        missing+=("lxc+ interface in 'trusted' zone")
+    fi
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "⚠️  firewalld is active but missing required rules for Kubernetes/Cilium (see INSTALLATION.md Requirements):"
+        for item in "${missing[@]}"; do
+            echo "   - missing $item"
+        done
+        echo "   Run the commands in INSTALLATION.md under 'Host Firewall Configuration' to apply them."
         return 1
     fi
 
-    echo "✅ firewalld active and configured for Cilium (zone: $zone)"
+    echo "✅ firewalld active and configured for Cilium (zone: $zone, trusted zone configured)"
     return 0
 }
 
