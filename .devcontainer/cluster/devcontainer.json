@@ -4,6 +4,11 @@
   "build": { "dockerfile": "Dockerfile" },
   "remoteUser": "vscode",
   "workspaceFolder": "/home/vscode/data_science_cluster",
+  "workspaceMount": "source=datasci-k8s-cluster-workspace,target=/home/vscode/data_science_cluster,type=volume",
+
+  "containerEnv": {
+    "ANSIBLE_CONFIG": "${containerWorkspaceFolder}/ansible/ansible.cfg"
+  },
 
   "customizations": {
     "vscode": {
@@ -16,31 +21,31 @@
 
         // DataOps
         "dbtlabsinc.dbt",
+        "mechatroner.rainbow-csv",
         "ms-kubernetes-tools.vscode-kubernetes-tools",
         "mtxr.sqltools",
         "mtxr.sqltools-driver-pg",
-        // "quarto.quarto",
         "opentofu.vscode-opentofu",
-        // "mechatroner.rainbow-csv",
+        "redhat.ansible",
 
         // Git
+        "adam-bender.commit-message-editor",
+        "donjayamanne.githistory",
         "github.vscode-github-actions",
         "github.vscode-pull-request-github",
-        // "mhutchie.git-graph",
-        // "donjayamanne.githistory",
-        // "adam-bender.commit-message-editor",
-        // "howardzuo.vscode-git-tags",
+        "howardzuo.vscode-git-tags",
+        "mhutchie.git-graph",
 
         // Syntax
         "redhat.vscode-yaml",
-        // "tamasfe.even-better-toml",
+        "tamasfe.even-better-toml",
 
         // Productivity
-        // "aaron-bond.better-comments",
-        // "christian-kohler.path-intellisense",
-        "davidanson.vscode-markdownlint"
-        // "mushan.vscode-paste-image",
-        // "usernamehw.errorlens"
+        "aaron-bond.better-comments",
+        "christian-kohler.path-intellisense",
+        "davidanson.vscode-markdownlint",
+        "mushan.vscode-paste-image",
+        "usernamehw.errorlens"
       ]
     }
   }
