@@ -5,33 +5,40 @@
 set -eu
 had_warnings=false
 
-# --- Step 1: Prevent duplicate execution ----------------------------------
-# Exit if systemd k3s service is already active
-if systemctl is-active --quiet k3s 2>/dev/null; then
-    echo "⚠️  systemd's k3s.service is already active. Refusing to start a second instance."
-    echo "   To adopt a script-managed lifecycle, run: sudo systemctl disable --now k3s"
-    exit 1
-fi
-
+# --- Step 1: Start k3s and wait for it to become ready ---------------------
 KUBECONFIG_DEST="$HOME/.kube/config"
 mkdir -p "$(dirname "$KUBECONFIG_DEST")"
 export KUBECONFIG="$KUBECONFIG_DEST"
 
-# --- Step 2: Launch k3s Server ---------------------------------------------
-# Start k3s using configuration from /etc/rancher/k3s/config.yaml
-echo "🚀 Starting k3s cluster..."
-K3S_PID=$(sudo bash -c 'nohup k3s server \
-  > /var/log/k3s.log 2>&1 &
-  echo $!')
+K3S_PID=""
+if systemctl is-active --quiet k3s 2>/dev/null; then
+    echo "ℹ️  k3s is already running via systemd."
+elif systemctl cat k3s.service &>/dev/null; then
+    echo "🚀 Starting k3s via systemd..."
+    sudo systemctl start k3s
+else
+    echo "🚀 Starting k3s (no systemd unit installed, running directly)..."
+    K3S_PID=$(sudo bash -c 'nohup k3s server \
+      > /var/log/k3s.log 2>&1 &
+      echo $!')
+fi
 
-# --- Step 3: Wait for API Server -------------------------------------------
+# True while k3s (systemd-supervised or the raw process above) is still alive
+k3s_alive() {
+    if [ -n "$K3S_PID" ]; then
+        sudo kill -0 "$K3S_PID" 2>/dev/null
+    else
+        systemctl is-active --quiet k3s 2>/dev/null
+    fi
+}
+
 # Poll until API server responds
-echo "⏳ Waiting for Kubernetes API to become available (pid $K3S_PID)..."
+echo "⏳ Waiting for Kubernetes API to become available..."
 retries=0
 until kubectl get nodes &> /dev/null; do
-    if ! sudo kill -0 "$K3S_PID" 2>/dev/null; then
-        echo "❌ ERROR: k3s (pid $K3S_PID) died during startup."
-        echo "Check logs: sudo tail -n 50 /var/log/k3s.log"
+    if ! k3s_alive; then
+        echo "❌ ERROR: k3s died during startup."
+        echo "Check logs: sudo tail -n 50 /var/log/k3s.log   (or: journalctl -u k3s -n 50)"
         exit 1
     fi
     sleep 5
@@ -44,12 +51,11 @@ until kubectl get nodes &> /dev/null; do
 done
 echo "✅ Kubernetes API is up."
 
-# --- Step 4: Wait for Node Readiness ---------------------------------------
 # Poll until node reports Ready status
 retries=0
 until kubectl get nodes | grep -q " Ready"; do
-    if ! sudo kill -0 "$K3S_PID" 2>/dev/null; then
-        echo "❌ ERROR: k3s (pid $K3S_PID) died while waiting for node Ready."
+    if ! k3s_alive; then
+        echo "❌ ERROR: k3s died while waiting for node Ready."
         exit 1
     fi
     sleep 5
@@ -68,153 +74,124 @@ done
 echo "✅ Node is Ready."
 echo ""
 
-# --- Step 5: Rename kubeconfig identity -------------------------------------
-# k3s hardcodes cluster/context/user as "default" every time it (re)writes
-# KUBECONFIG_DEST via config.yaml's write-kubeconfig setting, so this runs on
-# every start to keep the chosen name in place. Name comes from
-# ~/.config/data_science_cluster/cluster.env (set via `just cluster-name`);
-# falls back to "default" if that hasn't been run.
-CLUSTER_ENV_FILE="$HOME/.config/data_science_cluster/cluster.env"
-CLUSTER_NAME="default"
-[ -f "$CLUSTER_ENV_FILE" ] && . "$CLUSTER_ENV_FILE"
-KUBECONFIG_ALIAS="${CLUSTER_NAME:-default}"
-python3 - "$KUBECONFIG_DEST" "default" "$KUBECONFIG_ALIAS" <<'EOF'
-import sys
-import yaml
-
-path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(path) as f:
-    cfg = yaml.safe_load(f)
-
-changed = False
-for section in ("clusters", "users"):
-    for item in cfg.get(section, []):
-        if item.get("name") == old:
-            item["name"] = new
-            changed = True
-for ctx in cfg.get("contexts", []):
-    if ctx.get("name") == old:
-        ctx["name"] = new
-        changed = True
-    c = ctx.get("context", {})
-    if c.get("cluster") == old:
-        c["cluster"] = new
-        changed = True
-    if c.get("user") == old:
-        c["user"] = new
-        changed = True
-if cfg.get("current-context") == old:
-    cfg["current-context"] = new
-    changed = True
-
-if changed:
-    with open(path, "w") as f:
-        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
-EOF
-
-# --- Step 6: Unseal in-cluster Vault ------------------------------------
-# Check seal state and unseal via GPG keyfile if necessary
+# --- Step 2: Unseal in-cluster Vault ------------------------------------
 
 # Returns seal status: unsealed, sealed, or unreachable
 incluster_seal_state() {
-    local rc=0
-    kubectl exec -n vault vault-0 -- vault status -format=json > /dev/null 2>&1 || rc=$?
-    if [ "$rc" -eq 0 ]; then
+    local exit_code=0
+    kubectl exec -n vault vault-0 -- vault status -format=json > /dev/null 2>&1 || exit_code=$?
+    if [ "$exit_code" -eq 0 ]; then
         echo unsealed
-    elif [ "$rc" -eq 2 ]; then
+    elif [ "$exit_code" -eq 2 ]; then
         echo sealed
     else
         echo unreachable
     fi
 }
 
-echo "⏳ Checking in-cluster Vault seal status..."
-seal_state=$(incluster_seal_state)
-if [ "$seal_state" = unsealed ]; then
-    echo "✅ In-cluster Vault already unsealed."
-elif [ "$seal_state" = unreachable ]; then
-    echo "❌ ERROR: Cannot reach vault-0. Continuing..."
-    kubectl exec -n vault vault-0 -- vault status 2>&1 | sed 's/^/   /'
-    echo "💡 TROUBLESHOOTING: Is the pod up?  kubectl get pods -n vault"
-    had_warnings=true
-else
-    echo "🔒 In-cluster Vault is sealed."
-    KEYFILE="$HOME/.vault-keys.gpg"
-    if [ ! -f "$KEYFILE" ]; then
-        echo "❌ ERROR: $KEYFILE not found. Cannot unseal Vault."
-        echo "💡 TROUBLESHOOTING: Did the GPG keyfile get created during 'just bootstrap' (INSTALLATION.md)?. Continuing..."
-        had_warnings=true
-    else
-        # Decrypts keys and writes to Vault unseal endpoint via stdin
-        decrypt_and_unseal() {
-            gpg --quiet --decrypt "$KEYFILE" | while IFS= read -r key; do
-                [ -n "$key" ] || continue
-                if ! err=$(printf '%s\n' "$key" | kubectl exec -i -n vault vault-0 -- vault write -format=json sys/unseal key=- 2>&1 >/dev/null); then
-                    echo "   ⚠️ Key rejected by Vault: $err"
-                fi
-            done
-            return "${PIPESTATUS[0]}"
-        }
-
-        echo "🔑 Enter GPG passphrase to decrypt unseal keys:"
-        if ! decrypt_and_unseal; then
-            echo "❌ ERROR: GPG decryption failed or was cancelled. Vault remains sealed. Continuing..."
-            had_warnings=true
+# Decrypts $1 and writes each key to Vault's unseal endpoint via stdin
+decrypt_and_unseal() {
+    local keyfile="$1"
+    gpg --quiet --decrypt "$keyfile" | while IFS= read -r key; do
+        [ -n "$key" ] || continue
+        if ! error_output=$(printf '%s\n' "$key" | kubectl exec -i -n vault vault-0 -- vault write -format=json sys/unseal key=- 2>&1 >/dev/null); then
+            echo "   ⚠️ Key rejected by Vault: $error_output"
         fi
+    done
+    return "${PIPESTATUS[0]}"
+}
 
-        seal_state=$(incluster_seal_state)
-        if [ "$seal_state" = unsealed ]; then
-            echo "✅ In-cluster Vault unsealed successfully."
-        elif [ "$seal_state" = sealed ]; then
-            echo "❌ ERROR: Vault still sealed after applying keys from $KEYFILE. Continuing..."
-            had_warnings=true
-        else
-            echo "❌ ERROR: Vault unreachable after applying keys from $KEYFILE. Continuing..."
-            kubectl exec -n vault vault-0 -- vault status 2>&1 | sed 's/^/   /'
-            had_warnings=true
-        fi
+unseal_vault() {
+    local seal_state
+    seal_state=$(incluster_seal_state)
+
+    if [ "$seal_state" = unsealed ]; then
+        echo "✅ In-cluster Vault already unsealed."
+        return 0
     fi
-fi
+
+    if [ "$seal_state" = unreachable ]; then
+        echo "❌ ERROR: Cannot reach vault-0. Continuing..."
+        kubectl exec -n vault vault-0 -- vault status 2>&1 | sed 's/^/   /'
+        echo "💡 TROUBLESHOOTING: Is the pod up?  kubectl get pods -n vault"
+        return 1
+    fi
+
+    echo "🔒 In-cluster Vault is sealed."
+    local keyfile="$HOME/.vault-keys.gpg"
+    if [ ! -f "$keyfile" ]; then
+        echo "❌ ERROR: $keyfile not found. Cannot unseal Vault."
+        echo "💡 TROUBLESHOOTING: Did the GPG keyfile get created during 'just bootstrap' (INSTALLATION.md)?. Continuing..."
+        return 1
+    fi
+
+    echo "🔑 Enter GPG passphrase to decrypt unseal keys:"
+    if ! decrypt_and_unseal "$keyfile"; then
+        echo "❌ ERROR: GPG decryption failed or was cancelled. Vault remains sealed. Continuing..."
+        return 1
+    fi
+
+    seal_state=$(incluster_seal_state)
+    case "$seal_state" in
+        unsealed)
+            echo "✅ In-cluster Vault unsealed successfully."
+            ;;
+        sealed)
+            echo "❌ ERROR: Vault still sealed after applying keys from $keyfile. Continuing..."
+            return 1
+            ;;
+        *)
+            echo "❌ ERROR: Vault unreachable after applying keys from $keyfile. Continuing..."
+            kubectl exec -n vault vault-0 -- vault status 2>&1 | sed 's/^/   /'
+            return 1
+            ;;
+    esac
+}
+
+echo "⏳ Checking in-cluster Vault seal status..."
+unseal_vault || had_warnings=true
 echo ""
 
-# --- Step 7: Un-hibernate PostGIS and resume backups ------------------------
-# Resume CNPG cluster and scheduled backups
-if kubectl get cluster postgis-cluster -n databases &> /dev/null; then
-  hib=$(kubectl get cluster postgis-cluster -n databases \
-    -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null) || hib=""
+# --- Step 3: Un-hibernate PostGIS and resume backups ------------------------
 
-  if [ "$hib" == "on" ]; then
+unhibernate_postgis() {
+    kubectl get cluster postgis-cluster -n databases &> /dev/null || return 0
+
+    local hibernation_annotation
+    hibernation_annotation=$(kubectl get cluster postgis-cluster -n databases \
+        -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null) || hibernation_annotation=""
+    [ "$hibernation_annotation" = on ] || return 0
+
     echo "⏳ Rehydrating postgis-cluster from hibernation..."
-
-    retries=0
-    success=false
-    until [ $retries -ge 6 ]; do
-        if kubectl annotate cluster postgis-cluster -n databases --overwrite cnpg.io/hibernation=off 2>/dev/null; then
-            success=true
-            break
+    local retries=0
+    until kubectl annotate cluster postgis-cluster -n databases --overwrite cnpg.io/hibernation=off 2>/dev/null; do
+        retries=$((retries+1))
+        if [ $retries -ge 6 ]; then
+            echo "⚠️  Could not un-hibernate postgis-cluster (webhook timed out). Startup continues."
+            echo "💡 TROUBLESHOOTING: Once the cluster settles, run manually:"
+            echo "   kubectl annotate cluster postgis-cluster -n databases --overwrite cnpg.io/hibernation=off"
+            return 1
         fi
         sleep 5
-        retries=$((retries+1))
         echo "   ...still retrying re-hydration of database... ($((retries * 5))s elapsed)"
     done
-    if [ "$success" = true ]; then
-        echo "✅ postgis-cluster un-hibernated successfully."
-    else
-        echo "⚠️  Could not un-hibernate postgis-cluster (webhook timed out). Startup continues."
-        echo "💡 TROUBLESHOOTING: Once the cluster settles, run manually:"
-        echo "   kubectl annotate cluster postgis-cluster -n databases --overwrite cnpg.io/hibernation=off"
-        had_warnings=true
-    fi
-  fi
-fi
+    echo "✅ postgis-cluster un-hibernated successfully."
+}
 
-sbs=$(kubectl get scheduledbackup -n databases -o name 2>/dev/null) || sbs=""
-if [ -n "$sbs" ]; then
+resume_scheduled_backups() {
+    local scheduled_backups
+    scheduled_backups=$(kubectl get scheduledbackup -n databases -o name 2>/dev/null) || scheduled_backups=""
+    [ -n "$scheduled_backups" ] || return 0
+
     echo "▶️  Resuming scheduled backups..."
-    for sb in $sbs; do
-        kubectl patch "$sb" -n databases --type merge -p '{"spec":{"suspend":false}}' 2>/dev/null || true
+    local backup
+    for backup in $scheduled_backups; do
+        kubectl patch "$backup" -n databases --type merge -p '{"spec":{"suspend":false}}' 2>/dev/null || true
     done
-fi
+}
+
+unhibernate_postgis || had_warnings=true
+resume_scheduled_backups
 echo ""
 
 if [ "$had_warnings" = true ]; then
