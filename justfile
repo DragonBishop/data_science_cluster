@@ -179,11 +179,7 @@ install:
 update:
   uv sync -U --all-groups --all-extras --inexact
 
-# Set up git pre-commit hooks (prek)
+# set up the nbwipers git filter so notebooks stay clean on commit
 git-setup:
   @[ -d .git ] || git init
-  uv run prek install
-
-# Run tests and generate coverage reports
-test-cov:
-  uv run pytest --cov=src/clusterpgis --cov-report=lcov:lcov.info --cov-report=term-missing --cov-report html --cov-report xml
+  uv run nbwipers install local

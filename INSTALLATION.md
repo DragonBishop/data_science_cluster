@@ -134,28 +134,11 @@ tofu version
 
   ```bash
   sudo ufw status verbose
+  # Ensure DEFAULT_FORWARD_POLICY is accept (routed)
+  # Ensure cilium_host, cilium_net, cilium_vxlan, and lxc+ are ALLOW IN
   ```
 
-* **Fedora / RHEL / Red Hat (`firewalld`)**:
-  `ufw` is not present on Fedora and RHEL; `firewalld` serves the same role. Allow forwarding and masquerade on your active zone:
-
-  ```bash
-  sudo firewall-cmd --permanent --zone="$(firewall-cmd --get-default-zone)" --add-port=443/tcp
-  sudo firewall-cmd --permanent --zone="$(firewall-cmd --get-default-zone)" --add-masquerade
-  sudo firewall-cmd --reload
-  ```
-
-  Verify zone settings:
-
-  ```bash
-  sudo firewall-cmd --list-all
-  ```
-
-#### Reserved IP Range Verification
-
-Confirm `192.0.2.240` to `192.0.2.250` is excluded from your router's DHCP pool (configured in `infrastructure/cluster-config/cluster-config.yaml`).
-
-Verify neither the Gateway IP nor the DNS LAN IP is already in use:
+* [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `terraform/cluster-config/terraform.tfvars` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
 
 ```bash
 ping -c 2 -W 1 192.0.2.240
@@ -231,8 +214,9 @@ flowchart TD
     cc["cluster-config"] --> cilium
 
     %% Core Services & PKI
-    cilium --> flux
-    flux --> certmgr["cert-manager"]
+    cilium --> coredns["coredns-custom"]
+    cilium --> fluxpolicies["flux-system-policies"]
+    cilium --> certmgr["cert-manager"]
     certmgr --> vault["vault"]
 
     %% Platform Services
@@ -249,8 +233,8 @@ flowchart TD
     gw --> db
 ```
 
-* `cilium` requires `gateway-api-crds`, `namespaces`, and `cluster-config`.
-* `flux` depends on `cilium`, and `cert-manager` depends on `flux`.
+* `cilium` requires `gateway-api-crds` and `namespaces`.
+* `coredns-custom`, `flux-system-policies`, and `cert-manager` depend on `cilium`.
 * `vault` depends on `cert-manager` (for `vault-server-cert` TLS bootstrap).
 * `vault-secrets-operator` and `gateway` depend on `vault` (for PKI and secrets sync).
 * `cnpg-operator` depends on `vault-secrets-operator`, and `barman-cloud` depends on `cnpg-operator`.

@@ -10,12 +10,6 @@ variable "s3_secret_key" {
 }
 
 variable "postgres_superuser_password" {
-  type        = string
-  sensitive   = true
-  description = "Postgres superuser password for Vault's database secrets engine connection."
-}
-
-variable "secrets_wo_version" {
-  type        = number
-  description = "Version for write-only secrets (postgres password, S3 keys). Bumps only on rotation."
+  type      = string
+  sensitive = true
 }

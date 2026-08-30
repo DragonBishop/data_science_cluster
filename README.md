@@ -232,13 +232,13 @@ One-time, first-install setup: see `INSTALLATION.md` for Requirements and what t
 
 ### Development
 
-| Command | Operation | When |
-| --- | --- | --- |
-| `just setup` | Set up development environment | Runs `install` and configures repository git filters |
-| `just install` | Install Python dependencies | Syncs local virtual environment using `uv sync` |
-| `just update` | Update dependencies & lockfile | Upgrades packages to latest compatible versions and updates `uv.lock` |
-| `just git-setup` | Configure git filters & hooks | Installs `prek` pre-commit hooks |
-| `just test-cov` | Run tests with coverage | Executes pytest suite and generates lcov, terminal, HTML, and XML coverage reports |
+| Command | Operation |
+| --- | --- |
+| `just install` | Install dependencies |
+| `just setup` | Set up the dev environment (install + git filters) |
+| `just test-cov` | Run tests with coverage |
+| `just update` | Update packages and the lockfile |
+| `just git-setup` | Configure the `nbwipers` git filter |
 
 ---
 
@@ -346,6 +346,10 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       └── vso-setup.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
+│       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap`
+│       │   ├── gotk-components.yaml
+│       │   ├── gotk-sync.yaml
+│       │   └── kustomization.yaml
 │       ├── barman-cloud.yaml            # Kustomization → infrastructure/barman-cloud/
 │       ├── cert-manager.yaml            # Kustomization → infrastructure/cert-manager/
 │       ├── cilium.yaml                  # Kustomization → infrastructure/cilium/
@@ -413,11 +417,11 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   └── vso-release.yaml
 │   └── vault/
 │       ├── kustomization.yaml
-│       ├── kustomizeconfig.yaml
-│       ├── vault-networkpolicy.yaml
-│       ├── vault-release.yaml
-│       ├── vault-tls.yaml
-│       └── vault-values.yaml
+│       ├── vso-networkpolicy.yaml
+│       └── vso-release.yaml
+├── notebooks/
+│   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
+│   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
 │   ├── bash/
 │   │   ├── preflight.sh                 # Read-only host readiness checks
