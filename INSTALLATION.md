@@ -153,7 +153,7 @@ tofu version
 
 #### Reserved IP Range Verification
 
-Confirm `192.0.2.240`–`192.0.2.250` is excluded from your router's DHCP pool (configured in `infrastructure/cluster-config/cluster-config.yaml`).
+Confirm `192.0.2.240` to `192.0.2.250` is excluded from your router's DHCP pool (configured in `infrastructure/cluster-config/cluster-config.yaml`).
 
 Verify neither the Gateway IP nor the DNS LAN IP is already in use:
 
