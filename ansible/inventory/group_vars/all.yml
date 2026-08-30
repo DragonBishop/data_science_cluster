@@ -1,6 +1,5 @@
 ---
-# Absolute repo root; file lookups below need it since plain relative paths
-# don't reliably resolve regardless of invocation cwd.
+# Absolute repo root
 repo_root: "{{ playbook_dir }}/../.."
 
 # Parsed from infrastructure/cluster-config/cluster-config.yaml
