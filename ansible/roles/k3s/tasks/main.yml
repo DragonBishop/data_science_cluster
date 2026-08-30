@@ -1,0 +1,57 @@
+---
+- name: Create /etc/rancher/k3s directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    mode: "0755"
+    state: directory
+  become: true
+
+- name: Write k3s config.yaml
+  ansible.builtin.copy:
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0644"
+    content: |
+      write-kubeconfig-mode: "0644"
+      write-kubeconfig: "{{ ansible_env.HOME }}/.kube/config"
+      disable:
+        - traefik
+        - servicelb
+      disable-kube-proxy: true
+      disable-network-policy: true
+      flannel-backend: none
+      secrets-encryption: true
+  become: true
+
+- name: Confirm k3s install
+  ansible.builtin.command: k3s -v
+  register: k3s_installed
+  changed_when: false
+  failed_when: false
+
+- name: Install k3s
+  ansible.builtin.shell: set -o pipefail && curl -sFL https://get.k3s.io | sh -
+  args:
+    executable: /bin/bash
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  changed_when: false
+  failed_when: false
+  when: k3s_installed.rc != 0
+  become: true
+
+- name: Ensure ~/.kube directory exists.
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.kube"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Wait for Kubernetes API to respond
+  ansible.builtin.command: kubectl get nodes
+  environment:
+    KUBECONFIG: "{{ ansible_env.HOME }}/.kube/config"
+  register: k3s_api_check
+  until: k3s_api_check.rc == 0
+  retries: 12
+  delay: 5
+  changed_when: false

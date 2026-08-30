@@ -16,16 +16,16 @@ spec:
   values:
     resources:
       requests:
-        cpu: 2m
-        memory: 200Mi
+        cpu: ${CNPG_CPU_REQUEST}
+        memory: ${CNPG_MEM_REQUEST}
       limits:
-        memory: 600Mi
+        memory: ${CNPG_MEM_LIMIT}
   interval: 1h
   releaseName: cnpg
   chart:
     spec:
       chart: cloudnative-pg
-      version: "0.29.0"
+      version: "${CNPG_VERSION}"
       sourceRef:
         kind: HelmRepository
         name: cnpg

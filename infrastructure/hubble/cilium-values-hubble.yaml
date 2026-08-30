@@ -3,9 +3,9 @@ hubble:
   relay:
     resources:
       requests:
-        memory: 70Mi
+        memory: ${HUBBLE_RELAY_MEM_REQUEST}
       limits:
-        memory: 100Mi
+        memory: ${HUBBLE_RELAY_MEM_LIMIT}
     enabled: true
     tls:
       server:
@@ -15,15 +15,15 @@ hubble:
     frontend:
       resources:
         requests:
-          memory: 25Mi
+          memory: ${HUBBLE_UI_FRONTEND_MEM_REQUEST}
         limits:
-          memory: 40Mi
+          memory: ${HUBBLE_UI_FRONTEND_MEM_LIMIT}
     backend:
       resources:
         requests:
-          memory: 70Mi
+          memory: ${HUBBLE_UI_BACKEND_MEM_REQUEST}
         limits:
-          memory: 100Mi
+          memory: ${HUBBLE_UI_BACKEND_MEM_LIMIT}
     enabled: true
   tls:
     auto:

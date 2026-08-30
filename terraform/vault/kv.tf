@@ -6,8 +6,8 @@ resource "vault_mount" "kv" {
 }
 
 resource "vault_kv_secret_v2" "postgis" {
-  mount   = vault_mount.kv.path
-  name    = "postgis"
+  mount = vault_mount.kv.path
+  name  = "postgis"
   data_json_wo = jsonencode({
     username = "postgres"
     password = var.postgres_superuser_password
@@ -16,8 +16,8 @@ resource "vault_kv_secret_v2" "postgis" {
 }
 
 resource "vault_kv_secret_v2" "seaweedfs" {
-  mount   = vault_mount.kv.path
-  name    = "seaweedfs"
+  mount = vault_mount.kv.path
+  name  = "seaweedfs"
   data_json_wo = jsonencode({
     ACCESS_KEY_ID     = var.s3_access_key
     ACCESS_SECRET_KEY = var.s3_secret_key

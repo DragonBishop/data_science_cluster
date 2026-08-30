@@ -32,4 +32,3 @@ spec:
         - ports:
             - port: "9443"
               protocol: TCP
-

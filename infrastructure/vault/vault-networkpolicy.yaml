@@ -8,12 +8,6 @@ spec:
     matchLabels:
       app.kubernetes.io/name: vault
   egress:
-    - toCIDR:
-        - "${HOST_IP}/32"
-      toPorts:
-        - ports:
-            - port: "8200"
-              protocol: TCP
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: databases
@@ -32,4 +26,3 @@ spec:
         - ports:
             - port: "8200"
               protocol: TCP
-

@@ -1,0 +1,52 @@
+---
+
+- name: "Install Gateway API Custom Resource Definitions (CRDs) {{ gateway_api_version }}"
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/infrastructure/gateway-api-crds/standard-install.yaml"
+    server_side_apply:
+      enabled: true
+
+- name: Create temp file for rendered Cilium Helm values
+  ansible.builtin.tempfile:
+    state: file
+    suffix: cilium-values.yaml
+  register: cilium_values_rendered
+
+# Test to ensure no leakage of envs.
+# - name: Verify every ${VAR} in cilium-values.yaml is a known cluster-config key
+#  ansible.builtin.assert:
+#    that:
+#      - (lookup('file', repo_root + '/infrastructure/cilium/cilium-values.yaml') | regex_findall('\$\{(\w+)\}') | difference(cluster_config.keys())) == []
+#    fail_msg: >-
+#      cilium-values.yaml references a ${VAR} not defined in cluster-config.yaml:
+#      substitution would evaluate it to an empty string.
+
+- name: Substitute cluster-config values into Cilium Helm values
+  ansible.builtin.shell:
+    cmd: |
+      while IFS= read -r line || [ -n "$line" ]; do eval "echo \"$line\""; done < "{{ repo_root }}/infrastructure/cilium/cilium-values.yaml"
+    executable: /bin/bash
+  environment: "{{ cluster_config }}"
+  register: cilium_values_substituted
+  changed_when: false
+
+- name: Write rendered Cilium Helm values
+  ansible.builtin.copy:
+    dest: "{{ cilium_values_rendered.path }}"
+    content: "{{ cilium_values_substituted.stdout }}"
+    mode: "0600"
+
+- name: Install Cilium
+  kubernetes.core.helm:
+    name: cilium
+    chart_ref: oci://quay.io/cilium/charts/cilium
+    chart_version: "{{ cilium_version }}"
+    release_namespace: kube-system
+    values_files:
+      - "{{ cilium_values_rendered.path }}"
+
+- name: Clean up rendered Cilium Helm values
+  ansible.builtin.file:
+    path: "{{ cilium_values_rendered.path }}"
+    state: absent
