@@ -137,7 +137,7 @@ Organized to match the justfile's own section layout (`just --list` shows every 
 
 ### Bootstrap
 
-One-time, first-install setup — see `INSTALLATION.md` for Requirements and what the script does.
+One-time, first-install setup: see `INSTALLATION.md` for Requirements and what the script does.
 
 | Command | Operation |
 | --- | --- |

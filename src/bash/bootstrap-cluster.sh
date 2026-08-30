@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # bootstrap-cluster.sh: First-time cluster bootstrap (see INSTALLATION.md).
-# Idempotent — safe to re-run; each phase checks existing state first.
+# Idempotent, safe to re-run; each phase checks existing state first.
 #
 set -eu
 had_warnings=false
@@ -97,7 +97,7 @@ until kubectl get pods -n vault vault-0 2>/dev/null | grep -q "Running"; do
     sleep 5
     retries=$((retries+1))
     if [ $retries -ge 36 ]; then
-        echo "⚠️  vault-0 not Running after 3 minutes. Continuing — check 'kubectl get pods -n vault -w'."
+        echo "⚠️  vault-0 not Running after 3 minutes. Continuing: check 'kubectl get pods -n vault -w'."
         had_warnings=true
         break
     fi
@@ -133,7 +133,7 @@ if [ "$incluster_initialized" = "True" ]; then
         exit 1
     fi
 else
-    echo "🔑 Initializing in-cluster Vault (SAVE THESE — shown once)..."
+    echo "🔑 Initializing in-cluster Vault (SAVE THESE, shown once)..."
     incluster_init_json=$(kubectl exec -n vault vault-0 -- vault operator init -format=json)
     echo "$incluster_init_json" | python3 -m json.tool
     mapfile -t incluster_unseal_keys < <(echo "$incluster_init_json" | python3 -c "import json,sys; [print(k) for k in json.load(sys.stdin)['unseal_keys_b64'][:3]]")
@@ -164,7 +164,7 @@ echo ""
 # --- Step 7: vault Terraform (engines, policies) -----------------------------
 just vault-pf
 if [ -z "$incluster_root_token" ]; then
-    read -rs -p "In-cluster Vault root token (this run resumed after init already ran — paste it): " incluster_root_token; echo
+    read -rs -p "In-cluster Vault root token (this run resumed after init already ran, paste it): " incluster_root_token; echo
 fi
 read -rs -p "State encryption passphrase (used for terraform/vault's state file): " TF_VAR_state_encryption_passphrase; echo
 export TF_VAR_state_encryption_passphrase
@@ -181,7 +181,7 @@ else
         # shellcheck disable=SC1090
         . "$SECRETS_ENV_FILE"
         SECRETS_WO_VERSION=$((SECRETS_WO_VERSION + 1))
-        echo "🔄 ROTATE_VAULT_SECRETS=true — generating new app secrets (version ${SECRETS_WO_VERSION})..."
+        echo "🔄 ROTATE_VAULT_SECRETS=true: generating new app secrets (version ${SECRETS_WO_VERSION})..."
     else
         SECRETS_WO_VERSION=1
         echo "🔑 Generating app secrets (first run)..."
@@ -236,7 +236,7 @@ fi
 echo ""
 
 # --- Step 9: Summary ---------------------------------------------------------
-echo "Generated app secrets (postgres/S3) are stored in Vault — retrieve anytime with:"
+echo "Generated app secrets (postgres/S3) are stored in Vault. Retrieve anytime with:"
 echo "  kubectl exec -n vault vault-0 -- vault kv get secret/postgis"
 echo "  kubectl exec -n vault vault-0 -- vault kv get secret/seaweedfs"
 echo ""
