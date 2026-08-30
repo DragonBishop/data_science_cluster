@@ -31,12 +31,11 @@ acquire_sudo() {
     fi
 }
 
-k3s_active_or_enabled() {
-    systemctl is-active --quiet k3s 2>/dev/null || systemctl is-enabled --quiet k3s 2>/dev/null
-}
-
 exit_if_k3s_not_running() {
-    if ! k3s_active_or_enabled; then
+    if ! systemctl is-active --quiet k3s 2>/dev/null; then
+        if systemctl is-enabled --quiet k3s 2>/dev/null; then
+            sudo systemctl disable k3s 2>/dev/null || true
+        fi
         echo "ℹ️  k3s.service is already inactive."
         exit 0
     fi
@@ -83,7 +82,7 @@ wait_for_hibernation() {
         hibernation_reason=${condition_remainder%%|*}
         hibernation_message=${condition_remainder#*|}
 
-        if [ "$hibernation_status" == "True" ]; then
+        if [ "$hibernation_status" = "True" ]; then
             echo "  ✅ Operator reports hibernated: ${hibernation_message:-Cluster has been hibernated}"
             return 0
         fi
@@ -111,7 +110,7 @@ attempt_hibernate_postgis() {
     if ! kubectl get --raw='/readyz' &>/dev/null; then
         halt "$CLUSTER_NAME cannot be hibernated, Kubernetes API is unreachable.
    Check: sudo tail -n 50 /var/log/k3s.log   (or: journalctl -u k3s -n 50)"
-        return
+        return 0
     fi
     if ! kubectl get cluster "$CLUSTER_NAME" -n "$CLUSTER_NS" &>/dev/null; then
         echo "ℹ️  $CLUSTER_NAME not found. Unable to hibernate."
@@ -121,6 +120,7 @@ attempt_hibernate_postgis() {
     echo "💤 Hibernating $CLUSTER_NAME..."
     if ! kubectl annotate cluster "$CLUSTER_NAME" -n "$CLUSTER_NS" --overwrite cnpg.io/hibernation=on; then
         halt "$CLUSTER_NAME hibernation annotation failed."
+        return 0
     fi
 
     pause_scheduled_backups

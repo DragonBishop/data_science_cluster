@@ -20,7 +20,7 @@
 
 * **Port 6443 is still bound/in-use after running `stop-cluster.sh`**
   * **What's happening:** The API server stopped, but containerd shims are still running.
-  * **How to fix it:** Re-run `stop-cluster.sh --force` and once hibernation is confirmed, it prompts before running `k3s-killall.sh` for you (never runs it unattended). Or run `sudo k3s-killall.sh` yourself; it cleans up leftover processes and unmounts directories.
+  * **How to fix it:** Run `sudo k3s-killall.sh` manually; it cleans up leftover processes and unmounts directories.
 
 ---
 
