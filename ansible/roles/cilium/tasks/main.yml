@@ -1,0 +1,43 @@
+---
+
+- name: "Install Gateway API Custom Resource Definitions (CRDs) {{ gateway_api_version }}"
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/infrastructure/gateway-api-crds/standard-install.yaml"
+    server_side_apply:
+      enabled: true
+
+- name: Install Cilium
+  kubernetes.core.helm:
+    name: cilium
+    chart_ref: oci://quay.io/cilium/charts/cilium
+    chart_version: "{{ cilium_version }}"
+    release_namespace: kube-system
+    values_files:
+      - "{{ repo_root }}/infrastructure/cilium/cilium-values.yaml"
+    values:
+      k8sServiceHost: "{{ k3s_api_host }}"
+      k8sServicePort: "{{ k3s_api_port | int }}"
+      resources:
+        requests:
+          cpu: "{{ cilium_cpu_request }}"
+          memory: "{{ cilium_mem_request }}"
+        limits:
+          memory: "{{ cilium_mem_limit }}"
+      operator:
+        replicas: "{{ cilium_operator_replicas | int }}"
+        resources:
+          requests:
+            cpu: "{{ cilium_operator_cpu_request }}"
+            memory: "{{ cilium_operator_mem_request }}"
+          limits:
+            memory: "{{ cilium_operator_mem_limit }}"
+      envoy:
+        resources:
+          requests:
+            cpu: "{{ cilium_envoy_cpu_request }}"
+            memory: "{{ cilium_envoy_mem_request }}"
+      ipam:
+        operator:
+          clusterPoolIPv4PodCIDRList:
+            - "{{ pod_cidr }}"
