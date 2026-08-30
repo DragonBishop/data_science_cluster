@@ -76,7 +76,7 @@ exclude = [
 strip-kernel-info = true
 
 [tool.rumdl]
-disabled-rules = ["MD013"]
+disable = ["MD013"]
 
 [tool.rumdl.MD024]
 siblings-only = true
