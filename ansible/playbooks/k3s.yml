@@ -4,8 +4,8 @@
   become: false
 
   roles:
-    - { role: k3s, tags: [k3s, bootstrap] }
-    - { role: cilium, tags: [cilium, bootstrap] }
-    - { role: opentofu, tags: [vault, bootstrap]}
-    - { role: vault, tags: [vault, bootstrap]}
-    - { role: flux, tags: [flux, bootstrap]}
+    - { role: k3s, tags: [k3s] }
+    - { role: cilium, tags: [cilium] }
+    - { role: flux, tags: [flux] }
+    - { role: vault, tags: [vault] }
+    - { role: opentofu, tags: [opentofu, vault] }
