@@ -142,6 +142,7 @@ tofu version
   `ufw` is not present on Fedora and RHEL; `firewalld` serves the same role. Allow forwarding, masquerading, DNS, and add Cilium interfaces/subnets to `trusted`:
 
   ```bash
+  # 1. Base zone configuration (DNS, Gateway port, masquerade, cluster CIDRs)
   sudo firewall-cmd --zone=FedoraWorkstation --add-service=dns --permanent
   sudo firewall-cmd --zone=FedoraWorkstation --add-port=443/tcp --permanent
   sudo firewall-cmd --zone=FedoraWorkstation --add-masquerade --permanent
@@ -152,15 +153,32 @@ tofu version
   sudo firewall-cmd --zone=trusted --add-interface=cilium_host --permanent
   sudo firewall-cmd --zone=trusted --add-interface=cilium_net --permanent
   sudo firewall-cmd --zone=trusted --add-interface=cilium_vxlan --permanent
-  sudo firewall-cmd --zone=trusted --add-interface=lxc+ --permanent
+
+  # 2. Scoped forwarding policies (host probes, node API, outbound egress)
+  sudo firewall-cmd --permanent --new-policy=k8s-host-to-pods 2>/dev/null || true
+  sudo firewall-cmd --permanent --policy=k8s-host-to-pods --add-ingress-zone=HOST
+  sudo firewall-cmd --permanent --policy=k8s-host-to-pods --add-egress-zone=trusted
+  sudo firewall-cmd --permanent --policy=k8s-host-to-pods --set-target=ACCEPT
+
+  sudo firewall-cmd --permanent --new-policy=k8s-pods-to-host 2>/dev/null || true
+  sudo firewall-cmd --permanent --policy=k8s-pods-to-host --add-ingress-zone=trusted
+  sudo firewall-cmd --permanent --policy=k8s-pods-to-host --add-egress-zone=HOST
+  sudo firewall-cmd --permanent --policy=k8s-pods-to-host --set-target=ACCEPT
+
+  sudo firewall-cmd --permanent --new-policy=k8s-pods-to-wan 2>/dev/null || true
+  sudo firewall-cmd --permanent --policy=k8s-pods-to-wan --add-ingress-zone=trusted
+  sudo firewall-cmd --permanent --policy=k8s-pods-to-wan --add-egress-zone=FedoraWorkstation
+  sudo firewall-cmd --permanent --policy=k8s-pods-to-wan --set-target=ACCEPT
+
   sudo firewall-cmd --reload
   ```
 
-  Verify rule status:
+  Verify rule and policy status:
 
   ```bash
   sudo firewall-cmd --list-all
   sudo firewall-cmd --zone=trusted --list-all
+  sudo firewall-cmd --get-policies
   ```
 
 * [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `terraform/cluster-config/terraform.tfvars` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
