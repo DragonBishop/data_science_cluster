@@ -62,6 +62,20 @@ detect_distro() {
     printf '%s %s\n' "$distro_family" "$distro_id"
 }
 
+get_cluster_pod_cidr() {
+    local script_dir
+    local config_file
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    config_file="$script_dir/../../infrastructure/cluster-config/cluster-config.yaml"
+
+    if [ -f "$config_file" ]; then
+        grep 'POD_CIDR:' "$config_file" | head -n 1 | awk -F'"' '{print $2}'
+        return 0
+    fi
+
+    echo "10.42.0.0/16"
+}
+
 check_debian_firewall() {
     if ! command -v ufw >/dev/null 2>&1; then
         echo "⚠️  ufw not found on a Debian/Ubuntu host (expected on this distro family). Verify firewall state manually (see INSTALLATION.md Requirements)."
@@ -103,10 +117,11 @@ check_fedora_firewall() {
         return 0
     fi
 
-    local zone zone_info trusted_info missing=()
+    local zone zone_info trusted_info pod_cidr missing=()
     zone=$(firewall-cmd --get-default-zone 2>/dev/null || echo "FedoraWorkstation")
     zone_info=$(firewall-cmd --zone="$zone" --list-all 2>/dev/null)
     trusted_info=$(firewall-cmd --zone=trusted --list-all 2>/dev/null)
+    pod_cidr=$(get_cluster_pod_cidr)
 
     echo "$zone_info" | grep -q "forward: yes" || missing+=("forward: yes in zone '$zone'")
     echo "$zone_info" | grep -q "masquerade: yes" || missing+=("masquerade: yes in zone '$zone'")
@@ -116,15 +131,15 @@ check_fedora_firewall() {
         missing+=("dns service in zone '$zone' or 'trusted'")
     fi
 
-    if ! echo "$trusted_info" | grep -q "10.42.0.0/16"; then
-        missing+=("10.42.0.0/16 source in 'trusted' zone")
+    if ! echo "$trusted_info" | grep -q "$pod_cidr"; then
+        missing+=("$pod_cidr source in 'trusted' zone")
     fi
 
     local policies
     policies=$(firewall-cmd --get-policies 2>/dev/null || true)
-    echo "$policies" | grep -q "k8s-host-to-pods" || missing+=("policy 'k8s-host-to-pods'")
-    echo "$policies" | grep -q "k8s-pods-to-host" || missing+=("policy 'k8s-pods-to-host'")
-    echo "$policies" | grep -q "k8s-pods-to-wan" || missing+=("policy 'k8s-pods-to-wan'")
+    echo "$policies" | grep -q "k8s-forwarding-in" || missing+=("policy 'k8s-forwarding-in'")
+    echo "$policies" | grep -q "k8s-forwarding-out" || missing+=("policy 'k8s-forwarding-out'")
+    echo "$policies" | grep -q "k8s-forwarding-host" || missing+=("policy 'k8s-forwarding-host'")
 
     if [ ${#missing[@]} -gt 0 ]; then
         echo "⚠️  firewalld is active but missing required rules/policies for Kubernetes/Cilium (see INSTALLATION.md Requirements):"

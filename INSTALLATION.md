@@ -118,6 +118,12 @@ tofu version
 
 #### Host Firewall Configuration
 
+* [ ] **Host firewall configured for Cilium** — you can configure your host firewall automatically using the `just setup-firewall` recipe, or apply the manual commands below for your distribution:
+
+  ```bash
+  just setup-firewall
+  ```
+
 * **Ubuntu / Debian (`ufw`)**:
   If `ufw` is active, allow Cilium's network interfaces and set default forward policy to `ACCEPT`:
 
@@ -154,21 +160,24 @@ tofu version
   sudo firewall-cmd --zone=trusted --add-interface=cilium_net --permanent
   sudo firewall-cmd --zone=trusted --add-interface=cilium_vxlan --permanent
 
-  # 2. Scoped forwarding policies (host probes, node API, outbound egress)
-  sudo firewall-cmd --permanent --new-policy=k8s-host-to-pods 2>/dev/null || true
-  sudo firewall-cmd --permanent --policy=k8s-host-to-pods --add-ingress-zone=HOST
-  sudo firewall-cmd --permanent --policy=k8s-host-to-pods --add-egress-zone=trusted
-  sudo firewall-cmd --permanent --policy=k8s-host-to-pods --set-target=ACCEPT
+  # 2. Container forwarding policies (priority -1: ANY <-> trusted, HOST -> ANY)
+  sudo firewall-cmd --permanent --new-policy=k8s-forwarding-in 2>/dev/null || true
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-in --set-priority=-1
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-in --add-ingress-zone=ANY
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-in --add-egress-zone=trusted
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-in --set-target=ACCEPT
 
-  sudo firewall-cmd --permanent --new-policy=k8s-pods-to-host 2>/dev/null || true
-  sudo firewall-cmd --permanent --policy=k8s-pods-to-host --add-ingress-zone=trusted
-  sudo firewall-cmd --permanent --policy=k8s-pods-to-host --add-egress-zone=HOST
-  sudo firewall-cmd --permanent --policy=k8s-pods-to-host --set-target=ACCEPT
+  sudo firewall-cmd --permanent --new-policy=k8s-forwarding-out 2>/dev/null || true
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-out --set-priority=-1
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-out --add-ingress-zone=trusted
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-out --add-egress-zone=ANY
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-out --set-target=ACCEPT
 
-  sudo firewall-cmd --permanent --new-policy=k8s-pods-to-wan 2>/dev/null || true
-  sudo firewall-cmd --permanent --policy=k8s-pods-to-wan --add-ingress-zone=trusted
-  sudo firewall-cmd --permanent --policy=k8s-pods-to-wan --add-egress-zone=FedoraWorkstation
-  sudo firewall-cmd --permanent --policy=k8s-pods-to-wan --set-target=ACCEPT
+  sudo firewall-cmd --permanent --new-policy=k8s-forwarding-host 2>/dev/null || true
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-host --set-priority=-1
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-host --add-ingress-zone=HOST
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-host --add-egress-zone=ANY
+  sudo firewall-cmd --permanent --policy=k8s-forwarding-host --set-target=ACCEPT
 
   sudo firewall-cmd --reload
   ```
