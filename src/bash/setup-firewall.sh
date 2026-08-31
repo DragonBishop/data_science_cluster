@@ -183,10 +183,10 @@ CONF
 
 configure_firewalld_base_zone() {
     local active_zone="$1"
-    echo "   -> Configuring base zone '$active_zone' (DNS, 443/tcp, masquerade, forward)..."
+    echo "   -> Configuring base zone '$active_zone' (DNS, 443/tcp, forward)..."
+    # Masquerade is Cilium's job, not firewalld's.
     sudo firewall-cmd --zone="$active_zone" --add-service=dns --permanent >/dev/null
     sudo firewall-cmd --zone="$active_zone" --add-port=443/tcp --permanent >/dev/null
-    sudo firewall-cmd --zone="$active_zone" --add-masquerade --permanent >/dev/null
     sudo firewall-cmd --zone="$active_zone" --add-forward --permanent >/dev/null
 }
 

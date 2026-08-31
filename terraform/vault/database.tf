@@ -7,6 +7,8 @@ resource "vault_database_secret_backend_connection" "postgis_cluster" {
   backend       = vault_mount.db.path
   name          = "postgis-cluster"
   allowed_roles = ["postgis-app-role"]
+  # postgis-cluster-rw is created later in the Flux chain, downstream of this apply.
+  verify_connection = false
 
   postgresql {
     connection_url      = "postgresql://{{username}}:{{password}}@postgis-cluster-rw.databases.svc.cluster.local:5432/postgres?sslmode=require"

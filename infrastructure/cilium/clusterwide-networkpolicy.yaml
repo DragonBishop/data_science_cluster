@@ -7,6 +7,14 @@ spec:
   ingress:
     - fromEntities:
         - host
+    - fromEntities:
+        - cluster
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
   egress:
     - toEntities:
         - cluster
@@ -24,3 +32,11 @@ spec:
           rules:
             dns:
               - matchPattern: "*"
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP

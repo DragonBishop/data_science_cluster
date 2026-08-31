@@ -17,6 +17,16 @@
   register: flux_bootstrap_result
   changed_when: true
 
+- name: Apply Cilium cluster-default network policy
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/infrastructure/cilium/clusterwide-networkpolicy.yaml"
+
+- name: Apply flux-egress network policy
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('file', repo_root + '/infrastructure/flux-system-policies/flux-networkpolicy.yaml') | regex_replace('\\$\\{GIT_FORGE_HOST\\}', git_forge_host) }}"
+
 - name: Flux reconcile vault kustomization
   kubernetes.core.k8s:
     state: patched
