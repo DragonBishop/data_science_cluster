@@ -1,0 +1,32 @@
+[changelog]
+trim = true
+render_always = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+
+[[git.commit_parsers]]
+message = "^feat"
+group = "🚀 Features"
+[[git.commit_parsers]]
+message = "^fix"
+group = "🐛 Bug Fixes"
+[[git.commit_parsers]]
+message = "^doc"
+group = "📚 Documentation"
+[[git.commit_parsers]]
+message = "^refactor"
+group = "♻️ Refactor"
+[[git.commit_parsers]]
+message = "^chore\\(release\\): prepare for"
+skip = true
+[[git.commit_parsers]]
+message = "^chore\\(deps.*\\)"
+skip = true
+[[git.commit_parsers]]
+message = "^chore|^ci|^build"
+group = "⚙️ Miscellaneous Tasks"
+[[git.commit_parsers]]
+message = "^revert"
+group = "◀️ Revert"
