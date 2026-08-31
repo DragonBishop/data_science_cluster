@@ -316,7 +316,9 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── feature-proposal.yml
 │   │   └── technical-debt-resolution.yml
 │   └── workflows/
-│       └── ci.yml                       # ruff lint/format + pytest + coverage
+│       ├── lint.yml                     # ruff check/format
+│       ├── tests.yml                    # pytest + coverage
+│       └── release.yml                  # PR-title lint + release-please + git-cliff changelog
 ├── ansible/                             # Ansible playbooks and roles for cluster provisioning
 │   ├── inventory/
 │   │   ├── group_vars/
@@ -475,7 +477,9 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * **`Dockerfile`**: Builds the host management environment including `kubectl`, `helm`, `kubectl-cnpg`, `cilium`, `hubble`, `flux`, `postgresql-client`, `just`, and `uv`.
 * **`.github/`**
   * **`ISSUE_TEMPLATE/`**: Issue templates for bug reports, documentation updates, feature proposals, and technical-debt resolution.
-  * **`workflows/ci.yml`**: On pull requests, via `astral-sh/setup-uv`: a `lint` job runs `ruff check`/`ruff format --check`, and a `tests` job runs `pytest` with coverage against `src/clusterpgis`.
+  * **`workflows/lint.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `ruff check`/`ruff format --check`.
+  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest` with coverage against `src/clusterpgis`.
+  * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR and, once a release is tagged, regenerates `CHANGELOG.md` with `git-cliff` and pushes it back to `main`.
 * **`ansible/`** - Automated provisioning and orchestration playbooks for bootstrapping the cluster.
   * **`inventory/`**: Inventory definition (`hosts.ini`) and global variable mapping (`group_vars/all.yml`) sourcing values directly from `infrastructure/cluster-config/cluster-config.yaml`.
   * **`playbooks/k3s.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `vault` → `opentofu`.
