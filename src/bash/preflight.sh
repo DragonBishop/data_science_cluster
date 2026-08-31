@@ -124,7 +124,6 @@ check_fedora_firewall() {
     pod_cidr=$(get_cluster_pod_cidr)
 
     echo "$zone_info" | grep -q "forward: yes" || missing+=("forward: yes in zone '$zone'")
-    echo "$zone_info" | grep -q "masquerade: yes" || missing+=("masquerade: yes in zone '$zone'")
     echo "$zone_info" | grep -q "443/tcp" || missing+=("443/tcp port in zone '$zone'")
 
     if ! echo "$zone_info" | grep -qE "(services:.*\bdns\b|53/(tcp|udp))" && ! echo "$trusted_info" | grep -qE "(services:.*\bdns\b|53/(tcp|udp))"; then

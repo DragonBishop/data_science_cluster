@@ -1,8 +1,12 @@
 ---
-- name: Check whether the unseal keyfile exists
-  ansible.builtin.stat:
-    path: "{{ vault_keyfile }}"
-  register: vault_keyfile_stat
+- name: Check whether in-cluster Vault is already initialized
+  kubernetes.core.k8s_exec:
+    namespace: "{{ vault_namespace }}"
+    pod: "{{ vault_pod }}"
+    command: vault status -format=json
+  register: vault_status_result
+  changed_when: false
+  failed_when: false
 
 - name: Ensure ~/.gnupg directory exists
   ansible.builtin.file:
@@ -39,7 +43,7 @@
   no_log: true
 
 - name: Initialize Vault and write a new unseal keyfile
-  when: not vault_keyfile_stat.stat.exists
+  when: not (vault_status_result.stdout | from_json).initialized
   block:
     - name: Initialize in-cluster Vault
       kubernetes.core.k8s_exec:
@@ -54,6 +58,10 @@
         vault_root_token: "{{ (vault_init_result.stdout | from_json).root_token }}"
         vault_fresh_unseal_keys: "{{ (vault_init_result.stdout | from_json).unseal_keys_b64[:3] }}"
       no_log: true
+
+    - name: SAVE THIS NOW — root token shown once, unrecoverable if lost
+      ansible.builtin.debug:
+        msg: "Root Token: {{ vault_root_token }}"
 
     - name: Create tmpfs workdir for unseal keyfile
       ansible.builtin.tempfile:

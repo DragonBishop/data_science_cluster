@@ -5,6 +5,18 @@ metadata:
   namespace: flux-system
 spec:
   endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - cluster
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
   egress:
     - toFQDNs:
         - matchName: "${GIT_FORGE_HOST}"
+        - matchName: "quay.io"
+        - matchPattern: "*.quay.io"
+        - matchName: "helm.releases.hashicorp.com"
+        - matchName: "cloudnative-pg.github.io"
+        - matchPattern: "*.githubusercontent.com"
