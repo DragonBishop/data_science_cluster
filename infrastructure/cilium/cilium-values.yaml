@@ -6,11 +6,12 @@ kubeProxyReplacement: true
 k8sServiceHost: "${K3S_API_HOST}"
 k8sServicePort: ${K3S_API_PORT}
 
-ipv4NativeRoutingCIDR: "${POD_CIDR}"
+devices:
+  - "${LAN_INTERFACE}"
 
 bpf:
   masquerade: true
-  hostRouting: false
+  hostRouting: true
 
 resources:
   requests:

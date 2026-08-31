@@ -6,6 +6,10 @@ default:
 
 # --- Bootstrap (first-time install, see INSTALLATION.md) -------------------
 
+# Configure host firewall rules for Kubernetes and Cilium (Fedora firewalld or Ubuntu ufw)
+setup-firewall:
+  ./src/bash/setup-firewall.sh
+
 # Read-only host readiness check (tooling, gh auth, firewall, reserved IPs)
 preflight:
   ./src/bash/preflight.sh
