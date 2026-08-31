@@ -1,7 +1,6 @@
 # Changelog
 
-## 0.1.0 (2026-08-31)
-
+## 1.0.0 (2026-08-31)
 
 ### Features
 
@@ -94,7 +93,6 @@
 * Update retention policy for backups to 4 days and enhance Cilium network policies for SeaweedFS ([59ac0e0](https://github.com/DragonBishop/data_science_cluster/commit/59ac0e0a4736c20f3833121284857e5fe4fb89ae))
 * update seaweedfs backups manifest and cluster scripts for Flux migration ([784bfee](https://github.com/DragonBishop/data_science_cluster/commit/784bfee097dde5518113b2b6d1655516a87d092c))
 
-
 ### Bug Fixes
 
 * add schemas to postgis-database.yaml Database CRD ([5d0f188](https://github.com/DragonBishop/data_science_cluster/commit/5d0f18863b2981a16b968778d317adeb6a7001cb))
@@ -110,11 +108,9 @@
 * restore trimmed devcontainer.json content ([c279c0b](https://github.com/DragonBishop/data_science_cluster/commit/c279c0b27a787b636e3bb9b6f2828900fb3078d5))
 * S3/Barman TLS via Vault PKI (endpointCA, seaweedfs-s3-tls, HTTPS probes) ([a7271d4](https://github.com/DragonBishop/data_science_cluster/commit/a7271d44c59a2153a92fea00792ed373f2e8f620))
 
-
 ### Reverts
 
 * drop loopback externalIPs Service (rejected by Kubernetes API) ([dbd25a4](https://github.com/DragonBishop/data_science_cluster/commit/dbd25a45f612172b5e512ef7edafaa0a02a5f02c))
-
 
 ### Documentation
 
