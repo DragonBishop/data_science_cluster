@@ -1,144 +1,184 @@
-# Changelog
+## [1.0.0] - 2026-08-31
 
-## 1.0.0 (2026-08-31)
+### ◀️ Revert
 
-### Features
+- Drop loopback externalIPs Service (rejected by Kubernetes API)
 
-* Add Ansible configuration and roles for Vault and k3s integration, including secret management and troubleshooting updates ([368b17f](https://github.com/DragonBishop/data_science_cluster/commit/368b17f62eae89a419577b30da5eed4ed3044ada))
-* Add Ansible tasks for k3s installation and configuration ([c1a55bd](https://github.com/DragonBishop/data_science_cluster/commit/c1a55bd506491243ea9ce491646a99c88398d18d))
-* add Barman Cloud Flux Kustomization and HelmRelease ([e7eabfb](https://github.com/DragonBishop/data_science_cluster/commit/e7eabfb9e449f922a14b912117ea8fffbfc5fbc8))
-* add bootstrap recipes for k3s config, cluster network, Cilium, and Vault setup ([ed4b91a](https://github.com/DragonBishop/data_science_cluster/commit/ed4b91aa74d334d49ebc7fc90985ca311df4a458))
-* Add bootstrap scripts for cluster and Transit Vault setup ([2f34ef0](https://github.com/DragonBishop/data_science_cluster/commit/2f34ef08a65d4cf0c138de015e25ec24bf13f792))
-* add cert-manager Flux Kustomization ([eb37090](https://github.com/DragonBishop/data_science_cluster/commit/eb37090793bbc1da7fa048254e4ef3c5ad1276f5))
-* add cert-manager namespace to infrastructure configuration ([73af78f](https://github.com/DragonBishop/data_science_cluster/commit/73af78f66b40df7fcf391c6a12d57740270b550c))
-* add Cilium configuration ([42a281d](https://github.com/DragonBishop/data_science_cluster/commit/42a281d8ebcbf281885a7e7b8ed7f38c4cf5f304))
-* add Cilium Flux Kustomization and HelmRelease ([3bd753e](https://github.com/DragonBishop/data_science_cluster/commit/3bd753e413cfd201b5bb8127e10a63d3b5f923b5))
-* add CiliumNetworkPolicy for Vault ingress, dynamic host IP support ([62f8b8e](https://github.com/DragonBishop/data_science_cluster/commit/62f8b8e3e8ba7905f64b53141bd8054063038e82))
-* add cluster-config.yaml single source of truth, wire manifests via Flux postBuild substitution ([ee3f4a0](https://github.com/DragonBishop/data_science_cluster/commit/ee3f4a03c61d8388de30f6927fd83f3846fc0b86))
-* add clusterwide CiliumNetworkPolicy, rename flux-system allow-kubelet-probes to flux-networkpolicy ([b8493ba](https://github.com/DragonBishop/data_science_cluster/commit/b8493ba6a93f2e1378d75337b4409cf491d093ce))
-* add CNPG operator and Vault Secrets Operator Flux Kustomizations and HelmReleases ([43d8bb9](https://github.com/DragonBishop/data_science_cluster/commit/43d8bb9b674a93726bef4eee6cd3340e7dc1fbd2))
-* add CNPG postgis-cluster manifest, add MinIO backups manifest, retire postgis-k3s.yaml ([ec68beb](https://github.com/DragonBishop/data_science_cluster/commit/ec68beb2c236fd4b318fe37c89c11ae7adb6fd64))
-* add CNPG-managed localhost Service for postgis-cluster ([076786b](https://github.com/DragonBishop/data_science_cluster/commit/076786bca514c0602762f8d34c9d1f91c61749ab))
-* add cnpg-operator CiliumNetworkPolicy ([00128e3](https://github.com/DragonBishop/data_science_cluster/commit/00128e3af0a61b64deb8053ad1ec2a2800943f1d))
-* Add configuration files for cluster settings and resource sizing, including k3s installation tasks ([297c37a](https://github.com/DragonBishop/data_science_cluster/commit/297c37a0c29fa5705c56055f7c421cfdf98800dd))
-* add db-connect, vault-pf, and thin start/stop wrappers to justfile ([1a1c3fb](https://github.com/DragonBishop/data_science_cluster/commit/1a1c3fbcf78241fd2d7b53c3efc945b8e7969b91))
-* add dedicated DNS component with Cilium L2/LB policies ([9af448a](https://github.com/DragonBishop/data_science_cluster/commit/9af448aa4962bc4d06beec40377dc7e5266d2fa7))
-* add dedicated Hubble component ([32d895b](https://github.com/DragonBishop/data_science_cluster/commit/32d895bba556510e5aada248592d0673e47b0aad))
-* add devcontainer Dockerfile and devcontainer.json, rename README_cluster.md to README.md ([4fb7440](https://github.com/DragonBishop/data_science_cluster/commit/4fb7440d15ade06f0303f1c58e9dfd67d29f31e4))
-* add ETL/ML python dependencies, remove placeholder report stubs ([3dbefdf](https://github.com/DragonBishop/data_science_cluster/commit/3dbefdfe2d937a0d4d202aefd1f60101bf3ed910))
-* add external LoadBalancer service for postgis, Cilium L2 announcement policy and LB IP pool ([4ddc462](https://github.com/DragonBishop/data_science_cluster/commit/4ddc4629ce4de13a7411b384b55f2bb629ce8655))
-* add Falco runtime security scanning, initialize uv python project ([35fc138](https://github.com/DragonBishop/data_science_cluster/commit/35fc138c0bd1726fd254a29729d2953c532bbd8f))
-* add Gateway API CRDs Flux Kustomization ([bd601da](https://github.com/DragonBishop/data_science_cluster/commit/bd601da926bba6d672c0d17b7c45bc5673327939))
-* add GitHub bug report issue form ([9f16cdd](https://github.com/DragonBishop/data_science_cluster/commit/9f16cdd40191bd73475df3df75574d4de282af51))
-* add GitHub issue form templates (misplaced under .vscode/) ([f57cd91](https://github.com/DragonBishop/data_science_cluster/commit/f57cd91b1215dc5532d50e31a319c7b7f9a0bdcd))
-* add Hubble Relay configuration and troubleshooting guidance for firewall settings ([4d95da7](https://github.com/DragonBishop/data_science_cluster/commit/4d95da7e0cef5ec79a27f0dddba1f6bfae78b47a))
-* add Hubble Relay/UI configuration, integrate with Cilium HelmRelease ([502c8e5](https://github.com/DragonBishop/data_science_cluster/commit/502c8e5e799f9eac9e3574639024a8a17df0a512))
-* Add initial Ansible configuration and playbook for k3s cluster provisioning, update and regroup python dependencies ([5812f56](https://github.com/DragonBishop/data_science_cluster/commit/5812f5605b6abdc5055263658ba9813a721d7d18))
-* add jsonpatch and kubernetes dependencies to project ([ae482db](https://github.com/DragonBishop/data_science_cluster/commit/ae482db2b911c07bbf79abe2af014789ca6bcbc6))
-* add jsonpatch and kubernetes dependencies to project ([dec50da](https://github.com/DragonBishop/data_science_cluster/commit/dec50da86607ee3c7632a781ab1287453eace3c0))
-* add just status, a read-only cluster health check ([9fff6a6](https://github.com/DragonBishop/data_science_cluster/commit/9fff6a605e502b3604892694411156a8917c3b59))
-* Add kustomize configuration files for Cilium and Vault; update vault-values.yaml for environment variable handling ([6df7f17](https://github.com/DragonBishop/data_science_cluster/commit/6df7f17d2fbe9eeebe2f885cad9d6df06cee8b0c))
-* add namespaces Flux Kustomization ([1a1eaf4](https://github.com/DragonBishop/data_science_cluster/commit/1a1eaf43a05c851d845929fa93b865489b9fda87))
-* add postgis CiliumNetworkPolicy ([7277981](https://github.com/DragonBishop/data_science_cluster/commit/727798109882d6abff7877d35715569f1efafdb0))
-* add postgis-database Database CRD, simplify postgis-cluster.yaml Kustomization ([0067b73](https://github.com/DragonBishop/data_science_cluster/commit/0067b731382a57f5949603fd42475256c5c9371f))
-* Add preflight readiness checks for host setup ([6b69c5e](https://github.com/DragonBishop/data_science_cluster/commit/6b69c5e737b3c87bf72ed1383ccfc676a545779a))
-* add release-please workflow and configuration files ([82f889b](https://github.com/DragonBishop/data_science_cluster/commit/82f889bb97fcc8fd1e764cda8dab49676588daa5))
-* add SeaweedFS backup restoration and pre-flight validation to README ([27b1a93](https://github.com/DragonBishop/data_science_cluster/commit/27b1a9346ab4a018a7ad36cce1e12d463a3def94))
-* add SeaweedFS Flux Kustomization and HelmRelease ([a0f7879](https://github.com/DragonBishop/data_science_cluster/commit/a0f787983c551cf00727a7430b6512f56b8c2ce8))
-* add SeaweedFS NetworkPolicy restricting master/filer to databases namespace ([699217f](https://github.com/DragonBishop/data_science_cluster/commit/699217fc5217696fe867c352ba1b9a084cdec86b))
-* add shared Gateway component with dedicated Cilium L2/LB policies ([f440f7b](https://github.com/DragonBishop/data_science_cluster/commit/f440f7b5f3b379358d2094ca40f5d5c7d4e64aec))
-* add start-cluster.sh, stop-cluster.sh, sync-kubeconfig.sh scripts ([9747819](https://github.com/DragonBishop/data_science_cluster/commit/97478190b7c46de47a07ba0da38b680368b7f835))
-* add Terraform vault-bootstrap module (auth, kv, encryption) ([3c1bb8d](https://github.com/DragonBishop/data_science_cluster/commit/3c1bb8d396152239ae8af5e1a2025bbde14b1fc9))
-* add Terraform vault-database module ([3f27826](https://github.com/DragonBishop/data_science_cluster/commit/3f278267cefe049cede9ffa5ccaf43a2f6278ab4))
-* add Terraform vault-transit-bootstrap module ([bad7e40](https://github.com/DragonBishop/data_science_cluster/commit/bad7e4092013859d27529ed3b1c6f2c83dfa4afb))
-* add transit-vault secrets (vault-values, vso_setup), retire vault-manifest.yaml ([2f6b607](https://github.com/DragonBishop/data_science_cluster/commit/2f6b60724b19776d64735c943d558c8b9a4dbe90))
-* add Vault 2-tier PKI engine (root/intermediate CA, internal-server role) ([ce76721](https://github.com/DragonBishop/data_science_cluster/commit/ce76721b725049f3c6afed63e83f7943dec3d67b))
-* add vault CiliumNetworkPolicy ([3fd4ad2](https://github.com/DragonBishop/data_science_cluster/commit/3fd4ad2f774e30ef57ce3fd245e5c762bb731001))
-* add Vault Flux Kustomization and HelmRelease ([1b98ba6](https://github.com/DragonBishop/data_science_cluster/commit/1b98ba6e8133fb33ec28c4a43a6f9d202ae968ca))
-* add vault-secrets-operator CiliumNetworkPolicy ([d5e1b1d](https://github.com/DragonBishop/data_science_cluster/commit/d5e1b1d20a819c64bf261696bc2dd1081a843999))
-* add VS Code task for Headlamp startup, update README/ROADMAP ([87340eb](https://github.com/DragonBishop/data_science_cluster/commit/87340eb1fda9d24975531bc574f8fa3722178423))
-* add working GitHub issue templates (Markdown format) ([4655337](https://github.com/DragonBishop/data_science_cluster/commit/4655337db8c98e39b52ddda3b1a21716f853b95e))
-* add/extend CiliumNetworkPolicies for cert-manager, cnpg-operator, vault ([a36dc13](https://github.com/DragonBishop/data_science_cluster/commit/a36dc13ef7f6e2fe14981331830a1c0d4d2540e5))
-* bootstrap recipes for k3s, Cilium, and Vault setup ([caf26fd](https://github.com/DragonBishop/data_science_cluster/commit/caf26fd00c2cd87c0ca674057cee7b174bbefee1))
-* consolidate command sequences into justfile ([b245d0d](https://github.com/DragonBishop/data_science_cluster/commit/b245d0d70c3609930e42323c617a5b330252838e))
-* enable Cilium localRedirectPolicy for node-local Service redirection ([2d60421](https://github.com/DragonBishop/data_science_cluster/commit/2d60421d5693d6e575d778943ffc183aa4ade020))
-* enhance cluster startup/shutdown scripts ([4b491a7](https://github.com/DragonBishop/data_science_cluster/commit/4b491a7fe15ba2d5523b57e665935b53cad90ae7))
-* enhance documentation and tooling with Vault CLI commands ([04afa39](https://github.com/DragonBishop/data_science_cluster/commit/04afa391168ce63ed6dc363195c09ccee78f4e2d))
-* Enhance installation and bootstrap scripts with firewall and Vault improvements ([2e070bf](https://github.com/DragonBishop/data_science_cluster/commit/2e070bff6b5e87611de8e9321c7c26cd559c713a))
-* Enhance installation and bootstrap scripts with firewall and Vault improvements ([b401ecc](https://github.com/DragonBishop/data_science_cluster/commit/b401ecc927e58df35879a4bd58372efc71e690bf))
-* Enhance preflight checks and improve cluster startup scripts for better error handling and pod readiness ([b77b368](https://github.com/DragonBishop/data_science_cluster/commit/b77b36850b146720dc28bb07b06e6700c257ebaa))
-* enhance resource management across components, add Cilium NetworkPolicies for health checks ([e1e1854](https://github.com/DragonBishop/data_science_cluster/commit/e1e1854ab40951dadd7b5f790e7b9aadf150a22f)), closes [#4](https://github.com/DragonBishop/data_science_cluster/issues/4)
-* expose postgis-cluster on localhost:5432 via CiliumLocalRedirectPolicy ([393ad92](https://github.com/DragonBishop/data_science_cluster/commit/393ad922f86ef7d5c87abfe7f90b7c194abcaa38))
-* expose postgis-cluster primary on localhost:5432 ([16faaa5](https://github.com/DragonBishop/data_science_cluster/commit/16faaa56b98fb047dfc24c90c751f0e2365b8971))
-* implement firewall setup script for Kubernetes and Cilium ([e0c8ed6](https://github.com/DragonBishop/data_science_cluster/commit/e0c8ed6109c40c8c70a76c8270f42e8bdd9b0e05))
-* improve start-cluster.sh error handling and reporting ([8f287bc](https://github.com/DragonBishop/data_science_cluster/commit/8f287bc7b488c03b6fcd03a94eca5630b7e5777f))
-* initialize project via copier template (uv, pytest, CI, notebooks) ([8dddd3e](https://github.com/DragonBishop/data_science_cluster/commit/8dddd3e6edc57c28d02469c903e095f12e699984))
-* move Cilium values into infrastructure/cilium/ for Flux ([d86f325](https://github.com/DragonBishop/data_science_cluster/commit/d86f3256cb9a5ee6ed1d0e691498aa47475b4528))
-* move postgis-cluster/postgres-tls/vso-setup into apps/databases/ for Flux ([34b229c](https://github.com/DragonBishop/data_science_cluster/commit/34b229ca71c7575964915afedfbcf6b3f8fd7047))
-* move Vault values into infrastructure/vault/ for Flux, drop old NetworkPolicy manifest ([32e9925](https://github.com/DragonBishop/data_science_cluster/commit/32e992590d307465d42c27c8d8070b39c77cd5d1))
-* Refactor cluster configuration management and update installation scripts ([746030c](https://github.com/DragonBishop/data_science_cluster/commit/746030c55cba663c7e63d11d9d5f65f6a7bc9281))
-* Refactor start and stop cluster scripts for improved error handling and process management ([5251865](https://github.com/DragonBishop/data_science_cluster/commit/5251865965cff36f628859abdef9485a9c44d520))
-* Refactor start and stop cluster scripts for improved k3s management and backup handling ([2d5ff7e](https://github.com/DragonBishop/data_science_cluster/commit/2d5ff7ed431fc98e90911c0bf9fcff63e271cc90))
-* remove notebooks and jupyter tooling to align with include_notebooks=false ([2d45f4b](https://github.com/DragonBishop/data_science_cluster/commit/2d45f4bb7a9ed7c1d531967955dcef960821c503))
-* replace vendored cert-manager CRD dump with Helm-based HelmRelease ([d3d6989](https://github.com/DragonBishop/data_science_cluster/commit/d3d6989928e11d9afa7daed83e0beea7a9a3c7f6))
-* switch postgis-cluster to dynamic Vault secrets, add Barman/SeaweedFS backups ([b8fccfa](https://github.com/DragonBishop/data_science_cluster/commit/b8fccfae66a202e35bf5978fd5e051b4a2cac10f))
-* Update Ansible tasks for Vault installation and configuration, including TLS setup and repository adjustments ([a1e4a0f](https://github.com/DragonBishop/data_science_cluster/commit/a1e4a0fb4f5bd52897547d9dfb10236d372cb99a))
-* Update Cilium Helm values substitution method and enhance preflight checks; remove deprecated bootstrap script ([0a91d61](https://github.com/DragonBishop/data_science_cluster/commit/0a91d6104e543f796f2d9fcf1a2d9a95a7cc2b23))
-* Update configuration files to use environment variables for resource sizing and versions ([f56374b](https://github.com/DragonBishop/data_science_cluster/commit/f56374b8f6ecd811a719bc218d01626165601904))
-* Update dependencies and configurations across multiple components ([a082d03](https://github.com/DragonBishop/data_science_cluster/commit/a082d0331b2b1d9274563c20cd7d0cc461d471b6))
-* Update devcontainer and preflight scripts with environment configuration and tooling checks ([255ca4c](https://github.com/DragonBishop/data_science_cluster/commit/255ca4c4111b7cef76cc46532916127e1658d86f))
-* update firewall configuration and apply Cilium network policies ([6ffe7a8](https://github.com/DragonBishop/data_science_cluster/commit/6ffe7a8bd20d0adbfb4a78bed4fc2091da064c8f))
-* Update Flux role to bootstrap GitHub repository and reconcile vault kustomization ([65b0e2f](https://github.com/DragonBishop/data_science_cluster/commit/65b0e2ffd58dac66e825ab1a0c39cac6ffe26e8d))
-* Update installation instructions and scripts to include envsubst for Cilium configuration ([4bcbea0](https://github.com/DragonBishop/data_science_cluster/commit/4bcbea09c744285ae847ab6c9bd72afa0d1d1c86))
-* Update retention policy for backups to 4 days and enhance Cilium network policies for SeaweedFS ([59ac0e0](https://github.com/DragonBishop/data_science_cluster/commit/59ac0e0a4736c20f3833121284857e5fe4fb89ae))
-* update seaweedfs backups manifest and cluster scripts for Flux migration ([784bfee](https://github.com/DragonBishop/data_science_cluster/commit/784bfee097dde5518113b2b6d1655516a87d092c))
+### ♻️ Refactor
 
-### Bug Fixes
+- Reorganize into manifests/ and scripts/ directories, expand start/stop-cluster.sh and postgis-cluster.yaml
+- Improve sync-kubeconfig.sh clarity and validation checks
+- Simplify sync-kubeconfig.sh, deploy Headlamp in-cluster instead of Windows client
+- Simplify operator availability check in stop-cluster.sh
+- Replace postgis-external-service with postgis-tcproute
+- Move cluster scripts to src/bash/
+- Clean up justfile, drop unnecessary settings file, use dynamic Cilium versioning
+- Replace infrastructure/dns with coredns-custom internal DNS zone
+- Consolidate DNS/gateway L2-LB policies into single LAN policy, enable gatewayAPI/egressGateway
+- Clarify comments in postgis, gateway, hubble, namespace manifests
+- Update TLS configurations and enhance Vault integration across cluster services
+- Remove sync-kubeconfig.sh, kubeconfig now managed directly by k3s
+- Move cluster-config from Kubernetes ConfigMap to Terraform-managed secret
+- Consolidate vault-bootstrap and vault-database terraform into terraform/vault
+- Consolidate gateway and hubble TLS issuance onto vault-pki-issuer
+- Vault deployment and initialization
+- Clean up comments and improve variable descriptions in Terraform configurations
 
-* add schemas to postgis-database.yaml Database CRD ([5d0f188](https://github.com/DragonBishop/data_science_cluster/commit/5d0f18863b2981a16b968778d317adeb6a7001cb))
-* allow world-entity ingress to postgis on 5432 ([5e3b59a](https://github.com/DragonBishop/data_science_cluster/commit/5e3b59a226a192221c63b5b11f3559247c27b9a9))
-* correct bug report issue form title/name fields ([e119ea3](https://github.com/DragonBishop/data_science_cluster/commit/e119ea370aac23ef81a679c1c6cc476029b304d0))
-* enable BPF masquerade in Cilium to prevent pod-to-host timeouts ([fb8d054](https://github.com/DragonBishop/data_science_cluster/commit/fb8d054eb6b50c773c14812ebe74d043827a934a))
-* Flux Kustomization dependsOn wiring for vault/cert-manager rollout ([62a82f9](https://github.com/DragonBishop/data_science_cluster/commit/62a82f9a3258dd7ec48a07df3f3735952bfdc87e))
-* grant NetworkPolicy baseline egress for apiserver, cluster, CoreDNS upstream ([c12ee6a](https://github.com/DragonBishop/data_science_cluster/commit/c12ee6a5d371c05034bea06d6a8651b38d175f46)), closes [#3](https://github.com/DragonBishop/data_science_cluster/issues/3)
-* Hubble health check in Cilium release ([b19e51d](https://github.com/DragonBishop/data_science_cluster/commit/b19e51dbb5cb906eaa72e7da76542f568dd4675e))
-* hubble.internal TLS verification (wrong SAN, wrong CA) ([f8b6fe0](https://github.com/DragonBishop/data_science_cluster/commit/f8b6fe0d812ac6931040f72f1e6b052fa464a31e))
-* insert env vars in vault-values.yaml, remove WSL-side extra copy in sync-kubeconfig.sh ([932b640](https://github.com/DragonBishop/data_science_cluster/commit/932b640231aa954e3b6329778599d3fbd5ce1b97))
-* remove GitHub bug report YAML form (schema issue), consolidate gitignore into .gitignore ([6b03a91](https://github.com/DragonBishop/data_science_cluster/commit/6b03a919b861d6f26120d2267f9e4a38e69b2a81))
-* restore trimmed devcontainer.json content ([c279c0b](https://github.com/DragonBishop/data_science_cluster/commit/c279c0b27a787b636e3bb9b6f2828900fb3078d5))
-* S3/Barman TLS via Vault PKI (endpointCA, seaweedfs-s3-tls, HTTPS probes) ([a7271d4](https://github.com/DragonBishop/data_science_cluster/commit/a7271d44c59a2153a92fea00792ed373f2e8f620))
+### ⚙️ Miscellaneous Tasks
 
-### Reverts
+- Rename vso_setup.yaml to vso-setup.yaml
+- Add .gitignore
+- Archive legacy k3s manifests into k3s_archive/
+- Rename k3s_archive/.vscode/tasks.json to .archive/, simplify devcontainer Dockerfile
+- Archive superseded MinIO backups manifest
+- Remove misplaced issue templates from .vscode/
+- Convert GitHub issue templates from Markdown to YAML forms
+- Remove old Markdown issue templates, superseded by YAML forms
+- Remove .archive/, legacy pre-Flux manifests no longer needed
+- Remove personal contact links from issue template config
+- Sync copier template to v1.0.4
+- Update uv.lock
+- Trim comments in Kubernetes manifests and devcontainer config
+- Trim comments in cluster scripts
+- Remove unused postgres-proxy deployment from postgis-cluster.yaml
+- Update uv.lock
+- Add cluster naming support and reorganize install docs
+- Restructure devcontainer setup with new host and cluster configurations
+- *(dev)* Reorder justfile recipes, add prek hook setup, and sync dependencies
+- Ignore rumdl cache and virtualenv directory variants in gitignore
+- *(main)* Release 0.1.0
+- *(main)* Release 1.0.0
 
-* drop loopback externalIPs Service (rejected by Kubernetes API) ([dbd25a4](https://github.com/DragonBishop/data_science_cluster/commit/dbd25a45f612172b5e512ef7edafaa0a02a5f02c))
+### 🐛 Bug Fixes
 
-### Documentation
+- Insert env vars in vault-values.yaml, remove WSL-side extra copy in sync-kubeconfig.sh
+- Restore trimmed devcontainer.json content
+- Correct bug report issue form title/name fields
+- Remove GitHub bug report YAML form (schema issue), consolidate gitignore into .gitignore
+- Add schemas to postgis-database.yaml Database CRD
+- Hubble health check in Cilium release
+- Enable BPF masquerade in Cilium to prevent pod-to-host timeouts
+- Grant NetworkPolicy baseline egress for apiserver, cluster, CoreDNS upstream
+- S3/Barman TLS via Vault PKI (endpointCA, seaweedfs-s3-tls, HTTPS probes)
+- Flux Kustomization dependsOn wiring for vault/cert-manager rollout
+- Allow world-entity ingress to postgis on 5432
+- Hubble.internal TLS verification (wrong SAN, wrong CA)
 
-* add first-time setup instructions, optional Headlamp installation ([e8dc8ec](https://github.com/DragonBishop/data_science_cluster/commit/e8dc8eca7a35a8306f779af8f8b27d559e039325))
-* add README table of contents, rename devcontainers/ to .devcontainer/ ([8341bdc](https://github.com/DragonBishop/data_science_cluster/commit/8341bdcf1910e6377c3d5c600e282eca9da766b0))
-* add ROADMAP.md, remove pipeline.md, update README for new layout ([1ffe5f5](https://github.com/DragonBishop/data_science_cluster/commit/1ffe5f525c7e149e420b6dc24e2b821137a53b91))
-* add SeaweedFS backup restore instructions, pre-flight validation, backup gitignore patterns ([cc4f8a4](https://github.com/DragonBishop/data_science_cluster/commit/cc4f8a4ff4b629f119297bcb221ea305904ad163))
-* clarify Cilium installation prerequisites and commands ([72dd0b9](https://github.com/DragonBishop/data_science_cluster/commit/72dd0b95f72a207d9e4fd82e3cd4af40d7edba65))
-* clarify systemd-to-script handover in README and cluster scripts ([ad36143](https://github.com/DragonBishop/data_science_cluster/commit/ad36143bebccb5f63b9ee7dc65261d715e93acc0))
-* document kubeconfig sync workflow for Headlamp/Lens/VS Code access ([59a68e1](https://github.com/DragonBishop/data_science_cluster/commit/59a68e1f0e708ef16f2072cd1d266267d53c4df7))
-* document postgis-localhost.yaml and localRedirectPolicy ([8028e36](https://github.com/DragonBishop/data_science_cluster/commit/8028e366b67cb5f5df0858f69c2c9fb162c60436))
-* enhance README for clarity and detail on cluster architecture and components ([9b7e779](https://github.com/DragonBishop/data_science_cluster/commit/9b7e779e17c77bdff482f9eb15429b2e0f15fdd8))
-* expand ROADMAP foundational/ETL/ML sections, add notes on alternatives ([37c1396](https://github.com/DragonBishop/data_science_cluster/commit/37c13960229856e3a54d3e8c7e87e66e564d758c))
-* refactor setup and troubleshooting guides, fix rumdl config ([e2502f2](https://github.com/DragonBishop/data_science_cluster/commit/e2502f2dcddfd34bd68f8c62c4533524ec3f6665))
-* reference new bootstrap recipes, reorganize Cluster Operations table ([34dbaa0](https://github.com/DragonBishop/data_science_cluster/commit/34dbaa0c40ec563fd97bfbe069531a1f0608bc7e))
-* reference new justfile recipes in INSTALLATION.md and README.md ([8949630](https://github.com/DragonBishop/data_science_cluster/commit/8949630e2319ae031c72b2588c28e9ef8800afdf))
-* remove ROADMAP.md, shift to GitHub Issues for planning and tracking ([3c17194](https://github.com/DragonBishop/data_science_cluster/commit/3c171949a37c19a8d40bc119fa8c206d95f12969))
-* reorganize install steps into 7a/7b, add table of contents ([23d1b1f](https://github.com/DragonBishop/data_science_cluster/commit/23d1b1fdfab5d27ed6819da59fc2e1856fa6b230))
-* rewrite README for CNPG/vault/script changes, add pipeline planning doc, remove main.py stub ([acfa2a7](https://github.com/DragonBishop/data_science_cluster/commit/acfa2a7d920eadd5f45430e84be3523cd70c6c77))
-* split docs into README/INSTALLATION/troubleshooting ([6e14aef](https://github.com/DragonBishop/data_science_cluster/commit/6e14aefb2c9dea07ce9a47174ed7f40a75dd3f27))
-* Update component descriptions and organization in README.md for clarity ([55fde7e](https://github.com/DragonBishop/data_science_cluster/commit/55fde7eed5ee04411e025f4a91c69e07bf8feec7))
-* Update installation and troubleshooting documentation; clarify steps for k3s reinstallation and Vault setup ([c33b986](https://github.com/DragonBishop/data_science_cluster/commit/c33b9862c31d34667430a3b91c2f255bee9c2c7d))
-* Update installation and troubleshooting guides; enhance clarity and modularity of cluster services ([4ee106d](https://github.com/DragonBishop/data_science_cluster/commit/4ee106dcf31a9cfc55e8404749fb1e11b44cf626))
-* Update installation instructions and README for clarity; refine Terraform configurations and comments ([aef0363](https://github.com/DragonBishop/data_science_cluster/commit/aef03635db18938432f29c94f65dab36df54d8de))
-* update INSTALLATION, README, and troubleshooting for Vault PKI rollout ([1c11728](https://github.com/DragonBishop/data_science_cluster/commit/1c117285c1c187f39162f2a52677c432ff2d0c0a))
-* Update justfile description for clarity on setup commands ([47623a7](https://github.com/DragonBishop/data_science_cluster/commit/47623a77ec35c8db4b007467e6d6a99c3f660e1a))
-* update README and ROADMAP for clarity in Vault and k3s configurations ([2133185](https://github.com/DragonBishop/data_science_cluster/commit/213318507d263a0482863931df100f2752b869d2))
-* update README with project roadmap, refine devcontainer and cluster scripts ([c3a223e](https://github.com/DragonBishop/data_science_cluster/commit/c3a223ec50d3aa31bef24869975e9c78c0cb0f7b))
-* update README/INSTALLATION for NetworkPolicy and secrets refactor ([dd9bf10](https://github.com/DragonBishop/data_science_cluster/commit/dd9bf10b844dacdd46ee109d6cac305d1a7d30ca))
-* update troubleshooting and installation docs for DNS/cert changes ([51bd7fe](https://github.com/DragonBishop/data_science_cluster/commit/51bd7fe4077b6e3c0446b150a727181521a25e84))
-* update troubleshooting docs for kubeconfig and cluster shutdown changes ([6b1c9ca](https://github.com/DragonBishop/data_science_cluster/commit/6b1c9cab192cd12f0525ab9710485e94723b14b3))
+### 📚 Documentation
+
+- Document kubeconfig sync workflow for Headlamp/Lens/VS Code access
+- Rewrite README for CNPG/vault/script changes, add pipeline planning doc, remove main.py stub
+- Add ROADMAP.md, remove pipeline.md, update README for new layout
+- Clarify Cilium installation prerequisites and commands
+- Expand ROADMAP foundational/ETL/ML sections, add notes on alternatives
+- Update README with project roadmap, refine devcontainer and cluster scripts
+- Update README and ROADMAP for clarity in Vault and k3s configurations
+- Clarify systemd-to-script handover in README and cluster scripts
+- Add SeaweedFS backup restore instructions, pre-flight validation, backup gitignore patterns
+- Add first-time setup instructions, optional Headlamp installation
+- Split docs into README/INSTALLATION/troubleshooting
+- Add README table of contents, rename devcontainers/ to .devcontainer/
+- Remove ROADMAP.md, shift to GitHub Issues for planning and tracking
+- Update installation and troubleshooting guides; enhance clarity and modularity of cluster services
+- Update troubleshooting and installation docs for DNS/cert changes
+- Update installation and troubleshooting documentation; clarify steps for k3s reinstallation and Vault setup
+- Update justfile description for clarity on setup commands
+- Update troubleshooting docs for kubeconfig and cluster shutdown changes
+- Update component descriptions and organization in README.md for clarity
+- Update installation instructions and README for clarity; refine Terraform configurations and comments
+- Update README/INSTALLATION for NetworkPolicy and secrets refactor
+- Update INSTALLATION, README, and troubleshooting for Vault PKI rollout
+- Document postgis-localhost.yaml and localRedirectPolicy
+- Reference new justfile recipes in INSTALLATION.md and README.md
+- Reference new bootstrap recipes, reorganize Cluster Operations table
+- Reorganize install steps into 7a/7b, add table of contents
+- Refactor setup and troubleshooting guides, fix rumdl config
+- Enhance README for clarity and detail on cluster architecture and components
+
+### 🚀 Features
+
+- Add Falco runtime security scanning, initialize uv python project
+- Add CNPG postgis-cluster manifest, add MinIO backups manifest, retire postgis-k3s.yaml
+- Add transit-vault secrets (vault-values, vso_setup), retire vault-manifest.yaml
+- Add start-cluster.sh, stop-cluster.sh, sync-kubeconfig.sh scripts
+- Improve start-cluster.sh error handling and reporting
+- Add CiliumNetworkPolicy for Vault ingress, dynamic host IP support
+- Add VS Code task for Headlamp startup, update README/ROADMAP
+- Add devcontainer Dockerfile and devcontainer.json, rename README_cluster.md to README.md
+- Switch postgis-cluster to dynamic Vault secrets, add Barman/SeaweedFS backups
+- Add GitHub issue form templates (misplaced under .vscode/)
+- Add SeaweedFS backup restoration and pre-flight validation to README
+- Add Cilium configuration
+- Enhance cluster startup/shutdown scripts
+- Add GitHub bug report issue form
+- Add working GitHub issue templates (Markdown format)
+- Add Gateway API CRDs Flux Kustomization
+- Add namespaces Flux Kustomization
+- Add cert-manager Flux Kustomization
+- Move Cilium values into infrastructure/cilium/ for Flux
+- Move Vault values into infrastructure/vault/ for Flux, drop old NetworkPolicy manifest
+- Move postgis-cluster/postgres-tls/vso-setup into apps/databases/ for Flux
+- Update seaweedfs backups manifest and cluster scripts for Flux migration
+- Add Cilium Flux Kustomization and HelmRelease
+- Replace vendored cert-manager CRD dump with Helm-based HelmRelease
+- Add cert-manager namespace to infrastructure configuration
+- Add Vault Flux Kustomization and HelmRelease
+- Add Terraform vault-bootstrap module (auth, kv, encryption)
+- Add CNPG operator and Vault Secrets Operator Flux Kustomizations and HelmReleases
+- Add Barman Cloud Flux Kustomization and HelmRelease
+- Add SeaweedFS Flux Kustomization and HelmRelease
+- Add postgis-database Database CRD, simplify postgis-cluster.yaml Kustomization
+- Add SeaweedFS NetworkPolicy restricting master/filer to databases namespace
+- Add Terraform vault-database module
+- Add external LoadBalancer service for postgis, Cilium L2 announcement policy and LB IP pool
+- Add shared Gateway component with dedicated Cilium L2/LB policies
+- Add dedicated DNS component with Cilium L2/LB policies
+- Add dedicated Hubble component
+- Add Hubble Relay/UI configuration, integrate with Cilium HelmRelease
+- Initialize project via copier template (uv, pytest, CI, notebooks)
+- Add ETL/ML python dependencies, remove placeholder report stubs
+- Add Hubble Relay configuration and troubleshooting guidance for firewall settings
+- Enhance documentation and tooling with Vault CLI commands
+- Add kustomize configuration files for Cilium and Vault; update vault-values.yaml for environment variable handling
+- Add cluster-config.yaml single source of truth, wire manifests via Flux postBuild substitution
+- Add Terraform vault-transit-bootstrap module
+- Enhance resource management across components, add Cilium NetworkPolicies for health checks
+- Update retention policy for backups to 4 days and enhance Cilium network policies for SeaweedFS
+- Add postgis CiliumNetworkPolicy
+- Add vault CiliumNetworkPolicy
+- Add vault-secrets-operator CiliumNetworkPolicy
+- Add cnpg-operator CiliumNetworkPolicy
+- Add clusterwide CiliumNetworkPolicy, rename flux-system allow-kubelet-probes to flux-networkpolicy
+- Add Vault 2-tier PKI engine (root/intermediate CA, internal-server role)
+- Add/extend CiliumNetworkPolicies for cert-manager, cnpg-operator, vault
+- Add CNPG-managed localhost Service for postgis-cluster
+- Enable Cilium localRedirectPolicy for node-local Service redirection
+- Expose postgis-cluster primary on localhost:5432
+- Add db-connect, vault-pf, and thin start/stop wrappers to justfile
+- Add just status, a read-only cluster health check
+- Add bootstrap recipes for k3s config, cluster network, Cilium, and Vault setup
+- Add bootstrap scripts for cluster and Transit Vault setup
+- Update dependencies and configurations across multiple components
+- Enhance installation and bootstrap scripts with firewall and Vault improvements
+- Enhance installation and bootstrap scripts with firewall and Vault improvements
+- Add preflight readiness checks for host setup
+- Refactor cluster configuration management and update installation scripts
+- Add initial Ansible configuration and playbook for k3s cluster provisioning, update and regroup python dependencies
+- Update Ansible tasks for Vault installation and configuration, including TLS setup and repository adjustments
+- Add Ansible tasks for k3s installation and configuration
+- Update configuration files to use environment variables for resource sizing and versions
+- Add configuration files for cluster settings and resource sizing, including k3s installation tasks
+- Update installation instructions and scripts to include envsubst for Cilium configuration
+- Update Flux role to bootstrap GitHub repository and reconcile vault kustomization
+- Add Ansible configuration and roles for Vault and k3s integration, including secret management and troubleshooting updates
+- Update devcontainer and preflight scripts with environment configuration and tooling checks
+- Refactor start and stop cluster scripts for improved k3s management and backup handling
+- Refactor start and stop cluster scripts for improved error handling and process management
+- Enhance preflight checks and improve cluster startup scripts for better error handling and pod readiness
+- Update Cilium Helm values substitution method and enhance preflight checks; remove deprecated bootstrap script
+- Remove notebooks and jupyter tooling to align with include_notebooks=false
+- Add jsonpatch and kubernetes dependencies to project
+- Add jsonpatch and kubernetes dependencies to project
+- Implement firewall setup script for Kubernetes and Cilium
+- Update firewall configuration and apply Cilium network policies
+- Add release-please workflow and configuration files
