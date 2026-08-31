@@ -1,12 +1,13 @@
-# Changelog
+## [1.0.1] - 2026-08-31
 
-## [1.0.1](https://github.com/DragonBishop/data_science_cluster/compare/v1.0.0...v1.0.1) (2026-08-31)
+### ⚙️ Miscellaneous Tasks
 
+- Use dedicated PAT for release-please instead of repo Actions permission
+- *(main)* Release 1.0.1
 
-### Documentation
+### 📚 Documentation
 
-* regenerate changelog for v1.0.0 ([362e12a](https://github.com/DragonBishop/data_science_cluster/commit/362e12a2be2321ddbe8c4a3083e1bc13b0a7adba))
-
+- Regenerate changelog for v1.0.0
 ## [1.0.0] - 2026-08-31
 
 ### ◀️ Revert
