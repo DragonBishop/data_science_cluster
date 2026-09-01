@@ -12,7 +12,7 @@
     mode: "0644"
     content: |
       write-kubeconfig-mode: "0644"
-      write-kubeconfig: "{{ ansible_env.HOME }}/.kube/config"
+      write-kubeconfig: "{{ ansible_facts.env.HOME }}/.kube/config"
       disable:
         - traefik
         - servicelb
@@ -53,14 +53,14 @@
 
 - name: Ensure ~/.kube directory exists
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.kube"
+    path: "{{ ansible_facts.env.HOME }}/.kube"
     state: directory
     mode: "0755"
 
 - name: Wait for Kubernetes API to respond
   ansible.builtin.command: kubectl get nodes
   environment:
-    KUBECONFIG: "{{ ansible_env.HOME }}/.kube/config"
+    KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
   register: k3s_api_check
   until: k3s_api_check.rc == 0
   retries: 12

@@ -19,7 +19,7 @@
 - name: Record a new secrets write-only version
   ansible.builtin.copy:
     dest: "{{ opentofu_secrets_wo_version_file }}"
-    content: "{{ ansible_date_time.epoch }}"
+    content: "{{ ansible_facts.date_time.epoch }}"
     mode: "0600"
   when: not opentofu_secrets_wo_version_stat.stat.exists
 
