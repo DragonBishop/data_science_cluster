@@ -10,14 +10,14 @@
 
 - name: Ensure ~/.gnupg directory exists
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.gnupg"
+    path: "{{ ansible_facts.env.HOME }}/.gnupg"
     state: directory
     mode: "0700"
 
 # Required for gpg --pinentry-mode loopback (no TTY available for a real prompt).
 - name: Configure gpg-agent for loopback pinentry and zero caching
   ansible.builtin.lineinfile:
-    path: "{{ ansible_env.HOME }}/.gnupg/gpg-agent.conf"
+    path: "{{ ansible_facts.env.HOME }}/.gnupg/gpg-agent.conf"
     line: "{{ item }}"
     create: true
     mode: "0600"
@@ -59,9 +59,19 @@
         vault_fresh_unseal_keys: "{{ (vault_init_result.stdout | from_json).unseal_keys_b64[:3] }}"
       no_log: true
 
-    - name: SAVE THIS NOW — root token shown once, unrecoverable if lost
+    - name: Print root token and unseal keys to user
       ansible.builtin.debug:
-        msg: "Root Token: {{ vault_root_token }}"
+        msg: |
+          Root Token:
+          {{ vault_root_token }}
+          Fresh Unseal Keys:
+          {{ vault_fresh_unseal_keys | join('\n') }}
+
+    - name: Prompt user storage of root token / unseal keys
+      ansible.builtin.pause:
+        prompt: |
+          🚨 ATTENTION: ROOT TOKEN AND UNSEAL KEYS ONLY PRINT ONCE.
+             STORE THEM SECURELY OR RISK LOSING VAULT DATA.
 
     - name: Create tmpfs workdir for unseal keyfile
       ansible.builtin.tempfile:
@@ -116,7 +126,7 @@
     cmd: kubectl exec -i -n {{ vault_namespace }} {{ vault_pod }} -- vault write -format=json sys/unseal key=-
     stdin: "{{ item }}\n"
   environment:
-    KUBECONFIG: "{{ ansible_env.HOME }}/.kube/config"
+    KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
   loop: "{{ vault_unseal_keys }}"
   no_log: true
   changed_when: true
