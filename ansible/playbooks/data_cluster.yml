@@ -1,6 +1,6 @@
 ---
 - name: Provision k3s Data Science Cluster
-  hosts: localhost
+  hosts: "{{ target_host | default('localhost') }}"
   become: false
 
   vars_prompt:

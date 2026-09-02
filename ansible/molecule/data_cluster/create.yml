@@ -1,0 +1,27 @@
+---
+- name: Create container instances
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create container network
+      containers.podman.podman_network:
+        name: data-cluster-test
+        state: present
+
+    - name: Create test containers
+      containers.podman.podman_container:
+        name: "{{ item }}"
+        image: quay.io/centos/centos:stream9
+        command: /sbin/init
+        privileged: true
+        state: started
+        network:
+          - data-cluster-test
+        systemd: true
+      loop: "{{ groups['all'] }}"
+
+    - name: Wait for containers to be ready
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+      delegate_to: "{{ hostvars[item].ansible_host }}"
+      loop: "{{ groups['all'] }}"
