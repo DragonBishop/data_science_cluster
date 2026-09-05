@@ -5,6 +5,8 @@
 set -euo pipefail
 
 check_host_tooling() {
+    echo "🔎 Running preflight checks..."
+    echo ""
     echo "== Host tooling =="
     local has_errors=false
     local bin
@@ -33,13 +35,17 @@ check_database_client() {
 }
 
 check_github_auth() {
-    echo "== GitHub CLI =="
-    if gh auth status >/dev/null 2>&1; then
-        echo "✅ gh authenticated"
+    echo "== GitHub Authentication =="
+    if [ -n "${GITHUB_APP_ID:-}" ]; then
+        echo "✅ GitHub App (ID: $GITHUB_APP_ID) configured"
+        echo ""
+        return 0
+    elif gh auth status >/dev/null 2>&1; then
+        echo "✅ gh authenticated (fallback)"
         echo ""
         return 0
     else
-        echo "❌ gh not authenticated. Run: gh auth login"
+        echo "❌ No GitHub App provided and gh not authenticated. See INSTALLATION.md."
         echo ""
         return 1
     fi
@@ -213,9 +219,6 @@ report_summary() {
 main() {
     local had_errors=false
     local had_warnings=false
-
-    echo "🔎 Running preflight checks..."
-    echo ""
 
     check_host_tooling || had_errors=true
     check_database_client || had_warnings=true
