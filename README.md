@@ -50,9 +50,9 @@ These tools must be installed or configured on the host machine to bootstrap, te
 
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
-| Ansible | `2.18+` (`ansible-core`) | Idempotent cluster bootstrap playbook and host setup (`ansible/playbooks/k3s.yml`). |
+| Ansible | `2.18+` (`ansible-core`) | Idempotent cluster bootstrap playbook and host setup (`ansible/playbooks/data_cluster.yml`). |
 | Flux CLI | `v2.9.4` (`fluxcd.io`) | GitOps controller CLI used for pre-flight validation and repository bootstrapping. |
-| GitHub CLI (`gh`) | `gh` | GitHub authentication for automated repository access and Flux bootstrap. |
+| GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |
 | Helm | `v3.x` (`get_helm.sh`) | Package manager for Kubernetes charts and HelmRelease dependency resolution. |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
 | OpenTofu | `1.9.0` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in Vault (`terraform/vault/`). |
@@ -325,7 +325,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   │   └── all.yml
 │   │   └── hosts.ini
 │   ├── playbooks/
-│   │   └── k3s.yml
+│   │   └── data_cluster.yml
 │   ├── requirements.yml
 │   └── roles/
 │       ├── cilium/
@@ -482,8 +482,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR and, once a release is tagged, regenerates `CHANGELOG.md` with `git-cliff` and pushes it back to `main`.
 * **`ansible/`** - Automated provisioning and orchestration playbooks for bootstrapping the cluster.
   * **`inventory/`**: Inventory definition (`hosts.ini`) and global variable mapping (`group_vars/all.yml`) sourcing values directly from `infrastructure/cluster-config/cluster-config.yaml`.
-  * **`playbooks/k3s.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `vault` → `opentofu`.
-  * **`requirements.yml`**: Ansible Galaxy collection dependencies (`kubernetes.core`, `community.general`).
+  * **`playbooks/data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `vault` → `opentofu`.
+  * **`requirements.yml`**: Ansible Galaxy collection dependencies (`kubernetes.core`, `cloud.terraform`, `containers.podman`).
   * **`roles/`**: Reusable Ansible roles for configuring k3s systemd service, Gateway API CRDs & Cilium Helm release, GitHub Flux bootstrap, Vault initialization & GPG unseal automation, and OpenTofu state application.
 * **`apps/databases/`** - The PostGIS cluster and everything it depends on, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
