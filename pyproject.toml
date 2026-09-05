@@ -29,6 +29,7 @@ etl = [
 ml = [
   "scikit-learn>=1.3.2",
   "bentoml>=1.2.0",
+  "mlflow>=3.16.0",
 ]
 
 [dependency-groups]

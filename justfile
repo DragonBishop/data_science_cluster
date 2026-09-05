@@ -158,16 +158,13 @@ vault-shell:
 # Port-forward in-cluster Vault to localhost:8210 and fetch its CA
 vault-pf:
   #!/usr/bin/env bash
-  set -uo pipefail
+  set -euo pipefail
   mkdir -p ~/.vault-certs
-  [ -f ~/.vault-certs/vault-internal-ca.crt ] || kubectl get secret vault-server-cert -n vault -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.vault-certs/vault-internal-ca.crt
-  if ! (exec 3<>/dev/tcp/127.0.0.1/8210) 2>/dev/null; then
-    nohup kubectl port-forward -n vault vault-0 8210:8200 >~/.vault-certs/pf.log 2>&1 &
-    disown
-    for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/8210) 2>/dev/null && break; sleep 0.1; done
-  else
-    exec 3<&- 3>&-
-  fi
+  kubectl get secret vault-server-cert -n vault -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.vault-certs/vault-internal-ca.crt
+  pkill -f "kubectl port-forward -n vault vault-0 8210:8200" 2>/dev/null || true
+  nohup kubectl port-forward -n vault vault-0 8210:8200 >~/.vault-certs/pf.log 2>&1 &
+  disown
+  for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/8210) 2>/dev/null && break; sleep 0.1; done
   echo "Vault (in-cluster): https://127.0.0.1:8210  (CA: ~/.vault-certs/vault-internal-ca.crt)"
 
 # --- Development -------------------------------------------------------
