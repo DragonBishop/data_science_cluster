@@ -11,7 +11,7 @@
     --app-private-key="{{ lookup('env', 'GITHUB_APP_PRIVATE_KEY_PATH') }}"
     --namespace=flux-system
   environment:
-    KUBECONFIG: "{{ kubeconfig_path | default('~/.kube/config') }}"
+    KUBECONFIG: "{{ kubeconfig_path | default(ansible_facts.env.HOME + '/.kube/config') }}"
   when: lookup('env', 'GITHUB_APP_ID') != ""
   changed_when: true
 
@@ -40,7 +40,7 @@
     --password="{{ flux_auth_token.stdout }}"
     --namespace=flux-system
   environment:
-    KUBECONFIG: "{{ kubeconfig_path | default('~/.kube/config') }}"
+    KUBECONFIG: "{{ kubeconfig_path | default(ansible_facts.env.HOME + '/.kube/config') }}"
   when: lookup('env', 'GITHUB_APP_ID') == ""
   changed_when: true
 
