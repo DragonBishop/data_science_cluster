@@ -15,6 +15,7 @@ spec:
   egress:
     - toFQDNs:
         - matchName: "${GIT_FORGE_HOST}"
+        - matchName: "api.${GIT_FORGE_HOST}"
         - matchName: "quay.io"
         - matchPattern: "*.quay.io"
         - matchName: "helm.releases.hashicorp.com"

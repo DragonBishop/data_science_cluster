@@ -61,17 +61,14 @@
 
     - name: Print root token and unseal keys to user
       ansible.builtin.debug:
-        msg: |
-          Root Token:
-          {{ vault_root_token }}
-          Fresh Unseal Keys:
-          {{ vault_fresh_unseal_keys | join('\n') }}
+        msg: "{{ ['Root Token:', vault_root_token, 'Fresh Unseal Keys:'] + vault_fresh_unseal_keys }}"
 
     - name: Prompt user storage of root token / unseal keys
       ansible.builtin.pause:
         prompt: |
           🚨 ATTENTION: ROOT TOKEN AND UNSEAL KEYS ONLY PRINT ONCE.
              STORE THEM SECURELY OR RISK LOSING VAULT DATA.
+      no_log: true
 
     - name: Create tmpfs workdir for unseal keyfile
       ansible.builtin.tempfile:
@@ -124,7 +121,7 @@
 - name: Unseal Vault
   ansible.builtin.command:
     cmd: kubectl exec -i -n {{ vault_namespace }} {{ vault_pod }} -- vault write -format=json sys/unseal key=-
-    stdin: "{{ item }}\n"
+    stdin: "{{ item }}"
   environment:
     KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
   loop: "{{ vault_unseal_keys }}"

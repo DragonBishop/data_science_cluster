@@ -49,10 +49,15 @@
     state: present
     src: "{{ repo_root }}/clusters/local/flux-system/gotk-sync.yaml"
 
-- name: Apply Flux Kustomization (kustomization)
-  kubernetes.core.k8s:
-    state: present
-    src: "{{ repo_root }}/clusters/local/flux-system/kustomization.yaml"
+- name: Wait for Cilium CRDs to be established
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: ciliumclusterwidenetworkpolicies.cilium.io
+  register: flux_crd_cilium
+  until: flux_crd_cilium.resources | default([]) | length > 0
+  retries: 12
+  delay: 5
 
 - name: Apply Cilium cluster-default network policy
   kubernetes.core.k8s:
@@ -84,7 +89,22 @@
     kind: Pod
     name: vault-0
     namespace: vault
-  until: (flux_vault.resources | default([]) | length > 0) and (flux_vault.resources[0].status.phase | default('') == "Running")
   register: flux_vault
-  retries: 18
+  until: >-
+    (flux_vault.resources | default([]) | length > 0)
+    and (
+      flux_vault.resources[0].status.phase | default('') in ["Running", "Failed"]
+      or (flux_vault.resources[0].status.containerStatuses | default([])
+          | selectattr('state.waiting.reason', 'defined')
+          | selectattr('state.waiting.reason', 'in', ['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull'])
+          | list | length > 0)
+    )
+  retries: 24
   delay: 10
+
+- name: Fail with diagnostic if Vault pod did not reach Running
+  ansible.builtin.fail:
+    msg: >-
+      vault-0 did not reach Running: phase={{ flux_vault.resources[0].status.phase | default('unknown') }},
+      containerStatuses={{ flux_vault.resources[0].status.containerStatuses | default([]) }}
+  when: (flux_vault.resources | default([]) | length == 0) or (flux_vault.resources[0].status.phase | default('') != "Running")

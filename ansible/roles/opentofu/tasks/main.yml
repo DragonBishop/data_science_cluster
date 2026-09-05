@@ -66,11 +66,61 @@
   register: opentofu_postgres_superuser_prompt
   no_log: true
 
-- name: Set up local port-forward and CA cert for in-cluster Vault
-  ansible.builtin.command: just vault-pf
-  args:
-    chdir: "{{ repo_root }}"
+- name: Fetch in-cluster Vault CA certificate
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: vault-server-cert
+    namespace: "{{ vault_namespace }}"
+  register: opentofu_vault_cert_secret
+  failed_when: opentofu_vault_cert_secret.resources | default([]) | length == 0
+
+- name: Ensure local Vault cert directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts.env.HOME }}/.vault-certs"
+    state: directory
+    mode: "0700"
+
+- name: Write in-cluster Vault CA certificate locally
+  ansible.builtin.copy:
+    dest: "{{ ansible_facts.env.HOME }}/.vault-certs/vault-internal-ca.crt"
+    content: "{{ opentofu_vault_cert_secret.resources[0].data['ca.crt'] | b64decode }}"
+    mode: "0600"
+
+- name: Stop any existing Vault port-forward
+  ansible.builtin.command: pkill -f "kubectl port-forward -n {{ vault_namespace }} {{ vault_pod }} 8210:8200"
+  register: opentofu_vault_pf_kill
+  failed_when: false
+  changed_when: opentofu_vault_pf_kill.rc == 0
+
+- name: Start local port-forward to in-cluster Vault
+  ansible.builtin.command: kubectl port-forward -n {{ vault_namespace }} {{ vault_pod }} 8210:8200
+  async: 3600
+  poll: 0
+  register: opentofu_vault_pf_job
   changed_when: true
+  environment:
+    KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
+
+- name: Wait for local Vault port-forward to accept connections
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 8210
+    timeout: 10
+  register: opentofu_vault_pf_wait
+  ignore_errors: true
+
+- name: Check port-forward job status if it never came up
+  ansible.builtin.async_status:
+    jid: "{{ opentofu_vault_pf_job.ansible_job_id }}"
+  register: opentofu_vault_pf_job_status
+  when: opentofu_vault_pf_wait is failed
+
+- name: Fail with diagnostic if port-forward never came up
+  ansible.builtin.fail:
+    msg: >-
+      Vault port-forward to 127.0.0.1:8210 did not come up: {{ opentofu_vault_pf_job_status.stderr | default('no output captured') }}
+  when: opentofu_vault_pf_wait is failed
 
 - name: Apply terraform/vault
   cloud.terraform.terraform:
@@ -93,7 +143,7 @@
 #     cmd: kubectl exec -i -n {{ vault_namespace }} {{ vault_pod }} -- vault login -no-print -
 #     stdin: "{{ vault_root_token }}\n"
 #   environment:
-#     KUBECONFIG: "{{ ansible_env.HOME }}/.kube/config"
+#     KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
 #   no_log: true
 #   changed_when: true
 #
