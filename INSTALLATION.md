@@ -102,19 +102,37 @@ tofu version
   sudo dnf install -y postgresql
   ```
 
-#### GitHub CLI Authentication
+#### GitHub Authentication
 
-* Authenticate with GitHub (required for `flux bootstrap github`):
+The cluster requires read-only access to this repository to synchronize manifests. You can authenticate using either a **GitHub App** (Recommended) or your personal **GitHub CLI** token.
 
-  ```bash
-  gh auth login
-  ```
+**Option 1: GitHub App (Recommended)**
+For secure, automated rotation of short-lived tokens, create a GitHub App in your account with **Read-only** access to `Contents`.
 
-* Verify active authentication status:
+1. Generate a Private Key (`.pem`) for the app and save it locally.
+2. Install the App on your repository.
+3. Export the following environment variables before running the bootstrap:
 
-  ```bash
-  gh auth status
-  ```
+   ```bash
+   export GITHUB_APP_ID="<your-app-id>"
+   export GITHUB_APP_INSTALLATION_ID="<your-installation-id>"
+   export GITHUB_APP_PRIVATE_KEY_PATH="/path/to/your/private-key.pem"
+   ```
+
+**Option 2: GitHub CLI (Fallback)**
+If you do not have a GitHub App configured, the bootstrap process will fall back to using your personal GitHub token.
+
+1. Authenticate the CLI:
+
+   ```bash
+   gh auth login
+   ```
+
+2. Verify your status:
+
+   ```bash
+   gh auth status
+   ```
 
 #### Host Firewall Configuration
 
@@ -233,7 +251,7 @@ cd data_science_cluster
 
 #### Step 2: Execute Ansible Bootstrap
 
-Runs the full setup via Ansible (`ansible/playbooks/k3s.yml`): k3s, Cilium, Flux, Vault, and `terraform/vault`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
+Runs the full setup via Ansible (`ansible/playbooks/data_cluster.yml`): k3s, Cilium, Flux, Vault, and `terraform/vault`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
 > [!TIP]
 > **Just Recipe (automatically prompts for sudo):**
@@ -246,7 +264,7 @@ Runs the full setup via Ansible (`ansible/playbooks/k3s.yml`): k3s, Cilium, Flux
 > **Manual Shell Command:**
 >
 > ```bash
-> ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/k3s.yml --ask-become-pass
+> ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/data_cluster.yml --ask-become-pass
 > ```
 
 #### Step 3: Secure Vault Credentials & Unseal Keys

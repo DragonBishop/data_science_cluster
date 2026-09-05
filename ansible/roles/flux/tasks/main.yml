@@ -1,21 +1,58 @@
-- name: Obtain token for github bootstrap
+- name: Apply Flux controllers (gotk-components)
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/clusters/local/flux-system/gotk-components.yaml"
+
+- name: Create GitHub App authentication secret
+  ansible.builtin.command: >
+    flux create secret githubapp flux-system
+    --app-id="{{ lookup('env', 'GITHUB_APP_ID') }}"
+    --app-installation-id="{{ lookup('env', 'GITHUB_APP_INSTALLATION_ID') }}"
+    --app-private-key="{{ lookup('env', 'GITHUB_APP_PRIVATE_KEY_PATH') }}"
+    --namespace=flux-system
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path | default('~/.kube/config') }}"
+  when: lookup('env', 'GITHUB_APP_ID') != ""
+  changed_when: true
+
+- name: Obtain token for fallback github auth
   ansible.builtin.command: gh auth token
   register: flux_auth_token
   changed_when: false
+  when: lookup('env', 'GITHUB_APP_ID') == ""
 
-- name: Flux bootstrap to github repo
+- name: Get git remote origin URL # noqa: command-instead-of-module
+  ansible.builtin.command: git config --get remote.origin.url
+  register: flux_git_remote_url
+  changed_when: false
+  when: lookup('env', 'GITHUB_APP_ID') == ""
+
+- name: Format repository URL for HTTPS
+  ansible.builtin.set_fact:
+    flux_git_https_url: "{{ flux_git_remote_url.stdout | regex_replace('^git@github.com:', 'https://github.com/') | regex_replace('\\.git$', '') }}"
+  when: lookup('env', 'GITHUB_APP_ID') == ""
+
+- name: Create generic Git authentication secret (Fallback)
   ansible.builtin.command: >
-    flux bootstrap github
-    --owner=DragonBishop
-    --repository=data_science_cluster
-    --branch=main
-    --path=clusters/local
-    --personal
-    --network-policy=false
+    flux create secret git flux-system
+    --url="{{ flux_git_https_url }}"
+    --username=git
+    --password="{{ flux_auth_token.stdout }}"
+    --namespace=flux-system
   environment:
-    GITHUB_TOKEN: "{{ flux_auth_token.stdout }}"
-  register: flux_bootstrap_result
+    KUBECONFIG: "{{ kubeconfig_path | default('~/.kube/config') }}"
+  when: lookup('env', 'GITHUB_APP_ID') == ""
   changed_when: true
+
+- name: Apply Flux GitRepository (gotk-sync)
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/clusters/local/flux-system/gotk-sync.yaml"
+
+- name: Apply Flux Kustomization (kustomization)
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/clusters/local/flux-system/kustomization.yaml"
 
 - name: Apply Cilium cluster-default network policy
   kubernetes.core.k8s:
@@ -25,7 +62,9 @@
 - name: Apply flux-egress network policy
   kubernetes.core.k8s:
     state: present
-    definition: "{{ lookup('file', repo_root + '/infrastructure/flux-system-policies/flux-networkpolicy.yaml') | regex_replace('\\$\\{GIT_FORGE_HOST\\}', git_forge_host) }}"
+    definition: >-
+      {{ lookup('file', repo_root + '/infrastructure/flux-system-policies/flux-networkpolicy.yaml')
+      | regex_replace('\$\{GIT_FORGE_HOST\}', git_forge_host) }}
 
 - name: Flux reconcile vault kustomization
   kubernetes.core.k8s:
