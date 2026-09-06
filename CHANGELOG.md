@@ -8,6 +8,29 @@
 ### 📚 Documentation
 
 - Regenerate changelog for v1.0.0
+## [1.1.0](https://github.com/DragonBishop/data_science_cluster/compare/v1.0.1...v1.1.0) (2026-09-06)
+
+
+### Features
+
+* add GitHub workflows for linting, testing, and release management ([b543fcf](https://github.com/DragonBishop/data_science_cluster/commit/b543fcf48dd6538f189b16057d02f78a469e08c2))
+* **flux:** implement GitHub App authentication with PAT fallback ([84a1162](https://github.com/DragonBishop/data_science_cluster/commit/84a1162e52710761dc187b7f569f2234bd402e1d))
+* implement k3s Data Science Cluster provisioning and update Flux tasks for GitHub App integration ([b69ec83](https://github.com/DragonBishop/data_science_cluster/commit/b69ec83474c91960fd49977fe00c73688e3c1662))
+* **uninstall:** add 'just uninstall' command and script to tear down k3s and clear local state ([2886e2c](https://github.com/DragonBishop/data_science_cluster/commit/2886e2c55b6ae72cac8ae6cf066a48a24fae5498))
+
+
+### Bug Fixes
+
+* **ansible:** migrate ansible_env to ansible_facts, pause on vault secrets, drop flux wait conditions ([590fe9e](https://github.com/DragonBishop/data_science_cluster/commit/590fe9ecf7327d79e8988c1aea604bed2aaf80f8))
+* **ansible:** update KUBECONFIG default path to use ansible_facts for consistency ([1a08289](https://github.com/DragonBishop/data_science_cluster/commit/1a08289a52aecf5367fecf580a058104e40ba2cd))
+* **bootstrap:** make one-command cluster bootstrap reliable ([219b032](https://github.com/DragonBishop/data_science_cluster/commit/219b03284498ee69143be18dbb4cc8e3fac98858))
+
+
+### Documentation
+
+* regenerate changelog for v1.0.1 ([f5b5c86](https://github.com/DragonBishop/data_science_cluster/commit/f5b5c86015ecd157c303c93f7253f84479afc9a5))
+* update GitHub authentication instructions and improve preflight checks by adding github app check. ([bdf71c1](https://github.com/DragonBishop/data_science_cluster/commit/bdf71c15dc67d4e25c8a7a9f4c3e936730e9634c))
+
 ## [1.0.0] - 2026-08-31
 
 ### ◀️ Revert
