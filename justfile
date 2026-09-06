@@ -69,6 +69,10 @@ fuzzypods:
 stop *ARGS:
   ./src/bash/stop-cluster.sh {{ARGS}}
 
+# Uninstall k3s and clear stale local cluster state (sudo required)
+uninstall:
+  ./src/bash/uninstall-cluster.sh
+
 # --- Database ------------------------------------------------------------
 
 # Connect via psql to postgis-cluster (HOST defaults to the live Gateway IP; pass `localhost` for the node-local path)

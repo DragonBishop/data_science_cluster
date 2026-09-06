@@ -25,11 +25,15 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Playbook fails during k3s installation or times out waiting for `/etc/rancher/k3s/k3s.yaml`**
   * **What's happening:** Leftover state, containerd shims, or stale Cilium BPF mounts from a previous installation are preventing the k3s server from initializing cleanly.
-  * **How to fix it:** Run `/usr/local/bin/k3s-uninstall.sh`, unmount any lingering BPF filesystems (`mount | grep bpf`), and re-run `just bootstrap`.
+  * **How to fix it:** Run `just uninstall`, then re-run `just bootstrap`.
 
 * **Playbook fails during Flux bootstrap with GitHub authentication errors**
   * **What's happening:** `gh` CLI is either unauthenticated or lacks the required OAuth scopes to manage repository webhooks and deploy keys.
   * **How to fix it:** Run `gh auth login` and select `GitHub.com`, `HTTPS`, and authenticate with your browser or a personal access token with repo privileges. Verify with `gh auth status`.
+
+* **Flux fails with `unable to read private key file: ... no such file or directory`**
+  * **What's happening:** The `.pem` at `GITHUB_APP_PRIVATE_KEY_PATH` is gone. GitHub never lets you re-download a previously generated private key — there is no way to recover it, whether it was deleted, moved, or overwritten.
+  * **How to fix it:** Generate a new key from the GitHub App's settings page ("Generate a private key") — this doesn't invalidate the App or its installation, both keep working. Save the new `.pem` wherever `GITHUB_APP_PRIVATE_KEY_PATH` points and re-run bootstrap.
 
 * **OpenTofu role fails to apply Vault configuration**
   * **What's happening:** Vault is sealed, port-forwarding failed, or OpenTofu state encryption passphrase was mistyped.
@@ -39,6 +43,18 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
     tofu -chdir=terraform/vault init
     tofu -chdir=terraform/vault plan
     ```
+
+* **OpenTofu role fails with `Expecting value: line 2 column 1 (char 1)`**
+  * **What's happening:** This is a Python `JSONDecodeError` from inside the `cloud.terraform` Ansible module, not a Terraform error. `tofu version -json` — the first command the module runs — prints a "CLI configuration file does not exist" warning to stdout ahead of the actual JSON whenever `TF_CLI_CONFIG_FILE` is unset and `~/.config/terraform/terraformrc` doesn't exist. The module blindly `json.loads()`s that combined output.
+  * **How to fix it:** Create the default config file so `tofu` stops warning about its absence:
+
+    ```bash
+    mkdir -p ~/.config/terraform && touch ~/.config/terraform/terraformrc
+    ```
+
+* **OpenTofu apply succeeds locally with a passphrase you don't recognize, or fails to decrypt state**
+  * **What's happening:** `terraform/vault`'s local state is encrypted (`terraform/vault/encryption.tf`) with whatever passphrase was typed into the "Terraform state encryption passphrase" prompt on the run that created it. Nothing enforces that later runs use the same one — a differing passphrase against existing state fails with `decryption failed for all provided methods`.
+  * **How to fix it:** If the cluster (and therefore Vault) has been rebuilt since that state was written, it's orphaned — `just uninstall` already clears it (see [`INSTALLATION.md`'s Clean Host State step](INSTALLATION.md#clean-host-state-if-reinstalling)), so just re-apply with a fresh passphrase. Only worry about matching the exact old passphrase if the underlying Vault instance is still the same one that state describes.
 
 ---
 

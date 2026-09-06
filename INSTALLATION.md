@@ -217,16 +217,10 @@ If you do not have a GitHub App configured, the bootstrap process will fall back
 
 #### Clean Host State (if reinstalling)
 
-If reinstalling over an existing k3s instance, uninstall the server:
+If reinstalling over an existing k3s instance, tear it down first:
 
 ```bash
-/usr/local/bin/k3s-uninstall.sh
-```
-
-Verify Cilium BPF mounts are unmounted before running bootstrap (see [`troubleshooting.md`](troubleshooting.md)):
-
-```bash
-mount | grep bpf
+just uninstall
 ```
 
 #### Data Migration (if restoring an existing database)
