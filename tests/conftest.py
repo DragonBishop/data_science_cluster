@@ -1,1 +1,1 @@
-"""Fixtures for data_science_cluster"""
+"""Fixtures for pgiscluster"""

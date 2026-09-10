@@ -430,14 +430,12 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── preflight.sh                 # Read-only host readiness checks
 │   │   ├── start-cluster.sh             # Boot sequence: API, in-cluster Vault unseal, readiness checks
 │   │   └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
-│   └── clusterpgis/                     # The installable clusterpgis package (src layout)
+│   └── pgiscluster/                      # The installable pgiscluster package (src layout)
 │       ├── data/
 │       │   └── __init__.py
 │       ├── features/
 │       │   └── __init__.py
 │       ├── models/
-│       │   └── __init__.py
-│       ├── visualization/
 │       │   └── __init__.py
 │       └── __init__.py
 ├── terraform/                           # OpenTofu module configuring Vault's internals
@@ -461,7 +459,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 ├── .python-version
 ├── INSTALLATION.md                      # First-time cluster bootstrap: Requirements, then `just bootstrap`
 ├── justfile                             # `just setup` (review for more commands)
-├── pyproject.toml                       # uv-managed clusterpgis package + dev tooling
+├── pyproject.toml                       # uv-managed pgiscluster package + dev tooling
 ├── README.md                            # Architecture, setup, and operations reference
 ├── troubleshooting.md                   # Symptom → cause → fix, by subsystem
 └── uv.lock
@@ -479,7 +477,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 * **`.github/`**
   * **`ISSUE_TEMPLATE/`**: Issue templates for bug reports, documentation updates, feature proposals, and technical-debt resolution.
   * **`workflows/lint.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `ruff check`/`ruff format --check`.
-  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest` with coverage against `src/clusterpgis`.
+  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest` with coverage against `src/pgiscluster`.
   * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR and, once a release is tagged, regenerates `CHANGELOG.md` with `git-cliff` and pushes it back to `main`.
 * **`ansible/`** - Automated provisioning and orchestration playbooks for bootstrapping the cluster.
   * **`inventory/`**: Inventory definition (`hosts.ini`) and global variable mapping (`group_vars/all.yml`) sourcing values directly from `infrastructure/cluster-config/cluster-config.yaml`.
@@ -532,7 +530,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).
     * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, unsealing the in-cluster Vault, and reactivating hibernated workloads.
     * **`stop-cluster.sh`**: Graceful shutdown: declaratively hibernating the CNPG cluster, waiting for pod termination, and stopping the k3s systemd unit.
-  * **`src/clusterpgis/`**: The installable `clusterpgis` Python package structured across `data/`, `features/`, `models/`, and `visualization/`.
+  * **`src/pgiscluster/`**: The installable `pgiscluster` Python package structured across `data/`, `features/`, and `models/`.
 * **`terraform/`** - OpenTofu module configuring Vault's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
   * **`vault/`**: Unified module targeting the **in-cluster** Vault: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic role (`postgis-cluster`, `postgis-app-role`).
 * **`tests/`**

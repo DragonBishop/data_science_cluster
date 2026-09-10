@@ -24,7 +24,7 @@ jobs:
       - name: unit tests
         run: |
           set -o pipefail && \
-          uv run pytest --cov=src/clusterpgis --cov-report=term-missing:skip-covered --junitxml=pytest.xml \
+          uv run pytest --cov=src/pgiscluster --cov-report=term-missing:skip-covered --junitxml=pytest.xml \
           | tee pytest-coverage.txt
       - name: Pytest coverage comment
         uses: MishaKav/pytest-coverage-comment@v1.11.2
