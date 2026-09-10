@@ -1,4 +1,4 @@
-"""Module for data_science_cluster."""
+"""Module for pgiscluster."""
 
 from __future__ import annotations
 
