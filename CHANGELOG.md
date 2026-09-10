@@ -20,6 +20,13 @@
 - Add GitHub workflows for linting, testing, and release management
 - Implement k3s Data Science Cluster provisioning and update Flux tasks for GitHub App integration
 - *(uninstall)* Add 'just uninstall' command and script to tear down k3s and clear local state
+## [1.1.1](https://github.com/DragonBishop/data_science_cluster/compare/v1.1.0...v1.1.1) (2026-09-10)
+
+
+### Documentation
+
+* regenerate changelog for v1.1.0 ([a0ea017](https://github.com/DragonBishop/data_science_cluster/commit/a0ea01777a52dd749e3a74ecc34f87fb8cda0f48))
+
 ## [1.0.1] - 2026-08-31
 
 ### ⚙️ Miscellaneous Tasks
