@@ -13,6 +13,9 @@ group = "🚀 Features"
 message = "^fix"
 group = "🐛 Bug Fixes"
 [[git.commit_parsers]]
+message = "^docs: regenerate changelog for"
+skip = true
+[[git.commit_parsers]]
 message = "^doc"
 group = "📚 Documentation"
 [[git.commit_parsers]]
