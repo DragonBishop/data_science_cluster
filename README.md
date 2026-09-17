@@ -77,6 +77,7 @@ These are the resources that make up the database core of the cluster. It is eng
 | Headlamp | `0.45.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
 | Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay/UI run their own cert-manager mTLS trust domain; UI exposed at `hubble.internal` on the shared Gateway. |
 | k3s | `v1.36.4+k3s1` | Core control plane and execution environment. Host-installed, unpinned by this repo. |
+| [pgiscluster](https://pypi.org/project/pgiscluster/) | `0.2.0` | Python package providing `HostDBConnector`/`HostAdminDBConnector` classes for connecting ETL/ML job code to the database. |
 | PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` | Image the CNPG `Cluster` runs (`18.6` PostgreSQL, `3.6.4` PostGIS). |
 | SeaweedFS | `4.44.0` | In-cluster S3-compatible object store with TLS issued by `vault-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
 | Vault Database & PKI Engines | Same as Vault | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
@@ -147,6 +148,7 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Headlamp | [https://headlamp.dev/docs/latest/](https://headlamp.dev/docs/latest/) |
 | Hubble | [https://docs.cilium.io/en/stable/observability/hubble/](https://docs.cilium.io/en/stable/observability/hubble/) |
 | k3s | [https://docs.k3s.io/](https://docs.k3s.io/) |
+| pgiscluster | [https://pypi.org/project/pgiscluster/](https://pypi.org/project/pgiscluster/) |
 | PostGIS Extension | [https://postgis.net/documentation/](https://postgis.net/documentation/) |
 | PostgreSQL | [https://www.postgresql.org/docs/current/](https://www.postgresql.org/docs/current/) |
 | SeaweedFS | [https://github.com/seaweedfs/seaweedfs/wiki](https://github.com/seaweedfs/seaweedfs/wiki) |
@@ -426,18 +428,10 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
 │   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
-│   ├── bash/
-│   │   ├── preflight.sh                 # Read-only host readiness checks
-│   │   ├── start-cluster.sh             # Boot sequence: API, in-cluster Vault unseal, readiness checks
-│   │   └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
-│   └── pgiscluster/                      # The installable pgiscluster package (src layout)
-│       ├── data/
-│       │   └── __init__.py
-│       ├── features/
-│       │   └── __init__.py
-│       ├── models/
-│       │   └── __init__.py
-│       └── __init__.py
+│   └── bash/
+│       ├── preflight.sh                 # Read-only host readiness checks
+│       ├── start-cluster.sh             # Boot sequence: API, in-cluster Vault unseal, readiness checks
+│       └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
 ├── terraform/                           # OpenTofu module configuring Vault's internals
 │   └── vault/                           # Unified in-cluster Vault: KV mounts, Kubernetes auth, 2-tier PKI engine, DB secrets
 │       ├── .gitignore
@@ -451,15 +445,14 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       └── versions.tf
 ├── tests/
 │   ├── __init__.py
-│   ├── conftest.py
-│   └── test_example.py
+│   └── conftest.py
 ├── .copier-answers.yml                  # Records copier template + answers, for future `copier update`
 ├── .gitattributes
 ├── .gitignore
 ├── .python-version
 ├── INSTALLATION.md                      # First-time cluster bootstrap: Requirements, then `just bootstrap`
 ├── justfile                             # `just setup` (review for more commands)
-├── pyproject.toml                       # uv-managed pgiscluster package + dev tooling
+├── pyproject.toml                       # uv-managed project dependency + dev tooling
 ├── README.md                            # Architecture, setup, and operations reference
 ├── troubleshooting.md                   # Symptom → cause → fix, by subsystem
 └── uv.lock
@@ -477,7 +470,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 * **`.github/`**
   * **`ISSUE_TEMPLATE/`**: Issue templates for bug reports, documentation updates, feature proposals, and technical-debt resolution.
   * **`workflows/lint.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `ruff check`/`ruff format --check`.
-  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest` with coverage against `src/pgiscluster`.
+  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest`.
   * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR and, once a release is tagged, regenerates `CHANGELOG.md` with `git-cliff` and pushes it back to `main`.
 * **`ansible/`** - Automated provisioning and orchestration playbooks for bootstrapping the cluster.
   * **`inventory/`**: Inventory definition (`hosts.ini`) and global variable mapping (`group_vars/all.yml`) sourcing values directly from `infrastructure/cluster-config/cluster-config.yaml`.
@@ -530,9 +523,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).
     * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, unsealing the in-cluster Vault, and reactivating hibernated workloads.
     * **`stop-cluster.sh`**: Graceful shutdown: declaratively hibernating the CNPG cluster, waiting for pod termination, and stopping the k3s systemd unit.
-  * **`src/pgiscluster/`**: The installable `pgiscluster` Python package structured across `data/`, `features/`, and `models/`.
 * **`terraform/`** - OpenTofu module configuring Vault's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
   * **`vault/`**: Unified module targeting the **in-cluster** Vault: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic role (`postgis-cluster`, `postgis-app-role`).
 * **`tests/`**
   * **`conftest.py`**: Shared test fixtures and pytest configuration.
-  * **`test_example.py`**: Example test suite for package sanity checks.
