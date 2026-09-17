@@ -20,11 +20,11 @@ jobs:
         with:
           python-version-file: ".python-version"
       - name: Install the project
-        run: uv sync --all-extras --all-groups --frozen
+        run: uv sync --all-groups --frozen
       - name: unit tests
         run: |
           set -o pipefail && \
-          uv run pytest --cov=src/pgiscluster --cov-report=term-missing:skip-covered --junitxml=pytest.xml \
+          uv run pytest --junitxml=pytest.xml \
           | tee pytest-coverage.txt
       - name: Pytest coverage comment
         uses: MishaKav/pytest-coverage-comment@v1.11.2
