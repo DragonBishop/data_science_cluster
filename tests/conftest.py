@@ -1,1 +1,1 @@
-"""Fixtures for pgiscluster"""
+"""Shared pytest fixtures."""
