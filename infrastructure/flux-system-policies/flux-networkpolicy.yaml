@@ -20,4 +20,5 @@ spec:
         - matchPattern: "*.quay.io"
         - matchName: "helm.releases.hashicorp.com"
         - matchName: "cloudnative-pg.github.io"
+        - matchName: "seaweedfs.github.io"
         - matchPattern: "*.githubusercontent.com"

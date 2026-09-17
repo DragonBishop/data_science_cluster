@@ -4,6 +4,8 @@ kind: CiliumLocalRedirectPolicy
 metadata:
   name: postgis-localhost
   namespace: databases
+  labels:
+    app.kubernetes.io/name: postgis-cluster
 spec:
   redirectFrontend:
     addressMatcher:

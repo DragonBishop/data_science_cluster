@@ -3,9 +3,30 @@
   hosts: localhost
   become: false
 
+  vars_prompt:
+    - name: vault_gpg_passphrase
+      prompt: "GPG passphrase for the unseal keyfile"
+      private: true
+      default: ""
+    - name: opentofu_state_encryption_passphrase
+      prompt: "State encryption passphrase for terraform/vault's state file"
+      private: true
+      default: ""
+    - name: opentofu_postgres_superuser_password
+      prompt: "Postgres superuser password"
+      private: true
+      default: ""
+
   roles:
     - { role: k3s, tags: [k3s] }
     - { role: cilium, tags: [cilium] }
     - { role: flux, tags: [flux] }
     - { role: vault, tags: [vault] }
     - { role: opentofu, tags: [opentofu, vault] }
+
+  tasks:
+    - name: Print freshly-generated Vault root token and unseal keys
+      ansible.builtin.debug:
+        msg: "{{ ['Root Token:', vault_root_token, 'Fresh Unseal Keys:'] + vault_fresh_unseal_keys }}"
+      when: vault_fresh_unseal_keys is defined
+      tags: always

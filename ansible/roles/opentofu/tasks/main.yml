@@ -36,35 +36,30 @@
     opentofu_s3_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null', length=40, chars=['hexdigits']) }}"
   no_log: true
 
-- name: Resolve in-cluster Vault root token
-  when: vault_root_token | default('') | length == 0
-  block:
-    - name: Prompt for in-cluster Vault root token
-      ansible.builtin.pause:
-        prompt: "In-cluster Vault root token"
-        echo: false
-      register: opentofu_root_token_prompt
-      no_log: true
-
-    # vault_root_token is shared with the vault role's default, not opentofu-local.
-    - name: Store in-cluster Vault root token  # noqa: var-naming[no-role-prefix]
-      ansible.builtin.set_fact:
-        vault_root_token: "{{ opentofu_root_token_prompt.user_input }}"
-      no_log: true
-
-- name: Prompt for the Terraform state encryption passphrase
-  ansible.builtin.pause:
-    prompt: "State encryption passphrase for terraform/vault's state file"
-    echo: false
-  register: opentofu_state_encryption_prompt
+# vault_root_token is shared with the vault role's default, not opentofu-local.
+- name: Resolve in-cluster Vault root token  # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    vault_root_token: "{{ vault_root_token | default(lookup('ansible.builtin.env', 'VAULT_ROOT_TOKEN')) }}"
   no_log: true
 
-- name: Prompt for the Postgres superuser password
-  ansible.builtin.pause:
-    prompt: "Postgres superuser password"
-    echo: false
-  register: opentofu_postgres_superuser_prompt
-  no_log: true
+- name: Verify in-cluster Vault root token is available
+  ansible.builtin.assert:
+    that:
+      - vault_root_token | length > 0
+    fail_msg: >-
+      No Vault root token available. Either let the vault role's first-time init
+      run in this same invocation, or supply an existing token via
+      VAULT_ROOT_TOKEN=<token> ansible-playbook ... (the token printed at the
+      end of the run that first initialized Vault).
+
+- name: Verify the Terraform state encryption passphrase and Postgres superuser password are available
+  ansible.builtin.assert:
+    that:
+      - opentofu_state_encryption_passphrase | default('') | length > 0
+      - opentofu_postgres_superuser_password | default('') | length > 0
+    fail_msg: >-
+      Missing the Terraform state encryption passphrase or Postgres superuser
+      password. Answer both prompts at the start of the play.
 
 - name: Fetch in-cluster Vault CA certificate
   kubernetes.core.k8s_info:
@@ -130,8 +125,8 @@
     force_init: true
   environment:
     VAULT_TOKEN: "{{ vault_root_token }}"
-    TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_prompt.user_input }}"
-    TF_VAR_postgres_superuser_password: "{{ opentofu_postgres_superuser_prompt.user_input }}"
+    TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_passphrase }}"
+    TF_VAR_postgres_superuser_password: "{{ opentofu_postgres_superuser_password }}"
     TF_VAR_s3_access_key: "{{ opentofu_s3_access_key }}"
     TF_VAR_s3_secret_key: "{{ opentofu_s3_secret_key }}"
     TF_VAR_secrets_wo_version: "{{ opentofu_secrets_wo_version }}"

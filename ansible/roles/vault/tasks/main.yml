@@ -30,17 +30,13 @@
   ansible.builtin.command: gpgconf --reload gpg-agent
   changed_when: true
 
-- name: Prompt for the unseal-keyfile GPG passphrase
-  ansible.builtin.pause:
-    prompt: "GPG passphrase for {{ vault_keyfile }}"
-    echo: false
-  register: vault_gpg_passphrase_prompt
-  no_log: true
-
-- name: Store GPG passphrase
-  ansible.builtin.set_fact:
-    vault_gpg_passphrase: "{{ vault_gpg_passphrase_prompt.user_input }}"
-  no_log: true
+- name: Verify the unseal-keyfile GPG passphrase is available
+  ansible.builtin.assert:
+    that:
+      - vault_gpg_passphrase | default('') | length > 0
+    fail_msg: >-
+      No GPG passphrase supplied for {{ vault_keyfile }}. Answer the
+      "GPG passphrase for the unseal keyfile" prompt at the start of the play.
 
 - name: Initialize Vault and write a new unseal keyfile
   when: not (vault_status_result.stdout | from_json).initialized
@@ -57,17 +53,6 @@
       ansible.builtin.set_fact:
         vault_root_token: "{{ (vault_init_result.stdout | from_json).root_token }}"
         vault_fresh_unseal_keys: "{{ (vault_init_result.stdout | from_json).unseal_keys_b64[:3] }}"
-      no_log: true
-
-    - name: Print root token and unseal keys to user
-      ansible.builtin.debug:
-        msg: "{{ ['Root Token:', vault_root_token, 'Fresh Unseal Keys:'] + vault_fresh_unseal_keys }}"
-
-    - name: Prompt user storage of root token / unseal keys
-      ansible.builtin.pause:
-        prompt: |
-          🚨 ATTENTION: ROOT TOKEN AND UNSEAL KEYS ONLY PRINT ONCE.
-             STORE THEM SECURELY OR RISK LOSING VAULT DATA.
       no_log: true
 
     - name: Create tmpfs workdir for unseal keyfile
