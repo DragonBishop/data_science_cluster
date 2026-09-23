@@ -12,7 +12,7 @@ body:
     validations:
       required: true
 # Current Problem Types
-  - type:  checkboxes
+  - type: checkboxes
     id: problem-type
     attributes:
       label: Problem Type
