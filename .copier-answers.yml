@@ -1,0 +1,11 @@
+# Changes here will be overwritten by Copier
+_commit: v1.7.0
+_src_path: gh:DragonBishop/python-copier-template-ds
+github_actions: true
+include_module: false
+include_notebooks: false
+include_reports: false
+project_name: data_science_cluster
+project_type: data_science
+python_version: 3.14.7
+use_rumdl: true
