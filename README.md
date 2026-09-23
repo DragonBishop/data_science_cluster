@@ -471,7 +471,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`ISSUE_TEMPLATE/`**: Issue templates for bug reports, documentation updates, feature proposals, and technical-debt resolution.
   * **`workflows/lint.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `ruff check`/`ruff format --check`.
   * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest`.
-  * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR and, once a release is tagged, regenerates `CHANGELOG.md` with `git-cliff` and pushes it back to `main`.
+  * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR, and `git-cliff` commits `CHANGELOG.md` onto that PR's branch.
 * **`ansible/`** - Automated provisioning and orchestration playbooks for bootstrapping the cluster.
   * **`inventory/`**: Inventory definition (`hosts.ini`) and global variable mapping (`group_vars/all.yml`) sourcing values directly from `infrastructure/cluster-config/cluster-config.yaml`.
   * **`playbooks/data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `vault` → `opentofu`.
