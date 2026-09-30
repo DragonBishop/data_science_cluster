@@ -186,5 +186,5 @@ update:
 
 # set up pre-commit hooks
 git-setup:
-  @[ -d .git ] || git init
+  @[ -d .git ] || git init -b main
   uv run prek install
