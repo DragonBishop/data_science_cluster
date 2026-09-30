@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v1.7.0
+_commit: v1.7.2
 _src_path: gh:DragonBishop/python-copier-template-ds
 github_actions: true
 include_module: false
