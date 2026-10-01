@@ -45,5 +45,5 @@ spec:
             app.kubernetes.io/name: seaweedfs
       toPorts:
         - ports:
-            - port: "9000"
+            - port: "swfs-s3"
               protocol: TCP
