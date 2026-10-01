@@ -337,8 +337,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── openbao/
 │       └── opentofu/
 ├── apps/
-│   └── databases/                       # PostGIS cluster + dependencies, one Flux Kustomization
-│       ├── eso-setup.yaml
+│   ├── databases/                       # PostGIS cluster + dependencies, one Flux Kustomization
 │       ├── kustomization.yaml
 │       ├── postgis-cluster.yaml
 │       ├── postgis-database.yaml
@@ -346,9 +345,13 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── postgis-networkpolicy.yaml
 │       ├── postgis-tcproute.yaml
 │       ├── postgis-tls.yaml
-│       ├── seaweedfs-credentials.yaml
-│       ├── seaweedfs-networkpolicy.yaml
-│       └── seaweedfs-release.yaml
+│   │   ├── seaweedfs-networkpolicy.yaml
+│   │   └── seaweedfs-release.yaml
+│   └── databases-secrets/               # ESO SecretStore + ExternalSecrets, applied before databases
+│       ├── eso-setup.yaml
+│       ├── kustomization.yaml
+│       ├── postgis-credentials.yaml
+│       └── seaweedfs-credentials.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
 │       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap`
@@ -361,6 +364,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── cnpg-operator.yaml           # Kustomization → infrastructure/cnpg-operator/
 │       ├── coredns-custom.yaml          # Kustomization → infrastructure/coredns-custom/
 │       ├── databases.yaml               # Kustomization → apps/databases/
+│       ├── databases-secrets.yaml       # Kustomization → apps/databases-secrets/
 │       ├── external-secrets.yaml        # Kustomization → infrastructure/external-secrets/
 │       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap`
 │       │   ├── gotk-components.yaml
@@ -482,15 +486,18 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`roles/`**: Reusable Ansible roles for configuring k3s systemd service, Gateway API CRDs & Cilium Helm release, GitHub Flux bootstrap, OpenBao initialization & GPG unseal automation, and OpenTofu state application.
 * **`apps/databases/`** - The PostGIS cluster and everything it depends on, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
-  * **`postgis-cluster.yaml`**: The CNPG `Cluster`, its ESO `ExternalSecret`s and `VaultDynamicSecret` generator for static and dynamic credentials, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
+  * **`postgis-cluster.yaml`**: The CNPG `Cluster`, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
   * **`postgis-database.yaml`**: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
   * **`postgis-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
   * **`postgis-networkpolicy.yaml`**: Restricts PostGIS database ingress (CNPG operator, OpenBao) and egress (kube-dns, SeaweedFS S3).
   * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
-  * **`seaweedfs-credentials.yaml`**: `ExternalSecret` syncing S3 credentials from `secret/seaweedfs`.
   * **`seaweedfs-networkpolicy.yaml`**: Restricts SeaweedFS ingress and egress to the `databases` namespace and `kube-dns`.
   * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master/filer data on the external storage via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created at install.
+* **`apps/databases-secrets/`** - The ESO objects that produce the `databases` Secrets, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after every Secret exists.
+  * **`eso-setup.yaml`**: The `postgis-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
+  * **`postgis-credentials.yaml`**: `ExternalSecret`s and the `VaultDynamicSecret` generator for static and dynamic PostGIS credentials.
+  * **`seaweedfs-credentials.yaml`**: `ExternalSecret` syncing S3 credentials from `secret/seaweedfs`.
 * **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/`/`apps/` below.
   * **`barman-cloud.yaml`**: Kustomization → `infrastructure/barman-cloud/`
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
@@ -498,6 +505,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`cnpg-operator.yaml`**: Kustomization → `infrastructure/cnpg-operator/`
   * **`coredns-custom.yaml`**: Kustomization → `infrastructure/coredns-custom/`
   * **`databases.yaml`**: Kustomization → `apps/databases/`
+  * **`databases-secrets.yaml`**: Kustomization → `apps/databases-secrets/`
   * **`external-secrets.yaml`**: Kustomization → `infrastructure/external-secrets/`
   * **`flux-system/`**: (`gotk-components.yaml`, `gotk-sync.yaml`, `kustomization.yaml`): Flux's own controllers and `GitRepository` source, written by `flux bootstrap` (do not edit directly).
   * **`flux-system-policies.yaml`**: Kustomization → `infrastructure/flux-system-policies/`

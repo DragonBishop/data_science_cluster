@@ -12,3 +12,6 @@ configMapGenerator:
     namespace: kube-system
     files:
       - values.yaml=cilium-values.yaml
+    options:
+      labels:
+        reconcile.fluxcd.io/watch: Enabled
