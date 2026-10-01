@@ -199,7 +199,7 @@ One-time, first-install setup: see `INSTALLATION.md` for Requirements and what t
 | `just status` | Check overall cluster health | Post-install verification or periodic health check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
 | `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting; fuzzy-select a pod from all namespaces and describe it |
 | `just stop` (`just stop --force` if a stuck stop needs it) | Stop the cluster | Each work session; gracefully hibernates CNPG PostgreSQL before shutting down k3s |
-| `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears `.local/openbao`, local Postgres/Hubble caches, and orphaned `terraform/openbao` state |
+| `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears `.local/openbao`, local Postgres/Hubble caches, orphaned `terraform/openbao` state, and Cilium's persistent host files; reboot before the next `just bootstrap` |
 
 ### Database
 

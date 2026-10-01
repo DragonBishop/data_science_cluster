@@ -25,7 +25,11 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Playbook fails during k3s installation or times out waiting for `/etc/rancher/k3s/k3s.yaml`**
   * **What's happening:** Leftover state, containerd shims, or stale Cilium BPF mounts from a previous installation are preventing the k3s server from initializing cleanly.
-  * **How to fix it:** Run `just uninstall`, then re-run `just bootstrap`.
+  * **How to fix it:** Run `just uninstall`, reboot, then re-run `just bootstrap`.
+
+* **Every pod's probes time out and nothing reaches the API server after a reinstall**
+  * **What's happening:** The previous cluster's Cilium BPF programs are still attached in the kernel. They outlive `k3s-uninstall.sh` and silently drop host↔pod traffic.
+  * **How to fix it:** Reboot, then re-run `just bootstrap`.
 
 * **Playbook fails during Flux bootstrap with GitHub authentication errors**
   * **What's happening:** `gh` CLI is either unauthenticated or lacks the required OAuth scopes to manage repository webhooks and deploy keys.
