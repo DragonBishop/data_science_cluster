@@ -8,7 +8,7 @@ metadata:
 spec:
   interval: 1m0s
   ref:
-    branch: main
+    branch: feat/openbao
   provider: github
   secretRef:
     name: flux-system
