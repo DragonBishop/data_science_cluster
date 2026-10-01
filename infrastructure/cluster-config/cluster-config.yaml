@@ -39,6 +39,7 @@ data:
   # --- Topology ---
   CILIUM_OPERATOR_REPLICAS: "1"
   POSTGIS_INSTANCES: "1"
+  CILIUM_HELM_RETRIES: "3"
 
   # --- Resource sizing: Cilium / Hubble ---
   CILIUM_CPU_REQUEST: "20m"

@@ -32,7 +32,11 @@ spec:
       name: cilium-values-hubble
       valuesKey: values.yaml
       optional: true
+  install:
+    remediation:
+      retries: ${CILIUM_HELM_RETRIES}
   upgrade:
     crds: CreateReplace
     remediation:
+      retries: ${CILIUM_HELM_RETRIES}
       remediateLastFailure: true
