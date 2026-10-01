@@ -37,6 +37,7 @@ tekton_operator_version: "{{ cluster_config.TEKTON_OPERATOR_VERSION }}"
 # --- Topology ---
 cilium_operator_replicas: "{{ cluster_config.CILIUM_OPERATOR_REPLICAS }}"
 postgis_instances: "{{ cluster_config.POSTGIS_INSTANCES }}"
+cilium_helm_retries: "{{ cluster_config.CILIUM_HELM_RETRIES }}"
 
 # --- Resource sizing: Cilium / Hubble ---
 cilium_cpu_request: "{{ cluster_config.CILIUM_CPU_REQUEST }}"
