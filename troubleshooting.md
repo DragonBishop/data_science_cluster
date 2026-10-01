@@ -8,7 +8,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 * [Cluster Lifecycle](#cluster-lifecycle)
 * [Networking](#networking)
 * [GitOps](#gitops)
-* [Vault Secrets](#vault-secrets)
+* [OpenBao Secrets](#openbao-secrets)
 * [Database Storage](#database-storage)
 
 ---
@@ -35,13 +35,13 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **What's happening:** The `.pem` at `GITHUB_APP_PRIVATE_KEY_PATH` is gone. GitHub never lets you re-download a previously generated private key — there is no way to recover it, whether it was deleted, moved, or overwritten.
   * **How to fix it:** Generate a new key from the GitHub App's settings page ("Generate a private key") — this doesn't invalidate the App or its installation, both keep working. Save the new `.pem` wherever `GITHUB_APP_PRIVATE_KEY_PATH` points and re-run bootstrap.
 
-* **OpenTofu role fails to apply Vault configuration**
-  * **What's happening:** Vault is sealed, port-forwarding failed, or OpenTofu state encryption passphrase was mistyped.
-  * **How to fix it:** Verify the `vault-0` pod is Running and unsealed (`kubectl exec -n vault vault-0 -- vault status`). Run OpenTofu manually to inspect verbose output:
+* **OpenTofu role fails to apply OpenBao configuration**
+  * **What's happening:** OpenBao is sealed, port-forwarding failed, or OpenTofu state encryption passphrase was mistyped.
+  * **How to fix it:** Verify the `openbao-0` pod is Running and unsealed (`kubectl exec -n openbao openbao-0 -- bao status`). Run OpenTofu manually to inspect verbose output:
 
     ```bash
-    tofu -chdir=terraform/vault init
-    tofu -chdir=terraform/vault plan
+    tofu -chdir=terraform/openbao init
+    tofu -chdir=terraform/openbao plan
     ```
 
 * **OpenTofu role fails with `Expecting value: line 2 column 1 (char 1)`**
@@ -53,8 +53,8 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
     ```
 
 * **OpenTofu apply succeeds locally with a passphrase you don't recognize, or fails to decrypt state**
-  * **What's happening:** `terraform/vault`'s local state is encrypted (`terraform/vault/encryption.tf`) with whatever passphrase was typed into the "Terraform state encryption passphrase" prompt on the run that created it. Nothing enforces that later runs use the same one — a differing passphrase against existing state fails with `decryption failed for all provided methods`.
-  * **How to fix it:** If the cluster (and therefore Vault) has been rebuilt since that state was written, it's orphaned — `just uninstall` already clears it (see [`INSTALLATION.md`'s Clean Host State step](INSTALLATION.md#clean-host-state-if-reinstalling)), so just re-apply with a fresh passphrase. Only worry about matching the exact old passphrase if the underlying Vault instance is still the same one that state describes.
+  * **What's happening:** `terraform/openbao`'s local state is encrypted (`terraform/openbao/encryption.tf`) with whatever passphrase was typed into the "Terraform state encryption passphrase" prompt on the run that created it. Nothing enforces that later runs use the same one — a differing passphrase against existing state fails with `decryption failed for all provided methods`.
+  * **How to fix it:** If the cluster (and therefore OpenBao) has been rebuilt since that state was written, it's orphaned — `just uninstall` already clears it (see [`INSTALLATION.md`'s Clean Host State step](INSTALLATION.md#clean-host-state-if-reinstalling)), so just re-apply with a fresh passphrase. Only worry about matching the exact old passphrase if the underlying OpenBao instance is still the same one that state describes.
 
 ---
 
@@ -158,66 +158,66 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 ---
 
-## Vault Secrets
+## OpenBao Secrets
 
-* **Vault reports as "sealed" when it isn't (or prompts for a GPG password on every run)**
-  * **What's happening:** `vault status` returns `0` for unsealed, `2` for sealed, and another code if the command itself failed. Might be a dead pod. A check that greps the output for "false" treats a failed connection as sealed and goes looking for unseal keys.
+* **OpenBao reports as "sealed" when it isn't (or prompts for a GPG password on every run)**
+  * **What's happening:** `bao status` returns `0` for unsealed, `2` for sealed, and another code if the command itself failed. Might be a dead pod. A check that greps the output for "false" treats a failed connection as sealed and goes looking for unseal keys.
   * **How to fix it:** Diagnose using the exit code rather than the text output:
 
     ```bash
-    kubectl exec -n vault vault-0 -- vault status; echo "exit=$?"
+    kubectl exec -n openbao openbao-0 -- bao status; echo "exit=$?"
     ```
 
-    If Vault is re-sealing without a pod restart, check `kubectl get pods -n vault` for a crashing container.
+    If OpenBao is re-sealing without a pod restart, check `kubectl get pods -n openbao` for a crashing container.
 
 * **GPG decryption fails**
   * **What's happening:** The script cannot read or decrypt the unseal keys.
   * **How to fix it:**
-    1. Confirm `~/.vault-keys.gpg` exists and is mode `600` (`ls -l ~/.vault-keys.gpg`).
+    1. Confirm `.local/openbao/unseal-keys.gpg` exists and is mode `600` (`ls -l .local/openbao/unseal-keys.gpg`, from the repo root).
     2. Confirm the passphrase matches the one used to create the keyfile.
 
 > [!NOTE]
-> `vault operator unseal` does not accept piped input, so the script passes the key via `vault write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | kubectl exec -i -n vault vault-0 -- vault write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
+> `bao operator unseal` does not accept piped input, so the script passes the key via `bao write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | kubectl exec -i -n openbao openbao-0 -- bao write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
 
-* **The Vault root token was never captured and is now needed**
-  * **What's happening:** `vault operator init` prints the root token exactly once; this repo's Ansible role prints it to the terminal at that moment (`vault : SAVE THIS NOW`) but nothing persists it to disk, by design.
-  * **How to fix it:** If Vault has already been unsealed since, generate a new one from the unseal key shares instead of the lost token:
+* **The OpenBao root token was never captured and is now needed**
+  * **What's happening:** `bao operator init` prints the root token exactly once; the bootstrap play prints it to the terminal at that moment, but nothing persists it to disk, by design.
+  * **How to fix it:** If OpenBao has already been unsealed since, generate a new one from the unseal key shares instead of the lost token:
 
     ```bash
-    gpg --quiet --decrypt ~/.vault-keys.gpg   # prints the 3 unseal key shares
-    kubectl exec -i -n vault vault-0 -- vault operator generate-root -init   # prints a nonce + OTP
-    kubectl exec -i -n vault vault-0 -- vault operator generate-root -nonce=<nonce> <key>   # once per key share
-    kubectl exec -i -n vault vault-0 -- vault operator generate-root -decode=<encoded_token> -otp=<otp>
+    gpg --quiet --decrypt .local/openbao/unseal-keys.gpg   # prints the 3 unseal key shares
+    kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -init   # prints a nonce + OTP
+    kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -nonce=<nonce> <key>   # once per key share
+    kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -decode=<encoded_token> -otp=<otp>
     ```
 
-    If `-init`/`-status` itself returns `403 permission denied` with nothing explaining why in `kubectl logs -n vault vault-0` (seen once on this project's Vault image, cause never identified), and this is a fresh cluster with nothing of value stored in Vault yet, the fastest path is to wipe and reinitialize: `kubectl scale statefulset vault -n vault --replicas=0`, delete the `data-vault-0` PVC, scale back to `1`, and re-run `just bootstrap`.
+    If `-init`/`-status` itself returns `403 permission denied` with nothing explaining why in `kubectl logs -n openbao openbao-0`, and this is a fresh cluster with nothing of value stored in OpenBao yet, the fastest path is to wipe and reinitialize: `kubectl scale statefulset openbao -n openbao --replicas=0`, delete the `data-openbao-0` PVC, scale back to `1`, and re-run `just bootstrap`.
 
 > [!CAUTION]
-> Never wipe and reinitialize Vault if it holds real secrets — it destroys everything stored in it.
+> Never wipe and reinitialize OpenBao if it holds real secrets — it destroys everything stored in it.
 
-* **Vault throws a "permission denied" error**
-  * **How to fix it:** Check the policies and roles applied from `terraform/vault/`. `kubectl exec -n vault vault-0 -- vault policy read postgis-policy` and `... vault policy read cert-manager-pki-policy` show the paths granted; `... vault read auth/kubernetes/role/postgis-role` and `... vault read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
+* **OpenBao throws a "permission denied" error**
+  * **How to fix it:** Check the policies and roles applied from `terraform/openbao/`. `kubectl exec -n openbao openbao-0 -- bao policy read postgis-policy` and `... bao policy read cert-manager-pki-policy` show the paths granted; `... bao read auth/kubernetes/role/postgis-role` and `... bao read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
 
-* **`vault kv get secret/postgis` or `secret/seaweedfs` returns "No value found at secret/data/..."**
-  * **What's happening:** The `vault_kv_secret_v2` resources in `terraform/vault/kv.tf` that write this data have never been applied for this Vault instance.
-  * **How to fix it:** Re-run `just bootstrap` (or `tofu -chdir=terraform/vault apply` directly with the usual `TF_VAR_*` exported). If the resources exist in config but values still don't appear after that, see the next entry.
+* **`bao kv get secret/postgis` or `secret/seaweedfs` returns "No value found at secret/data/..."**
+  * **What's happening:** The `vault_kv_secret_v2` resources in `terraform/openbao/kv.tf` that write this data have never been applied for this OpenBao instance.
+  * **How to fix it:** Re-run `just bootstrap` (or `tofu -chdir=terraform/openbao apply` directly with the usual `TF_VAR_*` exported). If the resources exist in config but values still don't appear after that, see the next entry.
 
-* **A freshly-typed or corrected value (e.g. fixing a mistyped superuser password) doesn't reach Vault after re-running bootstrap**
+* **A freshly-typed or corrected value (e.g. fixing a mistyped superuser password) doesn't reach OpenBao after re-running bootstrap**
   * **What's happening:** `postgres_superuser_password`, `s3_access_key`, and `s3_secret_key` all share one write-only version counter (`secrets_wo_version`). Terraform only pushes a new write-only value when its version changes; an ordinary rerun leaves the version unchanged by design, so a differing typed value is silently not written.
-  * **How to fix it:** Re-run with `ROTATE_VAULT_SECRETS=true` to bump the version and force all three secrets to be rewritten (this also regenerates the S3 keys as a side effect).
+  * **How to fix it:** Re-run with `just bootstrap -e opentofu_rotate_openbao_secrets=true` to bump the version and force all three secrets to be rewritten (this also regenerates the S3 keys as a side effect).
 
 > [!IMPORTANT]
-> `ROTATE_VAULT_SECRETS=true` regenerates the S3 keys as a side effect of bumping the shared write-only version — don't set it just to fix one of the three secrets unless you're prepared for all three to rotate.
+> `opentofu_rotate_openbao_secrets=true` regenerates the S3 keys as a side effect of bumping the shared write-only version — don't set it just to fix one of the three secrets unless you're prepared for all three to rotate.
 
 * **Secrets or certificates are failing to issue/mount into Kubernetes**
-  * **How to fix it:** Run `kubectl describe vaultstaticsecret <name> -n databases` (or `vaultdynamicsecret` for dynamic credentials). For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why VSO or cert-manager could not pull or mint the resource.
+  * **How to fix it:** Run `kubectl describe externalsecret <name> -n databases` (and `kubectl describe secretstore openbao -n databases` for auth or connection errors). For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why ESO or cert-manager could not pull or mint the resource.
 
-* **Certificate issuance fails with a Name Constraint or permission error from Vault PKI**
-  * **What's happening:** Vault's intermediate CA enforces RFC 5280 Name Constraints (`permitted_dns_domains`) and role-level domain allowlists (`allowed_domains` in `terraform/vault/pki.tf`).
-  * **How to fix it:** Check `kubectl describe certificaterequest -n <namespace>`. If Vault rejects the CSR, confirm the requested DNS name or IP SAN is explicitly listed in `permitted_dns_domains` and `allowed_domains` in `terraform/vault/pki.tf`, and re-apply `tofu -chdir=terraform/vault apply`. Confirm `vault-pki-issuer` ClusterIssuer reports `Ready` (`kubectl describe clusterissuer vault-pki-issuer`).
+* **Certificate issuance fails with a Name Constraint or permission error from OpenBao PKI**
+  * **What's happening:** OpenBao's intermediate CA enforces RFC 5280 Name Constraints (`permitted_dns_domains`) and role-level domain allowlists (`allowed_domains` in `terraform/openbao/pki.tf`).
+  * **How to fix it:** Check `kubectl describe certificaterequest -n <namespace>`. If OpenBao rejects the CSR, confirm the requested DNS name or IP SAN is explicitly listed in `permitted_dns_domains` and `allowed_domains` in `terraform/openbao/pki.tf`, and re-apply `tofu -chdir=terraform/openbao apply`. Confirm `openbao-pki-issuer` ClusterIssuer reports `Ready` (`kubectl describe clusterissuer openbao-pki-issuer`).
 
 * **Dynamic credentials never reach a "Ready" state**
-  * **How to fix it:** `kubectl describe vaultdynamicsecret postgis-app-dynamic-secret -n databases` reports Vault's error.
+  * **How to fix it:** `kubectl describe externalsecret postgis-app-dynamic-credentials -n databases` reports OpenBao's error.
 
 ---
 
@@ -232,7 +232,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > [!IMPORTANT]
 > Both failure modes are silent — CNPG neither errors nor logs when it nulls the password or rejects a bad `username`, so check them even when the Secret otherwise looks correct.
 
-* **A role issued by Vault cannot create tables in a schema**
+* **A role issued by OpenBao cannot create tables in a schema**
   * **What's happening:** The schema predates the `app_readwrite_new_schema` event trigger, so no `CREATE` grant was issued on it.
   * **How to fix it:** `GRANT USAGE, CREATE ON SCHEMA <name> TO app_readwrite;`. Confirm the event trigger exists with `\dy`; without it, schemas created from now on have the same problem.
 
@@ -241,25 +241,25 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Tables created by a lease are unreadable by the next one**
   * **What's happening:** The lease was issued before `ALTER ROLE ... SET role = app_readwrite` was added to `creation_statements`, so it owns its objects.
-  * **How to fix it:** Update the role definition in `terraform/vault/database.tf`, then `vault lease revoke -prefix database/creds/postgis-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
+  * **How to fix it:** Update the role definition in `terraform/openbao/database.tf`, then `bao lease revoke -prefix database/creds/postgis-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
 
 > [!IMPORTANT]
-> `DROP ROLE` at lease expiry fails with `cannot be dropped because some objects depend on it` until ownership is reassigned — Vault will keep leaving the stale role behind on every expiry until you fix this.
+> `DROP ROLE` at lease expiry fails with `cannot be dropped because some objects depend on it` until ownership is reassigned — OpenBao will keep leaving the stale role behind on every expiry until you fix this.
 
 * **Application credentials stop working after a password rotation**
   * **What's happening:** App-role rotations (static or dynamic) reload automatically, as `postgis-app-credentials` and `postgis-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label in `postgis-cluster.yaml`, so CNPG picks up the new Secret on its own.
-  * **How to fix it:** For the superuser password, update `database/config/postgis-cluster` in Vault (via `terraform/vault/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgis-app-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
+  * **How to fix it:** For the superuser password, update `database/config/postgis-cluster` in OpenBao (via `terraform/openbao/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgis-app-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
-  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgis-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgis.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `vault-pki-issuer`. If the cluster or Vault PKI root was rebuilt, update your local `root.crt` from `kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt`.
+  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgis-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgis.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `openbao-pki-issuer`. If the cluster or OpenBao PKI root was rebuilt, update your local `root.crt` from `kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt`.
 
 > [!NOTE]
-> Any new name added to `postgis-tls.yaml` must also be permitted in `terraform/vault/pki.tf` (`permitted_dns_domains` and `allowed_domains`), or Vault PKI rejects the CSR before cert-manager can reissue.
+> Any new name added to `postgis-tls.yaml` must also be permitted in `terraform/openbao/pki.tf` (`permitted_dns_domains` and `allowed_domains`), or OpenBao PKI rejects the CSR before cert-manager can reissue.
 
 * **Barman Cloud Plugin backups start failing**
   * **What's happening:** The database cannot reach or authenticate to the object store, or S3 TLS handshake fails.
-  * **How to fix it:** Run `kubectl cnpg status postgis-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.databases.svc:9000`) with a valid certificate from `vault-pki-issuer`. Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `seaweedfs-credentials` Secret match the credentials inside its `config` field. Confirm the bucket exists:
+  * **How to fix it:** Run `kubectl cnpg status postgis-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.databases.svc:9000`) with a valid certificate from `openbao-pki-issuer`. Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `seaweedfs-credentials` Secret match the credentials inside its `config` field. Confirm the bucket exists:
 
     ```bash
     kubectl exec -n databases seaweedfs-master-0 -- sh -c 'echo "fs.ls /buckets" | weed shell -master=localhost:9333'

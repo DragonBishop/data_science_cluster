@@ -9,7 +9,7 @@ This cluster utilizes Ansible, `FluxCD`, `Kustomization`, and Helm to structure 
 * **Helm:** Manages third-party packages via `HelmRelease` manifests, allowing clean parameterization through ConfigMaps and Secrets while preserving upstream maintainability.
 * **Kustomization:** Breaks down complex Kubernetes resources into manageable, hierarchical modules whose explicit dependency chains (`dependsOn`) Flux follows during reconciliation.
 
-Cluster secrets and security rely on an in-cluster HashiCorp Vault, unsealed automatically at boot via a host-managed GPG-encrypted keyfile. OpenTofu declaratively configures Vault's internal engines, access policies, and Kubernetes authentication backend. Integrated with `cert-manager`, Vault's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, while the Vault Secrets Operator (VSO) securely injects static configuration and short-lived, dynamic database credentials directly into application workloads.
+Cluster secrets and security rely on an in-cluster OpenBao, unsealed at boot from a GPG-encrypted keyfile kept gitignored in this repo (`.local/openbao/`). OpenTofu declaratively configures OpenBao's internal engines, access policies, and Kubernetes authentication backend. Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, while the External Secrets Operator (ESO) syncs static configuration and short-lived, dynamic database credentials into Kubernetes `Secret`s for application workloads.
 
 Workloads are structured modularly to maximize compute efficiency on local hardware. The cluster maintains an always-on core database architecture, powered by PostgreSQL/PostGIS (CloudNativePG), Cilium eBPF networking and Gateway routing, and SeaweedFS S3-compatible storage. Specialized modules for cluster observability, ETL data pipelines, and machine learning workflows can be deployed dynamically when performing specific data science tasks and torn down afterward to conserve memory and CPU.
 
@@ -34,7 +34,7 @@ Customizable VS Code DevContainer configurations are provided in `.devcontainer/
   * [Database](#database)
   * [Gateway](#gateway)
   * [Observability (Hubble)](#observability-hubble)
-  * [Vault](#vault)
+  * [OpenBao](#openbao)
   * [Development](#development)
 * [Restoring the Database from SeaweedFS](#restoring-the-database-from-seaweedfs)
 * [Repository Structure](#repository-structure)
@@ -55,7 +55,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |
 | Helm | `v3.x` (`get_helm.sh`) | Package manager for Kubernetes charts and HelmRelease dependency resolution. |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
-| OpenTofu | `1.9.0` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in Vault (`terraform/vault/`). |
+| OpenTofu | `1.9.0` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
 | PostgreSQL Client (`psql`) | `postgresql-client` | Host CLI client for local database administration and connectivity testing. |
 | uv | `astral-sh/uv` | Fast Python package manager and virtual environment resolver (`pyproject.toml`). |
 
@@ -66,22 +66,22 @@ These are the resources that make up the database core of the cluster. It is eng
 | Component | Version | Description |
 | --- | --- | --- |
 | Barman Cloud Plugin | `0.7.1` | WAL archiving and base backups for CNPG, via the `ObjectStore` resource rather than in-tree `spec.backup.barmanObjectStore`. |
-| cert-manager | `1.21.1` | Manages local edge CA, provisions Vault TLS, and mints leaf certificates via `vault-pki-issuer`. |
+| cert-manager | `1.21.1` | Manages local edge CA, provisions OpenBao TLS, and mints leaf certificates via `openbao-pki-issuer`. |
 | Cilium | `1.20.1` | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
 | CloudNativePG (CNPG) | `0.29.0` | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
 | DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with an `internal` zone via a `coredns-custom` ConfigMap (`infrastructure/coredns-custom/`). Resolves `*.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
 | Flux | `v2.9.4` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. CLI-installed, unpinned by this repo. |
 | Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`) every tool attaches a `Route` to: an HTTPS listener (443, wildcard cert) for web UIs, a raw TCP listener (5432) for Postgres. |
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
-| HashiCorp Vault (in-cluster) | `2.0.4` (chart `0.34.1`) | Main Vault; unseals itself at pod start via a GPG-encrypted keyfile on the host. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
+| OpenBao (in-cluster) | `2.7.1` (chart `0.30.2`) | Secrets backend on PebbleDB storage; `just start` unseals it from the GPG-encrypted keyfile in `.local/openbao/`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), transit signing key, and database secrets engine. |
 | Headlamp | `0.45.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
 | Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay/UI run their own cert-manager mTLS trust domain; UI exposed at `hubble.internal` on the shared Gateway. |
 | k3s | `v1.36.4+k3s1` | Core control plane and execution environment. Host-installed, unpinned by this repo. |
 | [pgiscluster](https://pypi.org/project/pgiscluster/) | `0.2.0` | Python package providing `HostDBConnector`/`HostAdminDBConnector` classes for connecting ETL/ML job code to the database. |
 | PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` | Image the CNPG `Cluster` runs (`18.6` PostgreSQL, `3.6.4` PostGIS). |
-| SeaweedFS | `4.44.0` | In-cluster S3-compatible object store with TLS issued by `vault-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
-| Vault Database & PKI Engines | Same as Vault | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
-| Vault Secrets Operator (VSO) | `1.5.1` | Reads Main Vault values into Kubernetes `Secret`s; refreshes static secrets, renews dynamic leases. |
+| SeaweedFS | `4.44.0` | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
+| OpenBao Database & PKI Engines | Same as OpenBao | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
+| External Secrets Operator (ESO) | `2.11.0` | Syncs OpenBao values into Kubernetes `Secret`s; refreshes static secrets hourly and generates new dynamic database credentials every 2h. |
 
 ### Cluster Monitoring Module
 
@@ -144,7 +144,7 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | CoreDNS | [https://coredns.io/manual/toc/](https://coredns.io/manual/toc/) |
 | Flux | [https://fluxcd.io/flux/](https://fluxcd.io/flux/) |
 | Gateway API | [https://gateway-api.sigs.k8s.io/](https://gateway-api.sigs.k8s.io/) |
-| HashiCorp Vault | [https://developer.hashicorp.com/vault/docs](https://developer.hashicorp.com/vault/docs) |
+| OpenBao | [https://openbao.org/docs/](https://openbao.org/docs/) |
 | Headlamp | [https://headlamp.dev/docs/latest/](https://headlamp.dev/docs/latest/) |
 | Hubble | [https://docs.cilium.io/en/stable/observability/hubble/](https://docs.cilium.io/en/stable/observability/hubble/) |
 | k3s | [https://docs.k3s.io/](https://docs.k3s.io/) |
@@ -152,9 +152,9 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | PostGIS Extension | [https://postgis.net/documentation/](https://postgis.net/documentation/) |
 | PostgreSQL | [https://www.postgresql.org/docs/current/](https://www.postgresql.org/docs/current/) |
 | SeaweedFS | [https://github.com/seaweedfs/seaweedfs/wiki](https://github.com/seaweedfs/seaweedfs/wiki) |
-| Vault Database Secrets Engine | [https://developer.hashicorp.com/vault/docs/secrets/databases](https://developer.hashicorp.com/vault/docs/secrets/databases) |
-| Vault PKI Secrets Engine | [https://developer.hashicorp.com/vault/docs/secrets/pki](https://developer.hashicorp.com/vault/docs/secrets/pki) |
-| Vault Secrets Operator | [https://developer.hashicorp.com/vault/docs/vault-secrets-operator](https://developer.hashicorp.com/vault/docs/vault-secrets-operator) |
+| OpenBao Database Secrets Engine | [https://openbao.org/docs/secrets/databases/](https://openbao.org/docs/secrets/databases/) |
+| OpenBao PKI Secrets Engine | [https://openbao.org/docs/secrets/pki/](https://openbao.org/docs/secrets/pki/) |
+| External Secrets Operator | [https://external-secrets.io/latest/](https://external-secrets.io/latest/) |
 
 ### Cluster Monitoring Services
 
@@ -189,23 +189,23 @@ One-time, first-install setup: see `INSTALLATION.md` for Requirements and what t
 | Command | Operation | When |
 | --- | --- | --- |
 | `just preflight` | Run host readiness check | Verify host tooling, `gh` auth, firewall rules, and reserved IP range before install |
-| `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Provision k3s, Cilium, Flux, Vault, and apply initial OpenTofu secrets |
+| `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Provision k3s, Cilium, Flux, OpenBao, and apply initial OpenTofu secrets |
 
 ### Cluster Lifecycle
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just start` | Start the cluster | Each work session; starts k3s services and automatically unseals Vault |
+| `just start` | Start the cluster | Each work session; starts k3s services and unseals OpenBao |
 | `just status` | Check overall cluster health | Post-install verification or periodic health check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
 | `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting; fuzzy-select a pod from all namespaces and describe it |
 | `just stop` (`just stop --force` if a stuck stop needs it) | Stop the cluster | Each work session; gracefully hibernates CNPG PostgreSQL before shutting down k3s |
-| `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears local Vault/Postgres/Hubble caches and orphaned `terraform/vault` state |
+| `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears `.local/openbao`, local Postgres/Hubble caches, and orphaned `terraform/openbao` state |
 
 ### Database
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just db-connect` (`just db-connect localhost` from node) | Connect via psql (app role, host) | Application-level database access with Vault-issued dynamic credentials |
+| `just db-connect` (`just db-connect localhost` from node) | Connect via psql (app role, host) | Application-level database access with OpenBao-issued dynamic credentials |
 | `kubectl cnpg psql postgis-cluster -n databases` | Connect via psql (superuser, in-cluster) | Ad hoc direct administrative query access as `postgres` superuser |
 | `kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io` | Trigger a manual DB backup | Before schema changes or risky migrations; writes backup to SeaweedFS S3 |
 | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Check scheduled backup status | Confirming automated nightly backups are active (`suspend: false`) |
@@ -225,13 +225,13 @@ One-time, first-install setup: see `INSTALLATION.md` for Requirements and what t
 | `just hubble` / `just hubble observe --follow` | Stream Hubble flows (CLI) | Real-time network and security flow inspection over mTLS |
 | `just hubble-pf` | Port-forward Hubble Relay only | Direct local port-forward to Hubble Relay on `localhost:4245` |
 
-### Vault
+### OpenBao
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just vault-shell` | Open interactive Vault shell | Direct CLI access inside `vault-0` pod with a sanitized environment |
-| `just vault-pf` | Port-forward Vault API to host | Exposes in-cluster Vault API at `https://127.0.0.1:8210` and exports internal CA |
-| `kubectl exec -n vault vault-0 -- vault status` | Verify Vault seal state | Diagnostic check for Vault initialization, sealing, and HA status |
+| `just bao-shell` | Open interactive OpenBao shell | Direct `bao` CLI access inside `openbao-0` pod with a sanitized environment |
+| `just bao-pf` | Port-forward OpenBao API to host | Exposes in-cluster OpenBao API at `https://127.0.0.1:8210` and exports internal CA to `.local/openbao/certs/` |
+| `kubectl exec -n openbao openbao-0 -- bao status` | Verify OpenBao seal state | Diagnostic check for OpenBao initialization, sealing, and storage type |
 
 ### Development
 
@@ -334,10 +334,11 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── cilium/
 │       ├── flux/
 │       ├── k3s/
-│       ├── opentofu/
-│       └── vault/
+│       ├── openbao/
+│       └── opentofu/
 ├── apps/
 │   └── databases/                       # PostGIS cluster + dependencies, one Flux Kustomization
+│       ├── eso-setup.yaml
 │       ├── kustomization.yaml
 │       ├── postgis-cluster.yaml
 │       ├── postgis-database.yaml
@@ -347,8 +348,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── postgis-tls.yaml
 │       ├── seaweedfs-credentials.yaml
 │       ├── seaweedfs-networkpolicy.yaml
-│       ├── seaweedfs-release.yaml
-│       └── vso-setup.yaml
+│       └── seaweedfs-release.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
 │       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap`
@@ -361,6 +361,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── cnpg-operator.yaml           # Kustomization → infrastructure/cnpg-operator/
 │       ├── coredns-custom.yaml          # Kustomization → infrastructure/coredns-custom/
 │       ├── databases.yaml               # Kustomization → apps/databases/
+│       ├── external-secrets.yaml        # Kustomization → infrastructure/external-secrets/
 │       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap`
 │       │   ├── gotk-components.yaml
 │       │   ├── gotk-sync.yaml
@@ -370,8 +371,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── gateway.yaml                 # Kustomization → infrastructure/gateway/
 │       ├── hubble.yaml                  # Kustomization → infrastructure/hubble/
 │       ├── namespaces.yaml              # Kustomization → infrastructure/namespaces/
-│       ├── vault-secrets-operator.yaml  # Kustomization → infrastructure/vault-secrets-operator/
-│       └── vault.yaml                   # Kustomization → infrastructure/vault/
+│       └── openbao.yaml                 # Kustomization → infrastructure/openbao/
 ├── infrastructure/                      # Cluster-wide platform components
 │   ├── barman-cloud/
 │   │   ├── barman-cloud-release.yaml
@@ -399,6 +399,10 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── coredns-custom.yaml
 │   │   ├── coredns-lan-service.yaml
 │   │   └── kustomization.yaml
+│   ├── external-secrets/
+│   │   ├── external-secrets-networkpolicy.yaml
+│   │   ├── external-secrets-release.yaml
+│   │   └── kustomization.yaml
 │   ├── flux-system-policies/
 │   │   ├── flux-networkpolicy.yaml
 │   │   └── kustomization.yaml
@@ -416,24 +420,23 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   ├── namespaces/
 │   │   ├── kustomization.yaml
 │   │   └── namespaces.yaml
-│   ├── vault-secrets-operator/
-│   │   ├── kustomization.yaml
-│   │   ├── vso-networkpolicy.yaml
-│   │   └── vso-release.yaml
-│   └── vault/
+│   └── openbao/
 │       ├── kustomization.yaml
-│       ├── vso-networkpolicy.yaml
-│       └── vso-release.yaml
+│       ├── kustomizeconfig.yaml
+│       ├── openbao-networkpolicy.yaml
+│       ├── openbao-release.yaml
+│       ├── openbao-tls.yaml
+│       └── openbao-values.yaml
 ├── notebooks/
 │   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
 │   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
 │   └── bash/
 │       ├── preflight.sh                 # Read-only host readiness checks
-│       ├── start-cluster.sh             # Boot sequence: API, in-cluster Vault unseal, readiness checks
+│       ├── start-cluster.sh             # Boot sequence: API, in-cluster OpenBao unseal, readiness checks
 │       └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
-├── terraform/                           # OpenTofu module configuring Vault's internals
-│   └── vault/                           # Unified in-cluster Vault: KV mounts, Kubernetes auth, 2-tier PKI engine, DB secrets
+├── terraform/                           # OpenTofu module configuring OpenBao's internals
+│   └── openbao/                         # In-cluster OpenBao: KV mounts, Kubernetes auth, 2-tier PKI engine, DB secrets
 │       ├── .gitignore
 │       ├── database.tf
 │       ├── encryption.tf
@@ -474,21 +477,20 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR, and `git-cliff` commits `CHANGELOG.md` onto that PR's branch.
 * **`ansible/`** - Automated provisioning and orchestration playbooks for bootstrapping the cluster.
   * **`inventory/`**: Inventory definition (`hosts.ini`) and global variable mapping (`group_vars/all.yml`) sourcing values directly from `infrastructure/cluster-config/cluster-config.yaml`.
-  * **`playbooks/data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `vault` → `opentofu`.
+  * **`playbooks/data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `openbao` → `opentofu`.
   * **`requirements.yml`**: Ansible Galaxy collection dependencies (`kubernetes.core`, `cloud.terraform`, `containers.podman`).
-  * **`roles/`**: Reusable Ansible roles for configuring k3s systemd service, Gateway API CRDs & Cilium Helm release, GitHub Flux bootstrap, Vault initialization & GPG unseal automation, and OpenTofu state application.
+  * **`roles/`**: Reusable Ansible roles for configuring k3s systemd service, Gateway API CRDs & Cilium Helm release, GitHub Flux bootstrap, OpenBao initialization & GPG unseal automation, and OpenTofu state application.
 * **`apps/databases/`** - The PostGIS cluster and everything it depends on, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
-  * **`postgis-cluster.yaml`**: The CNPG `Cluster`, its static and dynamic Vault secrets, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
+  * **`postgis-cluster.yaml`**: The CNPG `Cluster`, its ESO `ExternalSecret`s and `VaultDynamicSecret` generator for static and dynamic credentials, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
   * **`postgis-database.yaml`**: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
   * **`postgis-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
-  * **`postgis-networkpolicy.yaml`**: Restricts PostGIS database ingress (CNPG operator, Vault) and egress (kube-dns, SeaweedFS S3).
+  * **`postgis-networkpolicy.yaml`**: Restricts PostGIS database ingress (CNPG operator, OpenBao) and egress (kube-dns, SeaweedFS S3).
   * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
-  * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `vault-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
-  * **`seaweedfs-credentials.yaml`**: `VaultStaticSecret` syncing S3 credentials from `secret/seaweedfs`.
+  * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
+  * **`seaweedfs-credentials.yaml`**: `ExternalSecret` syncing S3 credentials from `secret/seaweedfs`.
   * **`seaweedfs-networkpolicy.yaml`**: Restricts SeaweedFS ingress and egress to the `databases` namespace and `kube-dns`.
-  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master/filer data on the external storage via `hostPath`, S3 gateway on port 9000 with TLS issued by `vault-pki-issuer`, and `cnpg-backups` bucket created at install.
-  * **`vso-setup.yaml`**: Creates the `VaultConnection`/`VaultAuth`/`ServiceAccount` VSO uses to authenticate to Vault.
+  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master/filer data on the external storage via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created at install.
 * **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/`/`apps/` below.
   * **`barman-cloud.yaml`**: Kustomization → `infrastructure/barman-cloud/`
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
@@ -496,14 +498,14 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`cnpg-operator.yaml`**: Kustomization → `infrastructure/cnpg-operator/`
   * **`coredns-custom.yaml`**: Kustomization → `infrastructure/coredns-custom/`
   * **`databases.yaml`**: Kustomization → `apps/databases/`
+  * **`external-secrets.yaml`**: Kustomization → `infrastructure/external-secrets/`
   * **`flux-system/`**: (`gotk-components.yaml`, `gotk-sync.yaml`, `kustomization.yaml`): Flux's own controllers and `GitRepository` source, written by `flux bootstrap` (do not edit directly).
   * **`flux-system-policies.yaml`**: Kustomization → `infrastructure/flux-system-policies/`
   * **`gateway-api-crds.yaml`**: Kustomization → `infrastructure/gateway-api-crds/`
   * **`gateway.yaml`**: Kustomization → `infrastructure/gateway/`
   * **`hubble.yaml`**: Kustomization → `infrastructure/hubble/`
   * **`namespaces.yaml`**: Kustomization → `infrastructure/namespaces/`
-  * **`vault-secrets-operator.yaml`**: Kustomization → `infrastructure/vault-secrets-operator/`
-  * **`vault.yaml`**: Kustomization → `infrastructure/vault/`
+  * **`openbao.yaml`**: Kustomization → `infrastructure/openbao/`
 * **`infrastructure/`** - Cluster-wide platform components, listed alphabetically below:
   * **`barman-cloud/`**: `barman-cloud-release.yaml`, `kustomization.yaml`
   * **`cert-manager/`**: `cert-manager-networkpolicy.yaml`, `cert-manager-release.yaml`, `kustomization.yaml`
@@ -511,19 +513,19 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`cluster-config/`**: `cluster-config.yaml`, `kustomization.yaml` (centralized configuration ConfigMap)
   * **`cnpg-operator/`**: `cnpg-networkpolicy.yaml`, `cnpg-release.yaml`, `kustomization.yaml`
   * **`coredns-custom/`**: `coredns-custom.yaml`, `coredns-lan-service.yaml`, `kustomization.yaml` (internal zone on CoreDNS)
+  * **`external-secrets/`**: `external-secrets-networkpolicy.yaml`, `external-secrets-release.yaml`, `kustomization.yaml`
   * **`flux-system-policies/`**: `flux-networkpolicy.yaml`, `kustomization.yaml`
   * **`gateway-api-crds/`**: `kustomization.yaml`, `standard-install.yaml` (vendored Gateway API CRDs)
   * **`gateway/`**: `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
   * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-httproute.yaml`, `kustomization.yaml`
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
-  * **`vault-secrets-operator/`**: `kustomization.yaml`, `vso-networkpolicy.yaml`, `vso-release.yaml`
-  * **`vault/`**: `kustomization.yaml`, `kustomizeconfig.yaml`, `vault-networkpolicy.yaml`, `vault-release.yaml`, `vault-tls.yaml`, `vault-values.yaml`
+  * **`openbao/`**: `kustomization.yaml`, `kustomizeconfig.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
 * **`src/`**
   * **`src/bash/`**:
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).
-    * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, unsealing the in-cluster Vault, and reactivating hibernated workloads.
+    * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, unsealing the in-cluster OpenBao, and reactivating hibernated workloads.
     * **`stop-cluster.sh`**: Graceful shutdown: declaratively hibernating the CNPG cluster, waiting for pod termination, and stopping the k3s systemd unit.
-* **`terraform/`** - OpenTofu module configuring Vault's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
-  * **`vault/`**: Unified module targeting the **in-cluster** Vault: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic role (`postgis-cluster`, `postgis-app-role`).
+* **`terraform/`** - OpenTofu module configuring OpenBao's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
+  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic role (`postgis-cluster`, `postgis-app-role`).
 * **`tests/`**
   * **`conftest.py`**: Shared test fixtures and pytest configuration.
