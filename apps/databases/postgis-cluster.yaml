@@ -1,39 +1,73 @@
-# CloudNativePG PostGIS cluster configuration, Vault credentials,
+# CloudNativePG PostGIS cluster configuration, OpenBao credentials,
 # backup storage target, and localhost database bridge.
 
-apiVersion: secrets.hashicorp.com/v1beta1
-kind: VaultStaticSecret
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
 metadata:
-  name: postgis-vault-secret
+  name: postgis-app-credentials
   namespace: databases
 spec:
-  type: kv-v2
-  mount: secret
-  path: postgis
-  destination:
+  refreshInterval: ${ESO_REFRESH_INTERVAL}
+  secretStoreRef:
+    kind: SecretStore
+    name: openbao
+  target:
     name: postgis-app-credentials
-    create: true
-    type: kubernetes.io/basic-auth
-    labels:
-      cnpg.io/reload: "true"
-  refreshAfter: ${VSO_REFRESH_AFTER}
-  vaultAuthRef: vault-auth
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+  dataFrom:
+    - extract:
+        key: postgis
 ---
-# Dynamic database credentials leased from Vault
-apiVersion: secrets.hashicorp.com/v1beta1
+# Generates fresh dynamic database credentials from OpenBao on every refresh
+apiVersion: generators.external-secrets.io/v1alpha1
 kind: VaultDynamicSecret
 metadata:
-  name: postgis-app-dynamic-secret
+  name: postgis-app-dynamic
   namespace: databases
 spec:
-  vaultAuthRef: vault-auth
-  mount: database
-  path: creds/postgis-app-role
-  destination:
+  method: GET
+  path: database/creds/postgis-app-role
+  provider:
+    server: https://openbao.openbao.svc.cluster.local:8200
+    caProvider:
+      type: Secret
+      name: openbao-ca-bundle
+      key: ca.crt
+    auth:
+      kubernetes:
+        mountPath: kubernetes
+        role: postgis-role
+        serviceAccountRef:
+          name: postgis-openbao-auth
+          audiences:
+            - openbao
+---
+# Refresh below postgis-app-role's 3h default_ttl; old leases just expire
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: postgis-app-dynamic-credentials
+  namespace: databases
+spec:
+  refreshInterval: ${ESO_DYNAMIC_REFRESH_INTERVAL}
+  target:
     name: postgis-app-dynamic-credentials
-    create: true
-    labels:
-      cnpg.io/reload: "true"
+    creationPolicy: Owner
+    template:
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: VaultDynamicSecret
+          name: postgis-app-dynamic
 ---
 # S3 object store for WAL archiving and base backups (SeaweedFS)
 apiVersion: barmancloud.cnpg.io/v1

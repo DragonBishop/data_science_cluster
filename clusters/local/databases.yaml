@@ -9,6 +9,7 @@ spec:
     - name: barman-cloud
     - name: gateway
     - name: openbao
+    - name: external-secrets
     - name: cluster-config
   sourceRef:
     kind: GitRepository
