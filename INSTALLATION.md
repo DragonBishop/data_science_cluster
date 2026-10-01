@@ -217,10 +217,11 @@ If you do not have a GitHub App configured, the bootstrap process will fall back
 
 #### Clean Host State (if reinstalling)
 
-If reinstalling over an existing k3s instance, tear it down first:
+If reinstalling over an existing k3s instance, tear it down first, then reboot before bootstrapping. Cilium's BPF programs stay attached in the kernel after `k3s-uninstall.sh`, and the `k3s` role refuses to install while that state is present:
 
 ```bash
 just uninstall
+sudo reboot
 ```
 
 #### Data Migration (if restoring an existing database)
