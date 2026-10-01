@@ -1,8 +1,34 @@
-## [1.1.0] - 2026-09-07
+## [1.2.0] - 2026-10-01
+
+### 🚀 Features
+
+- Add Tekton operator configuration and resource definitions
+- Update egress rules in CiliumNetworkPolicy for improved FQDN matching
+- Add TektonConfig with Pipelines, Triggers, and Chains
+- Sign Tekton Chains artifacts with Vault Transit
+- Add tests for Flux-substituted manifests and cluster-config validation
+
+### ♻️ Refactor
+
+- Centralize secret prompts in vars_prompt, allow seaweedfs.github.io egress
+- Move environment-specific values into cluster-config
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(main)* Release 1.1.0
+- Rename package to pgiscluster and prune unused dependencies
+- Remove unused modules and update test descriptions
+- Update project configuration and dependencies for data_science_cluster
+- Bump cluster resource versions, use GitHub App token for release workflow
+- Sync project metadata and tooling with copier template
+- Adopt copier template v1.7.0 and generate changelog in release PR
+- Update Copier version to v1.7.2
+## [1.1.0] - 2026-09-07
+
+### 🚀 Features
+
+- Add GitHub workflows for linting, testing, and release management
+- Implement k3s Data Science Cluster provisioning and update Flux tasks for GitHub App integration
+- *(uninstall)* Add 'just uninstall' command and script to tear down k3s and clear local state
 
 ### 🐛 Bug Fixes
 
@@ -12,120 +38,13 @@
 
 ### 📚 Documentation
 
-- Regenerate changelog for v1.0.1
 - Update GitHub authentication instructions and improve preflight checks by adding github app check.
-
-### 🚀 Features
-
-- Add GitHub workflows for linting, testing, and release management
-- Implement k3s Data Science Cluster provisioning and update Flux tasks for GitHub App integration
-- *(uninstall)* Add 'just uninstall' command and script to tear down k3s and clear local state
 ## [1.0.1] - 2026-08-31
 
 ### ⚙️ Miscellaneous Tasks
 
 - Use dedicated PAT for release-please instead of repo Actions permission
-- *(main)* Release 1.0.1
-
-### 📚 Documentation
-
-- Regenerate changelog for v1.0.0
 ## [1.0.0] - 2026-08-31
-
-### ◀️ Revert
-
-- Drop loopback externalIPs Service (rejected by Kubernetes API)
-
-### ♻️ Refactor
-
-- Reorganize into manifests/ and scripts/ directories, expand start/stop-cluster.sh and postgis-cluster.yaml
-- Improve sync-kubeconfig.sh clarity and validation checks
-- Simplify sync-kubeconfig.sh, deploy Headlamp in-cluster instead of Windows client
-- Simplify operator availability check in stop-cluster.sh
-- Replace postgis-external-service with postgis-tcproute
-- Move cluster scripts to src/bash/
-- Clean up justfile, drop unnecessary settings file, use dynamic Cilium versioning
-- Replace infrastructure/dns with coredns-custom internal DNS zone
-- Consolidate DNS/gateway L2-LB policies into single LAN policy, enable gatewayAPI/egressGateway
-- Clarify comments in postgis, gateway, hubble, namespace manifests
-- Update TLS configurations and enhance Vault integration across cluster services
-- Remove sync-kubeconfig.sh, kubeconfig now managed directly by k3s
-- Move cluster-config from Kubernetes ConfigMap to Terraform-managed secret
-- Consolidate vault-bootstrap and vault-database terraform into terraform/vault
-- Consolidate gateway and hubble TLS issuance onto vault-pki-issuer
-- Vault deployment and initialization
-- Clean up comments and improve variable descriptions in Terraform configurations
-
-### ⚙️ Miscellaneous Tasks
-
-- Rename vso_setup.yaml to vso-setup.yaml
-- Add .gitignore
-- Archive legacy k3s manifests into k3s_archive/
-- Rename k3s_archive/.vscode/tasks.json to .archive/, simplify devcontainer Dockerfile
-- Archive superseded MinIO backups manifest
-- Remove misplaced issue templates from .vscode/
-- Convert GitHub issue templates from Markdown to YAML forms
-- Remove old Markdown issue templates, superseded by YAML forms
-- Remove .archive/, legacy pre-Flux manifests no longer needed
-- Remove personal contact links from issue template config
-- Sync copier template to v1.0.4
-- Update uv.lock
-- Trim comments in Kubernetes manifests and devcontainer config
-- Trim comments in cluster scripts
-- Remove unused postgres-proxy deployment from postgis-cluster.yaml
-- Update uv.lock
-- Add cluster naming support and reorganize install docs
-- Restructure devcontainer setup with new host and cluster configurations
-- *(dev)* Reorder justfile recipes, add prek hook setup, and sync dependencies
-- Ignore rumdl cache and virtualenv directory variants in gitignore
-- *(main)* Release 0.1.0
-- *(main)* Release 1.0.0
-
-### 🐛 Bug Fixes
-
-- Insert env vars in vault-values.yaml, remove WSL-side extra copy in sync-kubeconfig.sh
-- Restore trimmed devcontainer.json content
-- Correct bug report issue form title/name fields
-- Remove GitHub bug report YAML form (schema issue), consolidate gitignore into .gitignore
-- Add schemas to postgis-database.yaml Database CRD
-- Hubble health check in Cilium release
-- Enable BPF masquerade in Cilium to prevent pod-to-host timeouts
-- Grant NetworkPolicy baseline egress for apiserver, cluster, CoreDNS upstream
-- S3/Barman TLS via Vault PKI (endpointCA, seaweedfs-s3-tls, HTTPS probes)
-- Flux Kustomization dependsOn wiring for vault/cert-manager rollout
-- Allow world-entity ingress to postgis on 5432
-- Hubble.internal TLS verification (wrong SAN, wrong CA)
-
-### 📚 Documentation
-
-- Document kubeconfig sync workflow for Headlamp/Lens/VS Code access
-- Rewrite README for CNPG/vault/script changes, add pipeline planning doc, remove main.py stub
-- Add ROADMAP.md, remove pipeline.md, update README for new layout
-- Clarify Cilium installation prerequisites and commands
-- Expand ROADMAP foundational/ETL/ML sections, add notes on alternatives
-- Update README with project roadmap, refine devcontainer and cluster scripts
-- Update README and ROADMAP for clarity in Vault and k3s configurations
-- Clarify systemd-to-script handover in README and cluster scripts
-- Add SeaweedFS backup restore instructions, pre-flight validation, backup gitignore patterns
-- Add first-time setup instructions, optional Headlamp installation
-- Split docs into README/INSTALLATION/troubleshooting
-- Add README table of contents, rename devcontainers/ to .devcontainer/
-- Remove ROADMAP.md, shift to GitHub Issues for planning and tracking
-- Update installation and troubleshooting guides; enhance clarity and modularity of cluster services
-- Update troubleshooting and installation docs for DNS/cert changes
-- Update installation and troubleshooting documentation; clarify steps for k3s reinstallation and Vault setup
-- Update justfile description for clarity on setup commands
-- Update troubleshooting docs for kubeconfig and cluster shutdown changes
-- Update component descriptions and organization in README.md for clarity
-- Update installation instructions and README for clarity; refine Terraform configurations and comments
-- Update README/INSTALLATION for NetworkPolicy and secrets refactor
-- Update INSTALLATION, README, and troubleshooting for Vault PKI rollout
-- Document postgis-localhost.yaml and localRedirectPolicy
-- Reference new justfile recipes in INSTALLATION.md and README.md
-- Reference new bootstrap recipes, reorganize Cluster Operations table
-- Reorganize install steps into 7a/7b, add table of contents
-- Refactor setup and troubleshooting guides, fix rumdl config
-- Enhance README for clarity and detail on cluster architecture and components
 
 ### 🚀 Features
 
@@ -214,3 +133,96 @@
 - Implement firewall setup script for Kubernetes and Cilium
 - Update firewall configuration and apply Cilium network policies
 - Add release-please workflow and configuration files
+
+### 🐛 Bug Fixes
+
+- Insert env vars in vault-values.yaml, remove WSL-side extra copy in sync-kubeconfig.sh
+- Restore trimmed devcontainer.json content
+- Correct bug report issue form title/name fields
+- Remove GitHub bug report YAML form (schema issue), consolidate gitignore into .gitignore
+- Add schemas to postgis-database.yaml Database CRD
+- Hubble health check in Cilium release
+- Enable BPF masquerade in Cilium to prevent pod-to-host timeouts
+- Grant NetworkPolicy baseline egress for apiserver, cluster, CoreDNS upstream
+- S3/Barman TLS via Vault PKI (endpointCA, seaweedfs-s3-tls, HTTPS probes)
+- Flux Kustomization dependsOn wiring for vault/cert-manager rollout
+- Allow world-entity ingress to postgis on 5432
+- Hubble.internal TLS verification (wrong SAN, wrong CA)
+
+### 📚 Documentation
+
+- Document kubeconfig sync workflow for Headlamp/Lens/VS Code access
+- Rewrite README for CNPG/vault/script changes, add pipeline planning doc, remove main.py stub
+- Add ROADMAP.md, remove pipeline.md, update README for new layout
+- Clarify Cilium installation prerequisites and commands
+- Expand ROADMAP foundational/ETL/ML sections, add notes on alternatives
+- Update README with project roadmap, refine devcontainer and cluster scripts
+- Update README and ROADMAP for clarity in Vault and k3s configurations
+- Clarify systemd-to-script handover in README and cluster scripts
+- Add SeaweedFS backup restore instructions, pre-flight validation, backup gitignore patterns
+- Add first-time setup instructions, optional Headlamp installation
+- Split docs into README/INSTALLATION/troubleshooting
+- Add README table of contents, rename devcontainers/ to .devcontainer/
+- Remove ROADMAP.md, shift to GitHub Issues for planning and tracking
+- Update installation and troubleshooting guides; enhance clarity and modularity of cluster services
+- Update troubleshooting and installation docs for DNS/cert changes
+- Update installation and troubleshooting documentation; clarify steps for k3s reinstallation and Vault setup
+- Update justfile description for clarity on setup commands
+- Update troubleshooting docs for kubeconfig and cluster shutdown changes
+- Update component descriptions and organization in README.md for clarity
+- Update installation instructions and README for clarity; refine Terraform configurations and comments
+- Update README/INSTALLATION for NetworkPolicy and secrets refactor
+- Update INSTALLATION, README, and troubleshooting for Vault PKI rollout
+- Document postgis-localhost.yaml and localRedirectPolicy
+- Reference new justfile recipes in INSTALLATION.md and README.md
+- Reference new bootstrap recipes, reorganize Cluster Operations table
+- Reorganize install steps into 7a/7b, add table of contents
+- Refactor setup and troubleshooting guides, fix rumdl config
+- Enhance README for clarity and detail on cluster architecture and components
+
+### ♻️ Refactor
+
+- Reorganize into manifests/ and scripts/ directories, expand start/stop-cluster.sh and postgis-cluster.yaml
+- Improve sync-kubeconfig.sh clarity and validation checks
+- Simplify sync-kubeconfig.sh, deploy Headlamp in-cluster instead of Windows client
+- Simplify operator availability check in stop-cluster.sh
+- Replace postgis-external-service with postgis-tcproute
+- Move cluster scripts to src/bash/
+- Clean up justfile, drop unnecessary settings file, use dynamic Cilium versioning
+- Replace infrastructure/dns with coredns-custom internal DNS zone
+- Consolidate DNS/gateway L2-LB policies into single LAN policy, enable gatewayAPI/egressGateway
+- Clarify comments in postgis, gateway, hubble, namespace manifests
+- Update TLS configurations and enhance Vault integration across cluster services
+- Remove sync-kubeconfig.sh, kubeconfig now managed directly by k3s
+- Move cluster-config from Kubernetes ConfigMap to Terraform-managed secret
+- Consolidate vault-bootstrap and vault-database terraform into terraform/vault
+- Consolidate gateway and hubble TLS issuance onto vault-pki-issuer
+- Vault deployment and initialization
+- Clean up comments and improve variable descriptions in Terraform configurations
+
+### ⚙️ Miscellaneous Tasks
+
+- Rename vso_setup.yaml to vso-setup.yaml
+- Add .gitignore
+- Archive legacy k3s manifests into k3s_archive/
+- Rename k3s_archive/.vscode/tasks.json to .archive/, simplify devcontainer Dockerfile
+- Archive superseded MinIO backups manifest
+- Remove misplaced issue templates from .vscode/
+- Convert GitHub issue templates from Markdown to YAML forms
+- Remove old Markdown issue templates, superseded by YAML forms
+- Remove .archive/, legacy pre-Flux manifests no longer needed
+- Remove personal contact links from issue template config
+- Sync copier template to v1.0.4
+- Update uv.lock
+- Trim comments in Kubernetes manifests and devcontainer config
+- Trim comments in cluster scripts
+- Remove unused postgres-proxy deployment from postgis-cluster.yaml
+- Update uv.lock
+- Add cluster naming support and reorganize install docs
+- Restructure devcontainer setup with new host and cluster configurations
+- *(dev)* Reorder justfile recipes, add prek hook setup, and sync dependencies
+- Ignore rumdl cache and virtualenv directory variants in gitignore
+
+### ◀️ Revert
+
+- Drop loopback externalIPs Service (rejected by Kubernetes API)
