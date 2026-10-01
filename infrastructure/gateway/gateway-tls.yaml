@@ -1,4 +1,4 @@
-# Wildcard edge TLS certificate for the internal domain's HTTPRoutes issued via Vault PKI
+# Wildcard edge TLS certificate for the internal domain's HTTPRoutes issued via OpenBao PKI
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -10,11 +10,11 @@ spec:
     - "*.${INTERNAL_DOMAIN}"
     - "${INTERNAL_DOMAIN}"
     - "hubble.${INTERNAL_DOMAIN}"
-  duration: ${VAULT_PKI_CERT_DURATION}
-  renewBefore: ${VAULT_PKI_CERT_RENEW_BEFORE}
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
   issuerRef:
-    name: vault-pki-issuer
+    name: openbao-pki-issuer
     kind: ClusterIssuer

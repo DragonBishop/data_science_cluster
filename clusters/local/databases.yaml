@@ -8,7 +8,7 @@ spec:
   dependsOn:
     - name: barman-cloud
     - name: gateway
-    - name: vault
+    - name: openbao
     - name: cluster-config
   sourceRef:
     kind: GitRepository

@@ -26,9 +26,9 @@ cilium_version: "{{ cluster_config.CILIUM_VERSION }}"
 cert_manager_version: "{{ cluster_config.CERT_MANAGER_VERSION }}"
 cnpg_version: "{{ cluster_config.CNPG_VERSION }}"
 barman_cloud_version: "{{ cluster_config.BARMAN_CLOUD_VERSION }}"
-vault_version: "{{ cluster_config.VAULT_VERSION }}"
+openbao_version: "{{ cluster_config.OPENBAO_VERSION }}"
 vso_version: "{{ cluster_config.VSO_VERSION }}"
-vault_image_tag: "{{ cluster_config.VAULT_IMAGE_TAG }}"
+openbao_image_tag: "{{ cluster_config.OPENBAO_IMAGE_TAG }}"
 seaweedfs_version: "{{ cluster_config.SEAWEEDFS_VERSION }}"
 postgres_version: "{{ cluster_config.POSTGRES_VERSION }}"
 postgis_version: "{{ cluster_config.POSTGIS_VERSION }}"
@@ -55,10 +55,10 @@ hubble_ui_frontend_mem_limit: "{{ cluster_config.HUBBLE_UI_FRONTEND_MEM_LIMIT }}
 hubble_ui_backend_mem_request: "{{ cluster_config.HUBBLE_UI_BACKEND_MEM_REQUEST }}"
 hubble_ui_backend_mem_limit: "{{ cluster_config.HUBBLE_UI_BACKEND_MEM_LIMIT }}"
 
-# --- Resource sizing: Vault ---
-vault_cpu_request: "{{ cluster_config.VAULT_CPU_REQUEST }}"
-vault_mem_request: "{{ cluster_config.VAULT_MEM_REQUEST }}"
-vault_mem_limit: "{{ cluster_config.VAULT_MEM_LIMIT }}"
+# --- Resource sizing: OpenBao ---
+openbao_cpu_request: "{{ cluster_config.OPENBAO_CPU_REQUEST }}"
+openbao_mem_request: "{{ cluster_config.OPENBAO_MEM_REQUEST }}"
+openbao_mem_limit: "{{ cluster_config.OPENBAO_MEM_LIMIT }}"
 
 # --- Resource sizing: cert-manager ---
 cert_manager_cpu_request: "{{ cluster_config.CERT_MANAGER_CPU_REQUEST }}"
@@ -98,6 +98,7 @@ tekton_operator_webhook_cpu_request: "{{ cluster_config.TEKTON_OPERATOR_WEBHOOK_
 # --- Storage sizing ---
 postgis_storage_size: "{{ cluster_config.POSTGIS_STORAGE_SIZE }}"
 postgis_storage_class: "{{ cluster_config.POSTGIS_STORAGE_CLASS }}"
+openbao_data_storage_size: "{{ cluster_config.OPENBAO_DATA_STORAGE_SIZE }}"
 seaweedfs_host_path: "{{ cluster_config.SEAWEEDFS_HOST_PATH }}"
 seaweedfs_max_volumes: "{{ cluster_config.SEAWEEDFS_MAX_VOLUMES }}"
 
@@ -119,6 +120,6 @@ cert_key_size: "{{ cluster_config.CERT_KEY_SIZE }}"
 local_ca_root_duration: "{{ cluster_config.LOCAL_CA_ROOT_DURATION }}"
 local_ca_cert_duration: "{{ cluster_config.LOCAL_CA_CERT_DURATION }}"
 local_ca_cert_renew_before: "{{ cluster_config.LOCAL_CA_CERT_RENEW_BEFORE }}"
-vault_pki_cert_duration: "{{ cluster_config.VAULT_PKI_CERT_DURATION }}"
-vault_pki_cert_renew_before: "{{ cluster_config.VAULT_PKI_CERT_RENEW_BEFORE }}"
+openbao_pki_cert_duration: "{{ cluster_config.OPENBAO_PKI_CERT_DURATION }}"
+openbao_pki_cert_renew_before: "{{ cluster_config.OPENBAO_PKI_CERT_RENEW_BEFORE }}"
 hubble_cert_validity_days: "{{ cluster_config.HUBBLE_CERT_VALIDITY_DAYS }}"

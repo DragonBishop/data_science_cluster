@@ -1,8 +1,11 @@
-# Vault unseal and key material
+# OpenBao unseal and key material
 *.gpg
-vault-keys*
+openbao-keys*
 *-unseal*
 *recovery-keys*
+
+# Local secrets and certs (unseal keyfile, internal CA)
+.local/
 
 # Kubernetes configs
 kubeconfig

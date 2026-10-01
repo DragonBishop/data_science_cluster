@@ -1,12 +1,12 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: vault-ingress-egress
-  namespace: vault
+  name: openbao-ingress-egress
+  namespace: openbao
 spec:
   endpointSelector:
     matchLabels:
-      app.kubernetes.io/name: vault
+      app.kubernetes.io/name: openbao
   egress:
     - toEndpoints:
         - matchLabels:

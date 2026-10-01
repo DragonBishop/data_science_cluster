@@ -4,12 +4,12 @@
   become: false
 
   vars_prompt:
-    - name: vault_gpg_passphrase
+    - name: openbao_gpg_passphrase
       prompt: "GPG passphrase for the unseal keyfile"
       private: true
       default: ""
     - name: opentofu_state_encryption_passphrase
-      prompt: "State encryption passphrase for terraform/vault's state file"
+      prompt: "State encryption passphrase for terraform/openbao's state file"
       private: true
       default: ""
     - name: opentofu_postgres_superuser_password
@@ -21,12 +21,12 @@
     - { role: k3s, tags: [k3s] }
     - { role: cilium, tags: [cilium] }
     - { role: flux, tags: [flux] }
-    - { role: vault, tags: [vault] }
-    - { role: opentofu, tags: [opentofu, vault] }
+    - { role: openbao, tags: [openbao] }
+    - { role: opentofu, tags: [opentofu, openbao] }
 
   tasks:
-    - name: Print freshly-generated Vault root token and unseal keys
+    - name: Print freshly-generated OpenBao root token and unseal keys
       ansible.builtin.debug:
-        msg: "{{ ['Root Token:', vault_root_token, 'Fresh Unseal Keys:'] + vault_fresh_unseal_keys }}"
-      when: vault_fresh_unseal_keys is defined
+        msg: "{{ ['Root Token:', openbao_root_token, 'Fresh Unseal Keys:'] + openbao_fresh_unseal_keys }}"
+      when: openbao_fresh_unseal_keys is defined
       tags: always

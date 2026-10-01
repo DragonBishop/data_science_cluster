@@ -17,7 +17,7 @@ spec:
               protocol: TCP
     - fromEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: vault
+            k8s:io.kubernetes.pod.namespace: openbao
       toPorts:
         - ports:
             - port: "5432"

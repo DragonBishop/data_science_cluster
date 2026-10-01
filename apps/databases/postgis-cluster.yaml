@@ -96,7 +96,7 @@ spec:
     size: ${POSTGIS_STORAGE_SIZE}
     storageClass: ${POSTGIS_STORAGE_CLASS}
 
-  # TLS server certificate and CA issued via cert-manager and Vault PKI
+  # TLS server certificate and CA issued via cert-manager and OpenBao PKI
   certificates:
     serverTLSSecret: postgis-server-cert
     serverCASecret: postgis-server-cert
