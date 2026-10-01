@@ -16,7 +16,7 @@ spec:
     type: kubernetes.io/basic-auth
     labels:
       cnpg.io/reload: "true"
-  refreshAfter: 1h
+  refreshAfter: ${VSO_REFRESH_AFTER}
   vaultAuthRef: vault-auth
 ---
 # Dynamic database credentials leased from Vault
@@ -42,10 +42,10 @@ metadata:
   name: postgis-backups
   namespace: databases
 spec:
-  retentionPolicy: "4d"
+  retentionPolicy: "${POSTGIS_BACKUP_RETENTION}"
   configuration:
-    destinationPath: s3://cnpg-backups/
-    endpointURL: https://seaweedfs-s3.databases.svc:9000
+    destinationPath: s3://${CNPG_BACKUP_BUCKET}/
+    endpointURL: https://seaweedfs-s3.databases.svc:${SEAWEEDFS_S3_PORT}
     endpointCA:
       name: postgis-server-cert
       key: ca.crt
@@ -66,8 +66,8 @@ metadata:
   namespace: databases
 spec:
   instances: ${POSTGIS_INSTANCES}
-  smartShutdownTimeout: 15
-  stopDelay: 60
+  smartShutdownTimeout: ${POSTGIS_SMART_SHUTDOWN_TIMEOUT}
+  stopDelay: ${POSTGIS_STOP_DELAY}
   imageName: ghcr.io/cloudnative-pg/postgis:${POSTGRES_VERSION}-${POSTGIS_VERSION}-system-trixie
 
   resources:
@@ -114,7 +114,7 @@ metadata:
   name: postgis-cluster-daily-backup
   namespace: databases
 spec:
-  schedule: "0 0 0 * * *"
+  schedule: "${POSTGIS_BACKUP_SCHEDULE}"
   immediate: true
   cluster:
     name: postgis-cluster

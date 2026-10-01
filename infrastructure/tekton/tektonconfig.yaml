@@ -1,0 +1,63 @@
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonConfig
+metadata:
+  name: config
+spec:
+  targetNamespace: tekton-pipelines
+  profile: basic
+  pruner:
+    disabled: false
+    schedule: "${TEKTON_PRUNER_SCHEDULE}"
+    keep: ${TEKTON_PRUNER_KEEP}
+    resources:
+      - taskrun
+      - pipelinerun
+  chain:
+    artifacts.taskrun.storage: tekton
+    artifacts.pipelinerun.storage: tekton
+    artifacts.oci.storage: tekton
+    artifacts.taskrun.signer: kms
+    artifacts.pipelinerun.signer: kms
+    artifacts.oci.signer: kms
+    signers.kms.kmsref: hashivault://tekton-chains
+    signers.kms.auth.address: https://vault.vault.svc.cluster.local:8200
+    signers.kms.auth.oidc.path: kubernetes
+    signers.kms.auth.oidc.role: tekton-chains-role
+    options:
+      configMaps:
+        chains-config:
+          data:
+            signers.kms.auth.oidc.token-path: /var/run/secrets/vault/token
+      deployments:
+        tekton-chains-controller:
+          spec:
+            template:
+              spec:
+                volumes:
+                  - name: vault-ca
+                    secret:
+                      secretName: vault-ca-bundle
+                      items:
+                        - key: ca.crt
+                          path: ca.crt
+                  - name: vault-token
+                    projected:
+                      sources:
+                        - serviceAccountToken:
+                            audience: vault
+                            expirationSeconds: 3600
+                            path: token
+                containers:
+                  - name: tekton-chains-controller
+                    env:
+                      - name: VAULT_CACERT
+                        value: /etc/vault-ca/ca.crt
+                    volumeMounts:
+                      - name: vault-ca
+                        mountPath: /etc/vault-ca
+                        readOnly: true
+                      - name: vault-token
+                        mountPath: /var/run/secrets/vault
+                        readOnly: true
+  result:
+    disabled: true

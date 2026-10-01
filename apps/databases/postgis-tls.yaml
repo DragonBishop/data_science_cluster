@@ -6,11 +6,11 @@ metadata:
   namespace: databases
 spec:
   secretName: postgis-server-cert
-  duration: 720h
-  renewBefore: 120h
+  duration: ${VAULT_PKI_CERT_DURATION}
+  renewBefore: ${VAULT_PKI_CERT_RENEW_BEFORE}
   privateKey:
-    algorithm: ECDSA
-    size: 256
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
   dnsNames:
     - postgis-cluster-rw
     - postgis-cluster-rw.databases
@@ -21,7 +21,7 @@ spec:
     - postgis-cluster-r
     - postgis-cluster-r.databases.svc.cluster.local
     - localhost
-    - postgis.internal
+    - postgis.${INTERNAL_DOMAIN}
   ipAddresses:
     - 127.0.0.1
     - ${GATEWAY_IP}
@@ -37,11 +37,11 @@ metadata:
   namespace: databases
 spec:
   secretName: seaweedfs-s3-tls
-  duration: 720h
-  renewBefore: 120h
+  duration: ${VAULT_PKI_CERT_DURATION}
+  renewBefore: ${VAULT_PKI_CERT_RENEW_BEFORE}
   privateKey:
-    algorithm: ECDSA
-    size: 256
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
   dnsNames:
     - seaweedfs-s3
     - seaweedfs-s3.databases

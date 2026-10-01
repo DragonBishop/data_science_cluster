@@ -29,6 +29,7 @@ hubble:
     auto:
       enabled: true
       method: certmanager
+      certValidityDuration: ${HUBBLE_CERT_VALIDITY_DAYS}
       certManagerIssuerRef:
         group: cert-manager.io
         kind: ClusterIssuer

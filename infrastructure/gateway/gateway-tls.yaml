@@ -1,4 +1,4 @@
-# Wildcard edge TLS certificate for *.internal HTTPRoutes issued via Vault PKI
+# Wildcard edge TLS certificate for the internal domain's HTTPRoutes issued via Vault PKI
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -7,14 +7,14 @@ metadata:
 spec:
   secretName: internal-edge-cert
   dnsNames:
-    - "*.internal"
-    - "internal"
-    - "hubble.internal"
-  duration: 2160h # 90 days
-  renewBefore: 360h # 15 days
+    - "*.${INTERNAL_DOMAIN}"
+    - "${INTERNAL_DOMAIN}"
+    - "hubble.${INTERNAL_DOMAIN}"
+  duration: ${VAULT_PKI_CERT_DURATION}
+  renewBefore: ${VAULT_PKI_CERT_RENEW_BEFORE}
   privateKey:
-    algorithm: ECDSA
-    size: 256
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
   issuerRef:
     name: vault-pki-issuer
     kind: ClusterIssuer

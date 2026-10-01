@@ -10,7 +10,7 @@ spec:
       namespace: gateway
       sectionName: https
   hostnames:
-    - "hubble.internal"
+    - "hubble.${INTERNAL_DOMAIN}"
   rules:
     - backendRefs:
         - name: hubble-ui

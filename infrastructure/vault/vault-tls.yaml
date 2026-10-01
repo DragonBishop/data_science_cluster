@@ -17,10 +17,10 @@ spec:
   isCA: true
   commonName: vault-local-ca
   secretName: vault-local-ca-secret
-  duration: 87600h # 10 years
+  duration: ${LOCAL_CA_ROOT_DURATION}
   privateKey:
-    algorithm: ECDSA
-    size: 256
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
   issuerRef:
     name: vault-selfsigned-bootstrap
     kind: ClusterIssuer
@@ -42,11 +42,11 @@ metadata:
   namespace: vault
 spec:
   secretName: vault-server-cert
-  duration: 2160h # 90 days
-  renewBefore: 360h # 15 days
+  duration: ${LOCAL_CA_CERT_DURATION}
+  renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
   privateKey:
-    algorithm: ECDSA
-    size: 256
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
   dnsNames:
     - vault
     - vault.vault
@@ -71,11 +71,31 @@ metadata:
 spec:
   commonName: vault-ca-bundle
   secretName: vault-ca-bundle
-  duration: 2160h
-  renewBefore: 360h
+  duration: ${LOCAL_CA_CERT_DURATION}
+  renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
   privateKey:
-    algorithm: ECDSA
-    size: 256
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  dnsNames:
+    - vault-ca-bundle.unused.invalid
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+---
+# Vault CA bundle for the tekton-pipelines namespace
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-ca-tekton
+  namespace: tekton-pipelines
+spec:
+  commonName: vault-ca-bundle
+  secretName: vault-ca-bundle
+  duration: ${LOCAL_CA_CERT_DURATION}
+  renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
   dnsNames:
     - vault-ca-bundle.unused.invalid
   issuerRef:

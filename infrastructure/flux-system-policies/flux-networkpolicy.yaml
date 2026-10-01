@@ -13,12 +13,22 @@ spec:
             - port: "9090"
               protocol: TCP
   egress:
+    # Wildcard vendor-owned hosts; list tenant hosts (one owner per subdomain) by name
     - toFQDNs:
+        # Git forge: clone, API, codeload
         - matchName: "${GIT_FORGE_HOST}"
-        - matchName: "api.${GIT_FORGE_HOST}"
-        - matchName: "quay.io"
-        - matchPattern: "*.quay.io"
-        - matchName: "helm.releases.hashicorp.com"
+        - matchPattern: "*.${GIT_FORGE_HOST}"
+        # GitHub: container registry, blob and release CDN
+        - matchName: "ghcr.io"
+        - matchPattern: "*.githubusercontent.com"
+        # GitHub Pages Helm repos
         - matchName: "cloudnative-pg.github.io"
         - matchName: "seaweedfs.github.io"
-        - matchPattern: "*.githubusercontent.com"
+        # Quay: registry and CDN
+        - matchName: "quay.io"
+        - matchPattern: "*.quay.io"
+        # Docker Hub: auth and registry on docker.io, CDN on docker.com
+        - matchPattern: "*.docker.io"
+        - matchPattern: "**.docker.com"
+        # HashiCorp Helm repo
+        - matchPattern: "**.hashicorp.com"

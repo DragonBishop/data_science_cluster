@@ -13,7 +13,7 @@ spec:
     - name: https
       protocol: HTTPS
       port: 443
-      hostname: "*.internal"
+      hostname: "*.${INTERNAL_DOMAIN}"
       tls:
         mode: Terminate
         certificateRefs:
