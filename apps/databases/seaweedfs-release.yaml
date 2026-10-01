@@ -31,13 +31,13 @@ spec:
       dataDirs:
         - name: data1
           type: "hostPath"
-          hostPathPrefix: "/mnt/vault13/seaweedfs"
-          maxVolumes: 90
+          hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
+          maxVolumes: ${SEAWEEDFS_MAX_VOLUMES}
     s3:
       enabled: true
-      port: 9000
+      port: ${SEAWEEDFS_S3_PORT}
       createBuckets:
-        - name: cnpg-backups
+        - name: ${CNPG_BACKUP_BUCKET}
       livenessProbe:
         httpGet:
           scheme: HTTPS

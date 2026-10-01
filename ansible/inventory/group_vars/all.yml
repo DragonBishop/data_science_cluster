@@ -16,6 +16,8 @@ k3s_api_host: "{{ cluster_config.K3S_API_HOST }}"
 k3s_api_port: "{{ cluster_config.K3S_API_PORT }}"
 pod_cidr: "{{ cluster_config.POD_CIDR }}"
 git_forge_host: "{{ cluster_config.GIT_FORGE_HOST }}"
+seaweedfs_s3_port: "{{ cluster_config.SEAWEEDFS_S3_PORT }}"
+internal_domain: "{{ cluster_config.INTERNAL_DOMAIN }}"
 
 # --- Versions ---
 k3s_version: "{{ cluster_config.K3S_VERSION }}"
@@ -30,6 +32,7 @@ vault_image_tag: "{{ cluster_config.VAULT_IMAGE_TAG }}"
 seaweedfs_version: "{{ cluster_config.SEAWEEDFS_VERSION }}"
 postgres_version: "{{ cluster_config.POSTGRES_VERSION }}"
 postgis_version: "{{ cluster_config.POSTGIS_VERSION }}"
+tekton_operator_version: "{{ cluster_config.TEKTON_OPERATOR_VERSION }}"
 
 # --- Topology ---
 cilium_operator_replicas: "{{ cluster_config.CILIUM_OPERATOR_REPLICAS }}"
@@ -83,6 +86,38 @@ postgis_cpu_request: "{{ cluster_config.POSTGIS_CPU_REQUEST }}"
 postgis_mem_request: "{{ cluster_config.POSTGIS_MEM_REQUEST }}"
 postgis_mem_limit: "{{ cluster_config.POSTGIS_MEM_LIMIT }}"
 
+# --- Resource sizing: Tekton Operator ---
+tekton_operator_mem_request: "{{ cluster_config.TEKTON_OPERATOR_MEM_REQUEST }}"
+tekton_operator_mem_limit: "{{ cluster_config.TEKTON_OPERATOR_MEM_LIMIT }}"
+tekton_operator_cpu_request: "{{ cluster_config.TEKTON_OPERATOR_CPU_REQUEST }}"
+tekton_operator_webhook_mem_request: "{{ cluster_config.TEKTON_OPERATOR_WEBHOOK_MEM_REQUEST }}"
+tekton_operator_webhook_mem_limit: "{{ cluster_config.TEKTON_OPERATOR_WEBHOOK_MEM_LIMIT }}"
+tekton_operator_webhook_cpu_request: "{{ cluster_config.TEKTON_OPERATOR_WEBHOOK_CPU_REQUEST }}"
+
 # --- Storage sizing ---
 postgis_storage_size: "{{ cluster_config.POSTGIS_STORAGE_SIZE }}"
 postgis_storage_class: "{{ cluster_config.POSTGIS_STORAGE_CLASS }}"
+seaweedfs_host_path: "{{ cluster_config.SEAWEEDFS_HOST_PATH }}"
+seaweedfs_max_volumes: "{{ cluster_config.SEAWEEDFS_MAX_VOLUMES }}"
+
+# --- Backups ---
+cnpg_backup_bucket: "{{ cluster_config.CNPG_BACKUP_BUCKET }}"
+postgis_backup_schedule: "{{ cluster_config.POSTGIS_BACKUP_SCHEDULE }}"
+postgis_backup_retention: "{{ cluster_config.POSTGIS_BACKUP_RETENTION }}"
+
+# --- Lifecycle ---
+postgis_smart_shutdown_timeout: "{{ cluster_config.POSTGIS_SMART_SHUTDOWN_TIMEOUT }}"
+postgis_stop_delay: "{{ cluster_config.POSTGIS_STOP_DELAY }}"
+vso_refresh_after: "{{ cluster_config.VSO_REFRESH_AFTER }}"
+tekton_pruner_schedule: "{{ cluster_config.TEKTON_PRUNER_SCHEDULE }}"
+tekton_pruner_keep: "{{ cluster_config.TEKTON_PRUNER_KEEP }}"
+
+# --- TLS ---
+cert_key_algorithm: "{{ cluster_config.CERT_KEY_ALGORITHM }}"
+cert_key_size: "{{ cluster_config.CERT_KEY_SIZE }}"
+local_ca_root_duration: "{{ cluster_config.LOCAL_CA_ROOT_DURATION }}"
+local_ca_cert_duration: "{{ cluster_config.LOCAL_CA_CERT_DURATION }}"
+local_ca_cert_renew_before: "{{ cluster_config.LOCAL_CA_CERT_RENEW_BEFORE }}"
+vault_pki_cert_duration: "{{ cluster_config.VAULT_PKI_CERT_DURATION }}"
+vault_pki_cert_renew_before: "{{ cluster_config.VAULT_PKI_CERT_RENEW_BEFORE }}"
+hubble_cert_validity_days: "{{ cluster_config.HUBBLE_CERT_VALIDITY_DAYS }}"
