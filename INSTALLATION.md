@@ -2,7 +2,7 @@
 
 This guide provides e for provisioning, configuring, and verifying a local single-node Kubernetes cluster tailored for data science workloads.
 
-The process uses Ansible to provision k3s, Cilium eBPF networking, Flux GitOps controllers, in-cluster HashiCorp Vault secrets management, and OpenTofu infrastructure configurations. Once Ansible finishes, Flux takes over GitOps management of the cluster.
+The process uses Ansible to provision k3s, Cilium eBPF networking, Flux GitOps controllers, in-cluster OpenBao secrets management, and OpenTofu infrastructure configurations. Once Ansible finishes, Flux takes over GitOps management of the cluster.
 
 Once host-side prerequisites are met, running `just bootstrap` orchestrates the entire cluster lifecycle and reconciles all platform services declaratively.
 
@@ -245,7 +245,7 @@ cd data_science_cluster
 
 #### Step 2: Execute Ansible Bootstrap
 
-Runs the full setup via Ansible (`ansible/playbooks/data_cluster.yml`): k3s, Cilium, Flux, Vault, and `terraform/vault`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
+Runs the full setup via Ansible (`ansible/playbooks/data_cluster.yml`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
 > [!TIP]
 > **Just Recipe (automatically prompts for sudo):**
@@ -261,14 +261,14 @@ Runs the full setup via Ansible (`ansible/playbooks/data_cluster.yml`): k3s, Cil
 > ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/data_cluster.yml --ask-become-pass
 > ```
 
-#### Step 3: Secure Vault Credentials & Unseal Keys
+#### Step 3: Secure OpenBao Credentials & Unseal Keys
 
-The bootstrap script prompts for a GPG passphrase and an OpenTofu state-encryption passphrase, then prints the in-cluster Vault unseal keys and root token.
+The bootstrap script prompts for a GPG passphrase and an OpenTofu state-encryption passphrase, then prints the in-cluster OpenBao unseal keys and root token.
 
 > [!IMPORTANT]
 > Store the generated unseal keys and root token in a secure password manager immediately. Data cannot be recovered if these keys are lost.
 
-Future cluster starts (`just start` / `start-cluster.sh`) unseal Vault automatically using the GPG-encrypted keyfile (`~/.vault-keys.gpg`) written during bootstrap. Note that the cache-TTL setting in `~/.gnupg/gpg-agent.conf` only governs `gpg-agent`'s in-memory cache; on desktop environments with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be stored in the OS keyring. Add `no-allow-external-cache` to `~/.gnupg/gpg-agent.conf` to disable OS keyring caching.
+Future cluster starts (`just start` / `start-cluster.sh`) unseal OpenBao using the GPG-encrypted keyfile written during bootstrap to `.local/openbao/unseal-keys.gpg`, inside this repo and gitignored. `git clean -fdx` and `just uninstall` delete it, so keep a backup elsewhere. Note that the cache-TTL setting in `~/.gnupg/gpg-agent.conf` only governs `gpg-agent`'s in-memory cache; on desktop environments with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be stored in the OS keyring. Add `no-allow-external-cache` to `~/.gnupg/gpg-agent.conf` to disable OS keyring caching.
 
 ### Flux Dependency Graph
 
@@ -283,29 +283,30 @@ flowchart TD
     cilium --> coredns["coredns-custom"]
     cilium --> fluxpolicies["flux-system-policies"]
     cilium --> certmgr["cert-manager"]
-    certmgr --> vault["vault"]
+    certmgr --> openbao["openbao"]
 
     %% Platform Services
-    vault --> vso["vault-secrets-operator"]
-    vso --> cnpg["cnpg-operator"]
+    openbao --> eso["external-secrets"]
+    eso --> cnpg["cnpg-operator"]
     cnpg --> barman["barman-cloud"]
 
-    vault --> gw["gateway"]
+    openbao --> gw["gateway"]
     gw --> hubble["hubble"]
 
     %% Applications
     barman --> db["databases"]
-    vault --> db
+    openbao --> db
+    eso --> db
     gw --> db
 ```
 
 * `cilium` requires `gateway-api-crds` and `namespaces`.
 * `coredns-custom`, `flux-system-policies`, and `cert-manager` depend on `cilium`.
-* `vault` depends on `cert-manager` (for `vault-server-cert` TLS bootstrap).
-* `vault-secrets-operator` and `gateway` depend on `vault` (for PKI and secrets sync).
-* `cnpg-operator` depends on `vault-secrets-operator`, and `barman-cloud` depends on `cnpg-operator`.
+* `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap).
+* `external-secrets` and `gateway` depend on `openbao` (for secrets sync and PKI).
+* `cnpg-operator` depends on `external-secrets`, and `barman-cloud` depends on `cnpg-operator`.
 * `hubble` depends on `gateway` (attaching the `hubble.internal` HTTPRoute).
-* `databases` depends on `barman-cloud`, `gateway`, and `vault`.
+* `databases` depends on `barman-cloud`, `gateway`, `openbao`, and `external-secrets` (whose webhook must admit its `ExternalSecret`s).
 
 ---
 
@@ -444,12 +445,12 @@ On the k3s node itself, `CiliumLocalRedirectPolicy` redirects `127.0.0.1:5432` t
 
 ### Verify Dynamic Credentials
 
-Once the CNPG cluster is healthy and VSO reconciles `apps/databases/vso-setup.yaml`, VSO requests credentials from Vault and writes them to the `postgis-app-dynamic-credentials` Secret.
+Once the CNPG cluster is healthy, ESO's `VaultDynamicSecret` generator requests credentials from OpenBao and writes them to the `postgis-app-dynamic-credentials` Secret. Every 2h (`ESO_DYNAMIC_REFRESH_INTERVAL`) it generates a new role; each old role expires at its 3h TTL.
 
 #### Check Dynamic Secret & Role Membership
 
 ```bash
-kubectl get vaultdynamicsecret postgis-app-dynamic-secret -n databases
+kubectl get externalsecret postgis-app-dynamic-credentials -n databases
 kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c '\du'
 ```
 
@@ -497,7 +498,7 @@ Test Gateway listener routing and edge certificate termination:
 >   https://hubble.internal/
 > ```
 
-Verify that the page responds and the certificate chains to `vault-pki-issuer`'s CA (`internal-edge-cert`).
+Verify that the page responds and the certificate chains to `openbao-pki-issuer`'s CA (`internal-edge-cert`).
 
 ---
 
