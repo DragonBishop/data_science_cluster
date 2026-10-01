@@ -82,6 +82,26 @@ spec:
     name: vault-ca-issuer
     kind: ClusterIssuer
 ---
+# Vault CA bundle for the tekton-pipelines namespace
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-ca-tekton
+  namespace: tekton-pipelines
+spec:
+  commonName: vault-ca-bundle
+  secretName: vault-ca-bundle
+  duration: ${LOCAL_CA_CERT_DURATION}
+  renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  dnsNames:
+    - vault-ca-bundle.unused.invalid
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+---
 # ClusterIssuer backed by Vault's Intermediate PKI secrets engine.
 # Signs leaf certificates for Postgres (postgis-tls) and SeaweedFS S3.
 apiVersion: cert-manager.io/v1

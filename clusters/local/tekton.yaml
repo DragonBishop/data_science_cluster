@@ -8,6 +8,7 @@ spec:
   dependsOn:
     - name: tekton-operator
     - name: cluster-config
+    - name: vault
   sourceRef:
     kind: GitRepository
     name: flux-system

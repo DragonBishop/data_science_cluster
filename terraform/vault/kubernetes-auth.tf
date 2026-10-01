@@ -43,3 +43,22 @@ resource "vault_kubernetes_auth_backend_role" "cert_manager" {
   token_policies                   = [vault_policy.cert_manager_pki.name]
   token_ttl                        = 3600 # 1h
 }
+
+resource "vault_policy" "tekton_chains" {
+  name = "tekton-chains-policy"
+
+  policy = <<EOT
+path "transit/sign/tekton-chains/*" { capabilities = ["update"] }
+path "transit/keys/tekton-chains" { capabilities = ["read"] }
+EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "tekton_chains" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "tekton-chains-role"
+  bound_service_account_names      = ["tekton-chains-controller"]
+  bound_service_account_namespaces = ["tekton-pipelines"]
+  audience                         = "vault"
+  token_policies                   = [vault_policy.tekton_chains.name]
+  token_ttl                        = 3600 # 1h
+}
