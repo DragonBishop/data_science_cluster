@@ -20,7 +20,7 @@ spec:
         - kube-apiserver
     - toEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: vault
+            k8s:io.kubernetes.pod.namespace: openbao
       toPorts:
         - ports:
             - port: "8200"

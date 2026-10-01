@@ -39,7 +39,7 @@ status:
 
   echo ""
   echo "== cert-manager =="
-  kubectl get clusterissuer vault-pki-issuer
+  kubectl get clusterissuer openbao-pki-issuer
 
   echo ""
   echo "== Database =="
@@ -151,25 +151,25 @@ hubble *ARGS='status':
 hubble-pf:
   kubectl port-forward -n kube-system svc/hubble-relay 4245:443
 
-# --- Vault -----------------------------------------------------------------
+# --- OpenBao ---------------------------------------------------------------
 
-vault_env := "unset VAULT_TOKEN"
+bao_env := "unset BAO_TOKEN"
 
-# Open interactive shell in vault-0 pod
-vault-shell:
-  kubectl exec -it vault-0 -n vault -- sh -c '{{vault_env}}; exec sh'
+# Open interactive shell in openbao-0 pod
+bao-shell:
+  kubectl exec -it openbao-0 -n openbao -- sh -c '{{bao_env}}; exec sh'
 
-# Port-forward in-cluster Vault to localhost:8210 and fetch its CA
-vault-pf:
+# Port-forward in-cluster OpenBao to localhost:8210 and fetch its CA
+bao-pf:
   #!/usr/bin/env bash
   set -euo pipefail
-  mkdir -p ~/.vault-certs
-  kubectl get secret vault-server-cert -n vault -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.vault-certs/vault-internal-ca.crt
-  pkill -f "kubectl port-forward -n vault vault-0 8210:8200" 2>/dev/null || true
-  nohup kubectl port-forward -n vault vault-0 8210:8200 >~/.vault-certs/pf.log 2>&1 &
+  mkdir -p .local/openbao/certs
+  kubectl get secret openbao-server-cert -n openbao -o jsonpath='{.data.ca\.crt}' | base64 -d > .local/openbao/certs/openbao-internal-ca.crt
+  pkill -f "kubectl port-forward -n openbao openbao-0 8210:8200" 2>/dev/null || true
+  nohup kubectl port-forward -n openbao openbao-0 8210:8200 >.local/openbao/certs/pf.log 2>&1 &
   disown
   for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/8210) 2>/dev/null && break; sleep 0.1; done
-  echo "Vault (in-cluster): https://127.0.0.1:8210  (CA: ~/.vault-certs/vault-internal-ca.crt)"
+  echo "OpenBao (in-cluster): https://127.0.0.1:8210  (CA: .local/openbao/certs/openbao-internal-ca.crt)"
 
 # --- Development -------------------------------------------------------
 

@@ -71,30 +71,30 @@
       {{ lookup('file', repo_root + '/infrastructure/flux-system-policies/flux-networkpolicy.yaml')
       | regex_replace('\$\{GIT_FORGE_HOST\}', git_forge_host) }}
 
-- name: Flux reconcile vault kustomization
+- name: Flux reconcile openbao kustomization
   kubernetes.core.k8s:
     state: patched
     kind: Kustomization
     api_version: kustomize.toolkit.fluxcd.io/v1
-    name: vault
+    name: openbao
     namespace: flux-system
     definition:
       metadata:
         annotations:
           reconcile.fluxcd.io/requestedAt: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
-  register: flux_vault_kustomization
+  register: flux_openbao_kustomization
 
 - name: Monitor reconciliation until clear.
   kubernetes.core.k8s_info:
     kind: Pod
-    name: vault-0
-    namespace: vault
-  register: flux_vault
+    name: openbao-0
+    namespace: openbao
+  register: flux_openbao
   until: >-
-    (flux_vault.resources | default([]) | length > 0)
+    (flux_openbao.resources | default([]) | length > 0)
     and (
-      flux_vault.resources[0].status.phase | default('') in ["Running", "Failed"]
-      or (flux_vault.resources[0].status.containerStatuses | default([])
+      flux_openbao.resources[0].status.phase | default('') in ["Running", "Failed"]
+      or (flux_openbao.resources[0].status.containerStatuses | default([])
           | selectattr('state.waiting.reason', 'defined')
           | selectattr('state.waiting.reason', 'in', ['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull'])
           | list | length > 0)
@@ -102,9 +102,9 @@
   retries: 24
   delay: 10
 
-- name: Fail with diagnostic if Vault pod did not reach Running
+- name: Fail with diagnostic if OpenBao pod did not reach Running
   ansible.builtin.fail:
     msg: >-
-      vault-0 did not reach Running: phase={{ flux_vault.resources[0].status.phase | default('unknown') }},
-      containerStatuses={{ flux_vault.resources[0].status.containerStatuses | default([]) }}
-  when: (flux_vault.resources | default([]) | length == 0) or (flux_vault.resources[0].status.phase | default('') != "Running")
+      openbao-0 did not reach Running: phase={{ flux_openbao.resources[0].status.phase | default('unknown') }},
+      containerStatuses={{ flux_openbao.resources[0].status.containerStatuses | default([]) }}
+  when: (flux_openbao.resources | default([]) | length == 0) or (flux_openbao.resources[0].status.phase | default('') != "Running")

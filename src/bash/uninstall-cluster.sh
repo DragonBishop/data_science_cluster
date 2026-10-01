@@ -36,10 +36,9 @@ unmount_bpf() {
     done
 }
 
-clear_vault_cache() {
-    echo "🧹 Clearing local Vault cache (~/.vault-keys.gpg, ~/.vault-certs)..."
-    rm -f "$HOME/.vault-keys.gpg"
-    rm -rf "$HOME/.vault-certs"
+clear_openbao_cache() {
+    echo "🧹 Clearing local OpenBao keys and certs (.local/openbao)..."
+    rm -rf "$REPO_ROOT/.local/openbao"
 }
 
 clear_postgres_cache() {
@@ -53,9 +52,9 @@ clear_hubble_cache() {
 }
 
 clear_terraform_state() {
-    echo "🧹 Clearing orphaned terraform/vault state..."
-    rm -f "$REPO_ROOT/terraform/vault/terraform.tfstate" "$REPO_ROOT/terraform/vault/terraform.tfstate.backup"
-    rm -rf "$REPO_ROOT/terraform/vault/.terraform"
+    echo "🧹 Clearing orphaned terraform/openbao state..."
+    rm -f "$REPO_ROOT/terraform/openbao/terraform.tfstate" "$REPO_ROOT/terraform/openbao/terraform.tfstate.backup"
+    rm -rf "$REPO_ROOT/terraform/openbao/.terraform"
 }
 
 report_summary() {
@@ -68,7 +67,7 @@ main() {
     uninstall_k3s
     unmount_bpf
 
-    clear_vault_cache
+    clear_openbao_cache
     clear_postgres_cache
     clear_hubble_cache
     clear_terraform_state

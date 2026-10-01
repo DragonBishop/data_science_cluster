@@ -33,4 +33,4 @@ hubble:
       certManagerIssuerRef:
         group: cert-manager.io
         kind: ClusterIssuer
-        name: vault-pki-issuer
+        name: openbao-pki-issuer

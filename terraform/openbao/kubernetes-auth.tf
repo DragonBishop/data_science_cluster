@@ -22,8 +22,9 @@ EOT
 resource "vault_kubernetes_auth_backend_role" "postgis" {
   backend                          = vault_auth_backend.kubernetes.path
   role_name                        = "postgis-role"
-  bound_service_account_names      = ["postgis-vault-auth"]
+  bound_service_account_names      = ["postgis-openbao-auth"]
   bound_service_account_namespaces = ["databases"]
+  audience                         = "openbao"
   token_policies                   = [vault_policy.postgis.name]
   token_ttl                        = 86400 # 24h
 }
@@ -58,7 +59,7 @@ resource "vault_kubernetes_auth_backend_role" "tekton_chains" {
   role_name                        = "tekton-chains-role"
   bound_service_account_names      = ["tekton-chains-controller"]
   bound_service_account_namespaces = ["tekton-pipelines"]
-  audience                         = "vault"
+  audience                         = "openbao"
   token_policies                   = [vault_policy.tekton_chains.name]
   token_ttl                        = 3600 # 1h
 }

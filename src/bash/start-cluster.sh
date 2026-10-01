@@ -1,8 +1,10 @@
 #!/bin/bash
 #
-# start-cluster.sh: Starts k3s, unseals the in-cluster Vault, and resumes CNPG cluster.
+# start-cluster.sh: Starts k3s, unseals the in-cluster OpenBao, and resumes CNPG cluster.
 #
 set -eu
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 configure_kubeconfig() {
     local kubeconfig_dest="$HOME/.kube/config"
@@ -71,17 +73,17 @@ wait_for_node_ready() {
     echo ""
 }
 
-wait_for_vault_pod() {
-    echo "⏳ Waiting for vault-0 pod to be running..."
+wait_for_openbao_pod() {
+    echo "⏳ Waiting for openbao-0 pod to be running..."
     local retries=0
-    until [ "$(kubectl get pod vault-0 -n vault -o jsonpath='{.status.phase}' 2>/dev/null)" = "Running" ]; do
+    until [ "$(kubectl get pod openbao-0 -n openbao -o jsonpath='{.status.phase}' 2>/dev/null)" = "Running" ]; do
         sleep 5
         retries=$((retries+1))
         if [ $retries -ge 12 ]; then
-            echo "⚠️  vault-0 pod not in Running phase after 60s."
+            echo "⚠️  openbao-0 pod not in Running phase after 60s."
             return 1
         fi
-        echo "   ...still waiting for vault-0... ($((retries * 5))s elapsed)"
+        echo "   ...still waiting for openbao-0... ($((retries * 5))s elapsed)"
     done
     return 0
 }
@@ -89,7 +91,7 @@ wait_for_vault_pod() {
 # Returns seal status: unsealed, sealed, or unreachable
 incluster_seal_state() {
     local exit_code=0
-    kubectl exec -n vault vault-0 -- vault status -format=json > /dev/null 2>&1 || exit_code=$?
+    kubectl exec -n openbao openbao-0 -- bao status -format=json > /dev/null 2>&1 || exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
         echo unsealed
     elif [ "$exit_code" -eq 2 ]; then
@@ -99,70 +101,70 @@ incluster_seal_state() {
     fi
 }
 
-# Decrypts $1 and writes each key to Vault's unseal endpoint via stdin
+# Decrypts $1 and writes each key to OpenBao's unseal endpoint via stdin
 decrypt_and_unseal() {
     local keyfile="$1"
     gpg --quiet --decrypt "$keyfile" | while IFS= read -r key; do
         [ -n "$key" ] || continue
-        if ! error_output=$(printf '%s\n' "$key" | kubectl exec -i -n vault vault-0 -- vault write -format=json sys/unseal key=- 2>&1 >/dev/null); then
-            echo "   ⚠️ Key rejected by Vault: $error_output"
+        if ! error_output=$(printf '%s\n' "$key" | kubectl exec -i -n openbao openbao-0 -- bao write -format=json sys/unseal key=- 2>&1 >/dev/null); then
+            echo "   ⚠️ Key rejected by OpenBao: $error_output"
         fi
     done
     return "${PIPESTATUS[0]}"
 }
 
-attempt_unseal_vault() {
+attempt_unseal_openbao() {
     local seal_state
     seal_state=$(incluster_seal_state)
 
     if [ "$seal_state" = unsealed ]; then
-        echo "✅ In-cluster Vault already unsealed."
+        echo "✅ In-cluster OpenBao already unsealed."
         return 0
     fi
 
     if [ "$seal_state" = unreachable ]; then
-        echo "❌ ERROR: Cannot reach vault-0."
-        kubectl exec -n vault vault-0 -- vault status 2>&1 | sed 's/^/   /'
-        echo "💡 TROUBLESHOOTING: Is the pod up?  kubectl get pods -n vault"
+        echo "❌ ERROR: Cannot reach openbao-0."
+        kubectl exec -n openbao openbao-0 -- bao status 2>&1 | sed 's/^/   /'
+        echo "💡 TROUBLESHOOTING: Is the pod up?  kubectl get pods -n openbao"
         return 1
     fi
 
-    echo "🔒 In-cluster Vault is sealed."
-    local keyfile="$HOME/.vault-keys.gpg"
+    echo "🔒 In-cluster OpenBao is sealed."
+    local keyfile="$REPO_ROOT/.local/openbao/unseal-keys.gpg"
     if [ ! -f "$keyfile" ]; then
-        echo "❌ ERROR: $keyfile not found. Cannot unseal Vault."
+        echo "❌ ERROR: $keyfile not found. Cannot unseal OpenBao."
         echo "💡 TROUBLESHOOTING: Did the GPG keyfile get created during 'just bootstrap' (INSTALLATION.md)?."
         return 1
     fi
 
     echo "🔑 Enter GPG passphrase to decrypt unseal keys:"
     if ! decrypt_and_unseal "$keyfile"; then
-        echo "❌ ERROR: GPG decryption failed or was cancelled. Vault remains sealed."
+        echo "❌ ERROR: GPG decryption failed or was cancelled. OpenBao remains sealed."
         return 1
     fi
 
     seal_state=$(incluster_seal_state)
     case "$seal_state" in
         unsealed)
-            echo "✅ In-cluster Vault unsealed successfully."
+            echo "✅ In-cluster OpenBao unsealed successfully."
             ;;
         sealed)
-            echo "❌ ERROR: Vault still sealed after applying keys from $keyfile."
+            echo "❌ ERROR: OpenBao still sealed after applying keys from $keyfile."
             return 1
             ;;
         *)
-            echo "❌ ERROR: Cannot reach Vault after applying keys from $keyfile."
-            kubectl exec -n vault vault-0 -- vault status 2>&1 | sed 's/^/   /'
+            echo "❌ ERROR: Cannot reach OpenBao after applying keys from $keyfile."
+            kubectl exec -n openbao openbao-0 -- bao status 2>&1 | sed 's/^/   /'
             return 1
             ;;
     esac
 }
 
-unseal_vault() {
-    echo "⏳ Checking cluster Vault seal status..."
-    wait_for_vault_pod || true
+unseal_openbao() {
+    echo "⏳ Checking cluster OpenBao seal status..."
+    wait_for_openbao_pod || true
 
-    # Retry transient unreachable state while vault process initializes
+    # Retry transient unreachable state while openbao process initializes
     local seal_state retries=0
     while [ $retries -lt 6 ]; do
         seal_state=$(incluster_seal_state)
@@ -171,7 +173,7 @@ unseal_vault() {
         retries=$((retries+1))
     done
 
-    attempt_unseal_vault
+    attempt_unseal_openbao
     local exit_code=$?
     echo ""
     return "$exit_code"
@@ -235,7 +237,7 @@ main() {
     wait_for_api
     wait_for_node_ready
 
-    unseal_vault || had_warnings=true
+    unseal_openbao || had_warnings=true
 
     resume_postgis || had_warnings=true
     resume_scheduled_backups

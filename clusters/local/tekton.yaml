@@ -8,7 +8,7 @@ spec:
   dependsOn:
     - name: tekton-operator
     - name: cluster-config
-    - name: vault
+    - name: openbao
   sourceRef:
     kind: GitRepository
     name: flux-system
