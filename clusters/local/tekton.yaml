@@ -1,0 +1,21 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tekton
+  namespace: flux-system
+spec:
+  interval: 1h
+  dependsOn:
+    - name: tekton-operator
+    - name: cluster-config
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./infrastructure/tekton
+  prune: true
+  wait: true
+  timeout: 5m
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config

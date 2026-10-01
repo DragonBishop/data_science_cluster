@@ -1,0 +1,20 @@
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonConfig
+metadata:
+  name: config
+spec:
+  targetNamespace: tekton-pipelines
+  profile: basic
+  pruner:
+    disabled: false
+    schedule: "${TEKTON_PRUNER_SCHEDULE}"
+    keep: ${TEKTON_PRUNER_KEEP}
+    resources:
+      - taskrun
+      - pipelinerun
+  chain:
+    artifacts.taskrun.storage: tekton
+    artifacts.pipelinerun.storage: tekton
+    artifacts.oci.storage: tekton
+  result:
+    disabled: true
