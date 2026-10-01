@@ -22,7 +22,7 @@ group = "📚 Documentation"
 message = "^refactor"
 group = "♻️ Refactor"
 [[git.commit_parsers]]
-message = "^chore\\(release\\): prepare for"
+message = "^chore\\([^)]*\\): release "
 skip = true
 [[git.commit_parsers]]
 message = "^chore\\(deps.*\\)"
