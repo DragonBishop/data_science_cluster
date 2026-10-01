@@ -6,7 +6,7 @@ metadata:
 spec:
   interval: 1h
   dependsOn:
-    - name: vault-secrets-operator
+    - name: external-secrets
     - name: cluster-config
   sourceRef:
     kind: GitRepository

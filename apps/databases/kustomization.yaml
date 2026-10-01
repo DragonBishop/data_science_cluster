@@ -10,4 +10,4 @@ resources:
   - seaweedfs-release.yaml
   - seaweedfs-credentials.yaml
   - seaweedfs-networkpolicy.yaml
-  - vso-setup.yaml
+  - eso-setup.yaml
