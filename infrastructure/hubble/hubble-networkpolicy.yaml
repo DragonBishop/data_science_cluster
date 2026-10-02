@@ -1,0 +1,17 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: hubble-relay-egress
+  namespace: kube-system
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s-app: hubble-relay
+  egress:
+    # Hubble server in the Cilium agent
+    - toEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "4244"
+              protocol: TCP

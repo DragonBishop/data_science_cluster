@@ -1,39 +1,150 @@
+# Each namespace with its same-namespace rule; see "Network policy" in README.md
 apiVersion: v1
 kind: Namespace
 metadata:
   name: openbao
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: openbao
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: external-secrets
 ---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: external-secrets
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
+---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: cnpg-system
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: cnpg-system
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: databases
 ---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: databases
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
+---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: cert-manager
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: cert-manager
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: gateway
 ---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: gateway
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
+---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: tekton-operator
 ---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: tekton-operator
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
+---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: tekton-pipelines
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: tekton-pipelines
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: kube-system
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: flux-system
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
