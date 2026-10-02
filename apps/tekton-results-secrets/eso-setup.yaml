@@ -1,0 +1,6 @@
+# ServiceAccount ESO presents to OpenBao's Kubernetes auth for Tekton Results
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tekton-results-openbao-auth
+  namespace: tekton-pipelines
