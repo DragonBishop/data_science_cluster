@@ -58,6 +58,11 @@ spec:
         - CREATE ROLE app_readwrite NOLOGIN
         - GRANT pg_read_all_data, pg_write_all_data TO app_readwrite
 
+  managed:
+    roles:
+      - name: tekton_readwrite
+        login: false
+
   storage:
     size: ${POSTGIS_STORAGE_SIZE}
     storageClass: ${POSTGIS_STORAGE_CLASS}

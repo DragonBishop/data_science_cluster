@@ -1,0 +1,10 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: tekton-results
+  namespace: databases
+spec:
+  name: ${TEKTON_RESULTS_DB_NAME}
+  owner: tekton_readwrite
+  cluster:
+    name: postgis-cluster
