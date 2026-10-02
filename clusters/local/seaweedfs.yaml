@@ -1,21 +1,19 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: databases
+  name: seaweedfs
   namespace: flux-system
 spec:
   interval: 1h
   dependsOn:
-    - name: barman-cloud
-    - name: seaweedfs
-    - name: gateway
     - name: databases-secrets
     - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./apps/databases
+  path: ./apps/seaweedfs
   prune: true
+  # Ready only once the HelmRelease's post-install hook has created the backup bucket
   wait: true
   timeout: 5m
   postBuild:

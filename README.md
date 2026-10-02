@@ -360,20 +360,23 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── openbao/
 │       └── opentofu/
 ├── apps/
-│   ├── databases/                       # PostGIS cluster + dependencies, one Flux Kustomization
+│   ├── databases/                       # PostGIS cluster, one Flux Kustomization
+│   │   ├── kustomization.yaml
+│   │   ├── postgis-cluster.yaml
+│   │   ├── postgis-database.yaml
+│   │   ├── postgis-localhost.yaml
+│   │   ├── postgis-networkpolicy.yaml
+│   │   ├── postgis-tcproute.yaml
+│   │   └── postgis-tls.yaml
+│   ├── databases-secrets/               # ESO SecretStore + ExternalSecrets, applied before databases
+│   │   ├── eso-setup.yaml
+│   │   ├── kustomization.yaml
+│   │   ├── postgis-credentials.yaml
+│   │   └── seaweedfs-credentials.yaml
+│   └── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases
 │       ├── kustomization.yaml
-│       ├── postgis-cluster.yaml
-│       ├── postgis-database.yaml
-│       ├── postgis-localhost.yaml
-│       ├── postgis-networkpolicy.yaml
-│       ├── postgis-tcproute.yaml
-│       ├── postgis-tls.yaml
-│   │   └── seaweedfs-release.yaml
-│   └── databases-secrets/               # ESO SecretStore + ExternalSecrets, applied before databases
-│       ├── eso-setup.yaml
-│       ├── kustomization.yaml
-│       ├── postgis-credentials.yaml
-│       └── seaweedfs-credentials.yaml
+│       ├── seaweedfs-release.yaml
+│       └── seaweedfs-tls.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
 │       ├── barman-cloud.yaml            # Kustomization → infrastructure/barman-cloud/
@@ -395,6 +398,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── hubble.yaml                  # Kustomization → infrastructure/hubble/
 │       ├── namespaces.yaml              # Kustomization → infrastructure/namespaces/
 │       ├── openbao.yaml                 # Kustomization → infrastructure/openbao/
+│       ├── seaweedfs.yaml               # Kustomization → apps/seaweedfs/
 │       ├── tekton-operator.yaml         # Kustomization → infrastructure/tekton-operator/
 │       └── tekton.yaml                  # Kustomization → infrastructure/tekton/
 ├── infrastructure/                      # Cluster-wide platform components
@@ -506,7 +510,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`playbooks/data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `openbao` → `opentofu`.
   * **`requirements.yml`**: Ansible Galaxy collection dependencies (`kubernetes.core`, `cloud.terraform`, `containers.podman`).
   * **`roles/`**: Reusable Ansible roles for configuring k3s systemd service, Gateway API CRDs & Cilium Helm release, GitHub Flux bootstrap, OpenBao initialization & GPG unseal automation, and OpenTofu state application.
-* **`apps/databases/`** - The PostGIS cluster and everything it depends on, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
+* **`apps/databases/`** - The PostGIS cluster and its networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
   * **`postgis-cluster.yaml`**: The CNPG `Cluster`, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
   * **`postgis-database.yaml`**: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
@@ -514,11 +518,13 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`postgis-networkpolicy.yaml`**: Accepts the CNPG operator's status checks and OpenBao's role management.
   * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
-  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created at install.
 * **`apps/databases-secrets/`** - The ESO objects that produce the `databases` Secrets, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after every Secret exists.
   * **`eso-setup.yaml`**: The `postgis-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
   * **`postgis-credentials.yaml`**: `ExternalSecret`s and the `VaultDynamicSecret` generator for static and dynamic PostGIS credentials.
   * **`seaweedfs-credentials.yaml`**: `ExternalSecret` syncing S3 credentials from `secret/seaweedfs`.
+* **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`) so `databases` is applied only after the `cnpg-backups` bucket exists.
+  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created by the chart's post-install hook.
+  * **`seaweedfs-tls.yaml`**: cert-manager `Certificate` requesting the SeaweedFS S3 server certificate from `openbao-pki-issuer`.
 * **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/`/`apps/` below.
   * **`barman-cloud.yaml`**: Kustomization → `infrastructure/barman-cloud/`
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
@@ -536,6 +542,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`hubble.yaml`**: Kustomization → `infrastructure/hubble/`
   * **`namespaces.yaml`**: Kustomization → `infrastructure/namespaces/`
   * **`openbao.yaml`**: Kustomization → `infrastructure/openbao/`
+  * **`seaweedfs.yaml`**: Kustomization → `apps/seaweedfs/`
   * **`tekton-operator.yaml`**: Kustomization → `infrastructure/tekton-operator/`
   * **`tekton.yaml`**: Kustomization → `infrastructure/tekton/`
 * **`infrastructure/`** - Cluster-wide platform components, listed alphabetically below:

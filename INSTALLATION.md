@@ -347,9 +347,12 @@ flowchart TD
     gw --> hubble["hubble"]
 
     %% Applications
+    openbao --> dbsecrets["databases-secrets"]
+    eso --> dbsecrets
+    dbsecrets --> seaweedfs["seaweedfs"]
     barman --> db["databases"]
-    openbao --> db
-    eso --> db
+    seaweedfs --> db
+    dbsecrets --> db
     gw --> db
 ```
 
@@ -359,7 +362,9 @@ flowchart TD
 * `external-secrets` and `gateway` depend on `openbao` (for secrets sync and PKI).
 * `cnpg-operator` depends on `external-secrets`, and `barman-cloud` depends on `cnpg-operator`.
 * `hubble` depends on `gateway`.
-* `databases` depends on `barman-cloud`, `gateway`, `openbao`, and `external-secrets` (whose webhook must admit its `ExternalSecret`s).
+* `databases-secrets` depends on `openbao` and `external-secrets` (whose webhook must admit its `ExternalSecret`s).
+* `seaweedfs` depends on `databases-secrets` (for `seaweedfs-credentials`) and is Ready only after its install hook creates the `cnpg-backups` bucket.
+* `databases` depends on `barman-cloud`, `seaweedfs`, `gateway`, and `databases-secrets`, so the PostGIS cluster starts with its backup bucket already in place.
 
 ---
 
