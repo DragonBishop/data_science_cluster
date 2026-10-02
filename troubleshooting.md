@@ -274,3 +274,22 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 > [!CAUTION]
 > A mismatch between the Secret's `ACCESS_KEY_ID`/`ACCESS_SECRET_KEY` fields and its `config` field produces no error until an archive is actually attempted — a "healthy" cluster can still be silently failing every backup.
+
+* **`TektonResult` never becomes Ready and no Results pods exist**
+  * **What's happening:** The operator holds Results back until `tekton-results-postgres` exists in `tekton-pipelines`.
+  * **How to fix it:** `flux get kustomization tekton-results-secrets` and `kubectl describe externalsecret tekton-results-postgres -n tekton-pipelines` report what is missing, usually OpenBao auth or the `tekton-results-app-role` role not yet applied by `just bootstrap --tags opentofu`.
+
+* **A Results pod is stuck in `Init` or `CreateContainerConfigError`**
+  * **What's happening:** The `delete-db-credentials` init container deletes `tekton-results-postgres` so ESO mints a new login, and the kubelet starts the main container once the Secret is back.
+  * **How to fix it:** `kubectl logs <pod> -c delete-db-credentials -n tekton-pipelines` shows RBAC errors from `credential-renewal-rbac.yaml`. If the init container succeeded, `kubectl describe externalsecret tekton-results-postgres -n tekton-pipelines` reports why ESO could not re-create the Secret.
+
+* **The Results API crash-loops on its database connection**
+  * **What's happening:** The API connects to `postgis-cluster-rw` with `sslmode=verify-full`, trusting `/etc/tls/ca.crt` from `tekton-results-tls`, as a login that must still be within its 32d TTL.
+  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton-pipelines` names the failure. For a certificate error, confirm `tekton-results-tls` was issued by `openbao-pki-issuer` (`kubectl describe certificate tekton-results-tls -n tekton-pipelines`). For a timeout, check that `postgis-ingress` still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton-pipelines` restarts it with a new login.
+
+* **PipelineRuns finish but no records appear**
+  * **What's happening:** The API serves the certificate it loaded at startup, so an API pod running past `tekton-results-tls` expiry fails the watcher's TLS handshake.
+  * **How to fix it:** `kubectl logs deploy/tekton-results-watcher -n tekton-pipelines` shows the TLS error. `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton-pipelines` loads the renewed certificate; a nightly shutdown already does this.
+
+> [!NOTE]
+> Delete Results pods rather than running `kubectl rollout restart`: the operator reverts the template change the restart makes, which causes a second rollout.
