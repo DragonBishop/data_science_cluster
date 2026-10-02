@@ -8,6 +8,3 @@ resources:
   - postgis-database.yaml
   - postgis-networkpolicy.yaml
   - seaweedfs-release.yaml
-  - seaweedfs-credentials.yaml
-  - seaweedfs-networkpolicy.yaml
-  - vso-setup.yaml

@@ -1,40 +1,6 @@
-# CloudNativePG PostGIS cluster configuration, Vault credentials,
-# backup storage target, and localhost database bridge.
+# CloudNativePG PostGIS cluster configuration, backup storage target,
+# and localhost database bridge.
 
-apiVersion: secrets.hashicorp.com/v1beta1
-kind: VaultStaticSecret
-metadata:
-  name: postgis-vault-secret
-  namespace: databases
-spec:
-  type: kv-v2
-  mount: secret
-  path: postgis
-  destination:
-    name: postgis-app-credentials
-    create: true
-    type: kubernetes.io/basic-auth
-    labels:
-      cnpg.io/reload: "true"
-  refreshAfter: ${VSO_REFRESH_AFTER}
-  vaultAuthRef: vault-auth
----
-# Dynamic database credentials leased from Vault
-apiVersion: secrets.hashicorp.com/v1beta1
-kind: VaultDynamicSecret
-metadata:
-  name: postgis-app-dynamic-secret
-  namespace: databases
-spec:
-  vaultAuthRef: vault-auth
-  mount: database
-  path: creds/postgis-app-role
-  destination:
-    name: postgis-app-dynamic-credentials
-    create: true
-    labels:
-      cnpg.io/reload: "true"
----
 # S3 object store for WAL archiving and base backups (SeaweedFS)
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
@@ -96,7 +62,7 @@ spec:
     size: ${POSTGIS_STORAGE_SIZE}
     storageClass: ${POSTGIS_STORAGE_CLASS}
 
-  # TLS server certificate and CA issued via cert-manager and Vault PKI
+  # TLS server certificate and CA issued via cert-manager and OpenBao PKI
   certificates:
     serverTLSSecret: postgis-server-cert
     serverCASecret: postgis-server-cert

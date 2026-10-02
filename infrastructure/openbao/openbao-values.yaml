@@ -1,0 +1,44 @@
+# Helm values for in-cluster OpenBao
+
+global:
+  tlsDisable: false
+
+injector:
+  enabled: false
+
+server:
+  image:
+    repository: "openbao/openbao"
+    tag: "${OPENBAO_IMAGE_TAG}"
+  resources:
+    requests:
+      cpu: ${OPENBAO_CPU_REQUEST}
+      memory: ${OPENBAO_MEM_REQUEST}
+    limits:
+      memory: ${OPENBAO_MEM_LIMIT}
+  extraEnvironmentVars:
+    BAO_CACERT: /openbao/userconfig/openbao-server-cert/ca.crt
+
+  extraVolumes:
+    - type: secret
+      name: openbao-server-cert
+
+  dataStorage:
+    size: ${OPENBAO_DATA_STORAGE_SIZE}
+
+  standalone:
+    enabled: true
+    config: |
+      disable_mlock = true
+      ui = true
+
+      listener "tcp" {
+        address          = "[::]:8200"
+        cluster_address  = "[::]:8201"
+        tls_cert_file    = "/openbao/userconfig/openbao-server-cert/tls.crt"
+        tls_key_file     = "/openbao/userconfig/openbao-server-cert/tls.key"
+      }
+
+      storage "pebbledb" {
+        path = "/openbao/data/pebbledb"
+      }

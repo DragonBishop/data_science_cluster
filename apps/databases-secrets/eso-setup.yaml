@@ -1,0 +1,33 @@
+# External Secrets Operator (ESO) configuration for the databases namespace
+
+# ServiceAccount ESO presents to OpenBao's Kubernetes auth
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgis-openbao-auth
+  namespace: databases
+---
+# Connection and Kubernetes auth to in-cluster OpenBao (KV v2 at secret/)
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao
+  namespace: databases
+spec:
+  provider:
+    vault:
+      server: https://openbao.openbao.svc.cluster.local:8200
+      path: secret
+      version: v2
+      caProvider:
+        type: Secret
+        name: openbao-ca-bundle
+        key: ca.crt
+      auth:
+        kubernetes:
+          mountPath: kubernetes
+          role: postgis-role
+          serviceAccountRef:
+            name: postgis-openbao-auth
+            audiences:
+              - openbao

@@ -24,22 +24,19 @@ uninstall_k3s() {
     sudo "$uninstaller"
 }
 
-unmount_bpf() {
-    local mounts
-    mounts=$(mount | grep /sys/fs/bpf | awk '{print $3}') || mounts=""
-    [ -n "$mounts" ] || return 0
-
-    echo "🔻 Unmounting leftover BPF filesystems..."
-    local m
-    for m in $mounts; do
-        sudo umount "$m" || echo "   ⚠️  Failed to unmount $m"
-    done
+clear_cilium_host_files() {
+    echo "🧹 Clearing Cilium files that persist across reboots..."
+    sudo rm -f /etc/cni/net.d/05-cilium.conflist
+    # Restore CNI configs Cilium set aside, as its own post-uninstall-cleanup does
+    sudo find /etc/cni/net.d -name '*.cilium_bak' -exec sh -c 'mv "$1" "${1%.cilium_bak}"' _ {} \;
+    sudo rm -f /opt/cni/bin/cilium-cni
+    sudo rm -f /etc/sysctl.d/99-zzz-override_cilium.conf
+    sudo rm -rf /var/lib/cilium
 }
 
-clear_vault_cache() {
-    echo "🧹 Clearing local Vault cache (~/.vault-keys.gpg, ~/.vault-certs)..."
-    rm -f "$HOME/.vault-keys.gpg"
-    rm -rf "$HOME/.vault-certs"
+clear_openbao_cache() {
+    echo "🧹 Clearing local OpenBao keys and certs (.local/openbao)..."
+    rm -rf "$REPO_ROOT/.local/openbao"
 }
 
 clear_postgres_cache() {
@@ -53,22 +50,22 @@ clear_hubble_cache() {
 }
 
 clear_terraform_state() {
-    echo "🧹 Clearing orphaned terraform/vault state..."
-    rm -f "$REPO_ROOT/terraform/vault/terraform.tfstate" "$REPO_ROOT/terraform/vault/terraform.tfstate.backup"
-    rm -rf "$REPO_ROOT/terraform/vault/.terraform"
+    echo "🧹 Clearing orphaned terraform/openbao state..."
+    rm -f "$REPO_ROOT/terraform/openbao/terraform.tfstate" "$REPO_ROOT/terraform/openbao/terraform.tfstate.backup"
+    rm -rf "$REPO_ROOT/terraform/openbao/.terraform"
 }
 
 report_summary() {
     echo "✅ Cluster uninstalled and local state cleared."
-    echo "   Run 'just bootstrap' to provision a fresh cluster."
+    echo "⚠️  Reboot before 'just bootstrap': Cilium's BPF programs stay attached in the kernel until then."
 }
 
 main() {
     acquire_sudo
     uninstall_k3s
-    unmount_bpf
+    clear_cilium_host_files
 
-    clear_vault_cache
+    clear_openbao_cache
     clear_postgres_cache
     clear_hubble_cache
     clear_terraform_state

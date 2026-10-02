@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - gateway-tls.yaml
   - gateway.yaml
+  - gateway-networkpolicy.yaml

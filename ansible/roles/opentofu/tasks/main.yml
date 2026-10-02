@@ -9,7 +9,7 @@
   ansible.builtin.file:
     path: "{{ opentofu_secrets_wo_version_file }}"
     state: absent
-  when: opentofu_rotate_vault_secrets | bool
+  when: opentofu_rotate_openbao_secrets | bool
 
 - name: Check whether a secrets write-only version is already recorded
   ansible.builtin.stat:
@@ -36,21 +36,21 @@
     opentofu_s3_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null', length=40, chars=['hexdigits']) }}"
   no_log: true
 
-# vault_root_token is shared with the vault role's default, not opentofu-local.
-- name: Resolve in-cluster Vault root token  # noqa: var-naming[no-role-prefix]
+# openbao_root_token is shared with the openbao role's default, not opentofu-local.
+- name: Resolve in-cluster OpenBao root token  # noqa: var-naming[no-role-prefix]
   ansible.builtin.set_fact:
-    vault_root_token: "{{ vault_root_token | default(lookup('ansible.builtin.env', 'VAULT_ROOT_TOKEN')) }}"
+    openbao_root_token: "{{ openbao_root_token | default(lookup('ansible.builtin.env', 'OPENBAO_ROOT_TOKEN')) }}"
   no_log: true
 
-- name: Verify in-cluster Vault root token is available
+- name: Verify in-cluster OpenBao root token is available
   ansible.builtin.assert:
     that:
-      - vault_root_token | length > 0
+      - openbao_root_token | length > 0
     fail_msg: >-
-      No Vault root token available. Either let the vault role's first-time init
+      No OpenBao root token available. Either let the openbao role's first-time init
       run in this same invocation, or supply an existing token via
-      VAULT_ROOT_TOKEN=<token> ansible-playbook ... (the token printed at the
-      end of the run that first initialized Vault).
+      OPENBAO_ROOT_TOKEN=<token> ansible-playbook ... (the token printed at the
+      end of the run that first initialized OpenBao).
 
 - name: Verify the Terraform state encryption passphrase and Postgres superuser password are available
   ansible.builtin.assert:
@@ -61,70 +61,44 @@
       Missing the Terraform state encryption passphrase or Postgres superuser
       password. Answer both prompts at the start of the play.
 
-- name: Fetch in-cluster Vault CA certificate
+- name: Fetch in-cluster OpenBao CA certificate
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Secret
-    name: vault-server-cert
-    namespace: "{{ vault_namespace }}"
-  register: opentofu_vault_cert_secret
-  failed_when: opentofu_vault_cert_secret.resources | default([]) | length == 0
+    name: openbao-server-cert
+    namespace: "{{ openbao_namespace }}"
+  register: opentofu_openbao_cert_secret
+  failed_when: opentofu_openbao_cert_secret.resources | default([]) | length == 0
 
-- name: Ensure local Vault cert directory exists
+- name: Ensure local OpenBao cert directory exists
   ansible.builtin.file:
-    path: "{{ ansible_facts.env.HOME }}/.vault-certs"
+    path: "{{ openbao_local_dir }}/certs"
     state: directory
     mode: "0700"
 
-- name: Write in-cluster Vault CA certificate locally
+- name: Write in-cluster OpenBao CA certificate locally
   ansible.builtin.copy:
-    dest: "{{ ansible_facts.env.HOME }}/.vault-certs/vault-internal-ca.crt"
-    content: "{{ opentofu_vault_cert_secret.resources[0].data['ca.crt'] | b64decode }}"
+    dest: "{{ openbao_local_dir }}/certs/openbao-internal-ca.crt"
+    content: "{{ opentofu_openbao_cert_secret.resources[0].data['ca.crt'] | b64decode }}"
     mode: "0600"
 
-- name: Stop any existing Vault port-forward
-  ansible.builtin.command: pkill -f "kubectl port-forward -n {{ vault_namespace }} {{ vault_pod }} 8210:8200"
-  register: opentofu_vault_pf_kill
-  failed_when: false
-  changed_when: opentofu_vault_pf_kill.rc == 0
-
-- name: Start local port-forward to in-cluster Vault
-  ansible.builtin.command: kubectl port-forward -n {{ vault_namespace }} {{ vault_pod }} 8210:8200
-  async: 3600
-  poll: 0
-  register: opentofu_vault_pf_job
-  changed_when: true
-  environment:
-    KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
-
-- name: Wait for local Vault port-forward to accept connections
+- name: Wait for OpenBao on its local redirect
   ansible.builtin.wait_for:
     host: 127.0.0.1
     port: 8210
-    timeout: 10
-  register: opentofu_vault_pf_wait
-  ignore_errors: true
-
-- name: Check port-forward job status if it never came up
-  ansible.builtin.async_status:
-    jid: "{{ opentofu_vault_pf_job.ansible_job_id }}"
-  register: opentofu_vault_pf_job_status
-  when: opentofu_vault_pf_wait is failed
-
-- name: Fail with diagnostic if port-forward never came up
-  ansible.builtin.fail:
+    timeout: 30
     msg: >-
-      Vault port-forward to 127.0.0.1:8210 did not come up: {{ opentofu_vault_pf_job_status.stderr | default('no output captured') }}
-  when: opentofu_vault_pf_wait is failed
+      OpenBao did not answer on 127.0.0.1:8210. Check the openbao-localhost
+      CiliumLocalRedirectPolicy and that openbao-0 is Running.
 
-- name: Apply terraform/vault
+- name: Apply terraform/openbao
   cloud.terraform.terraform:
-    project_path: "{{ repo_root }}/terraform/vault"
+    project_path: "{{ repo_root }}/terraform/openbao"
     binary_path: "{{ opentofu_binary }}"
     state: present
     force_init: true
   environment:
-    VAULT_TOKEN: "{{ vault_root_token }}"
+    TF_VAR_openbao_token: "{{ openbao_root_token }}"
     TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_passphrase }}"
     TF_VAR_postgres_superuser_password: "{{ opentofu_postgres_superuser_password }}"
     TF_VAR_s3_access_key: "{{ opentofu_s3_access_key }}"
@@ -133,10 +107,10 @@
   no_log: true
 
 # Sanity checks.
-# - name: Log in to in-cluster Vault CLI
+# - name: Log in to in-cluster OpenBao CLI
 #   ansible.builtin.command:
-#     cmd: kubectl exec -i -n {{ vault_namespace }} {{ vault_pod }} -- vault login -no-print -
-#     stdin: "{{ vault_root_token }}\n"
+#     cmd: kubectl exec -i -n {{ openbao_namespace }} {{ openbao_pod }} -- bao login -no-print -
+#     stdin: "{{ openbao_root_token }}\n"
 #   environment:
 #     KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
 #   no_log: true
@@ -144,9 +118,9 @@
 #
 # - name: Verify Postgres secret is readable
 #   kubernetes.core.k8s_exec:
-#     namespace: "{{ vault_namespace }}"
-#     pod: "{{ vault_pod }}"
-#     command: vault kv get secret/postgis
+#     namespace: "{{ openbao_namespace }}"
+#     pod: "{{ openbao_pod }}"
+#     command: bao kv get secret/postgis
 #   register: opentofu_verify_postgis
 #   changed_when: false
 #   failed_when: opentofu_verify_postgis.rc != 0
@@ -154,9 +128,9 @@
 #
 # - name: Verify SeaweedFS secret is readable
 #   kubernetes.core.k8s_exec:
-#     namespace: "{{ vault_namespace }}"
-#     pod: "{{ vault_pod }}"
-#     command: vault kv get secret/seaweedfs
+#     namespace: "{{ openbao_namespace }}"
+#     pod: "{{ openbao_pod }}"
+#     command: bao kv get secret/seaweedfs
 #   register: opentofu_verify_seaweedfs
 #   changed_when: false
 #   failed_when: opentofu_verify_seaweedfs.rc != 0
@@ -164,18 +138,18 @@
 #
 # - name: Verify internal-server PKI role
 #   kubernetes.core.k8s_exec:
-#     namespace: "{{ vault_namespace }}"
-#     pod: "{{ vault_pod }}"
-#     command: vault read pki_int/roles/internal-server
+#     namespace: "{{ openbao_namespace }}"
+#     pod: "{{ openbao_pod }}"
+#     command: bao read pki_int/roles/internal-server
 #   register: opentofu_verify_pki_role
 #   changed_when: false
 #   failed_when: opentofu_verify_pki_role.rc != 0
 #
 # - name: Verify cert-manager Kubernetes auth role
 #   kubernetes.core.k8s_exec:
-#     namespace: "{{ vault_namespace }}"
-#     pod: "{{ vault_pod }}"
-#     command: vault read auth/kubernetes/role/cert-manager-pki-role
+#     namespace: "{{ openbao_namespace }}"
+#     pod: "{{ openbao_pod }}"
+#     command: bao read auth/kubernetes/role/cert-manager-pki-role
 #   register: opentofu_verify_cert_manager_role
 #   changed_when: false
 #   failed_when: opentofu_verify_cert_manager_role.rc != 0

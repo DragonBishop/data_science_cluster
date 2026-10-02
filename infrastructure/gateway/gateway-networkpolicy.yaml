@@ -1,0 +1,14 @@
+# Gateway clients: the LAN and the node
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: gateway-clients
+spec:
+  endpointSelector:
+    matchExpressions:
+      - key: reserved:ingress
+        operator: Exists
+  ingress:
+    - fromCIDR:
+        - "${LAN_CIDR}"
+        - 127.0.0.1/32

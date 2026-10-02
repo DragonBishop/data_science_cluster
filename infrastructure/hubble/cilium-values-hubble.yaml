@@ -1,4 +1,4 @@
-# Cilium Helm values for Hubble Relay and UI
+# Cilium Helm values for Hubble Relay
 hubble:
   relay:
     resources:
@@ -12,19 +12,7 @@ hubble:
         enabled: true
         mtls: true
   ui:
-    frontend:
-      resources:
-        requests:
-          memory: ${HUBBLE_UI_FRONTEND_MEM_REQUEST}
-        limits:
-          memory: ${HUBBLE_UI_FRONTEND_MEM_LIMIT}
-    backend:
-      resources:
-        requests:
-          memory: ${HUBBLE_UI_BACKEND_MEM_REQUEST}
-        limits:
-          memory: ${HUBBLE_UI_BACKEND_MEM_LIMIT}
-    enabled: true
+    enabled: false
   tls:
     auto:
       enabled: true
@@ -33,4 +21,4 @@ hubble:
       certManagerIssuerRef:
         group: cert-manager.io
         kind: ClusterIssuer
-        name: vault-pki-issuer
+        name: openbao-pki-issuer
