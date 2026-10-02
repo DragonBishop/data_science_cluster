@@ -4,3 +4,4 @@ resources:
   - tekton-results-tls.yaml
   - eso-setup.yaml
   - tekton-results-credentials.yaml
+  - credential-renewal-rbac.yaml
