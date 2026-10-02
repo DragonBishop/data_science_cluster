@@ -20,44 +20,44 @@ spec:
     artifacts.pipelinerun.signer: kms
     artifacts.oci.signer: kms
     signers.kms.kmsref: hashivault://tekton-chains
-    signers.kms.auth.address: https://vault.vault.svc.cluster.local:8200
+    signers.kms.auth.address: https://openbao.openbao.svc.cluster.local:8200
     signers.kms.auth.oidc.path: kubernetes
     signers.kms.auth.oidc.role: tekton-chains-role
     options:
       configMaps:
         chains-config:
           data:
-            signers.kms.auth.oidc.token-path: /var/run/secrets/vault/token
+            signers.kms.auth.oidc.token-path: /var/run/secrets/openbao/token
       deployments:
         tekton-chains-controller:
           spec:
             template:
               spec:
                 volumes:
-                  - name: vault-ca
+                  - name: openbao-ca
                     secret:
-                      secretName: vault-ca-bundle
+                      secretName: openbao-ca-bundle
                       items:
                         - key: ca.crt
                           path: ca.crt
-                  - name: vault-token
+                  - name: openbao-token
                     projected:
                       sources:
                         - serviceAccountToken:
-                            audience: vault
+                            audience: openbao
                             expirationSeconds: 3600
                             path: token
                 containers:
                   - name: tekton-chains-controller
                     env:
                       - name: VAULT_CACERT
-                        value: /etc/vault-ca/ca.crt
+                        value: /etc/openbao-ca/ca.crt
                     volumeMounts:
-                      - name: vault-ca
-                        mountPath: /etc/vault-ca
+                      - name: openbao-ca
+                        mountPath: /etc/openbao-ca
                         readOnly: true
-                      - name: vault-token
-                        mountPath: /var/run/secrets/vault
+                      - name: openbao-token
+                        mountPath: /var/run/secrets/openbao
                         readOnly: true
   result:
     disabled: true

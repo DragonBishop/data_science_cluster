@@ -25,8 +25,14 @@ spec:
   values:
     master:
       ipBind: "0.0.0.0"
+      data:
+        type: "hostPath"
+        hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
     filer:
       ipBind: "0.0.0.0"
+      data:
+        type: "hostPath"
+        hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
     volume:
       dataDirs:
         - name: data1
@@ -45,7 +51,7 @@ spec:
         httpGet:
           scheme: HTTPS
       # S3 TLS certificates provisioned via cert-manager seaweedfs-s3-tls Certificate
-      # backed by vault-pki-issuer.
+      # backed by openbao-pki-issuer.
       extraArgs:
         - "-cert.file=/var/run/secrets/seaweedfs.io/tls.crt"
         - "-key.file=/var/run/secrets/seaweedfs.io/tls.key"

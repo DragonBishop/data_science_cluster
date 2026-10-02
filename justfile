@@ -39,7 +39,7 @@ status:
 
   echo ""
   echo "== cert-manager =="
-  kubectl get clusterissuer vault-pki-issuer
+  kubectl get clusterissuer openbao-pki-issuer
 
   echo ""
   echo "== Database =="
@@ -58,8 +58,7 @@ status:
 
   echo ""
   echo "== Hubble =="
-  kubectl get pods -n kube-system -l 'k8s-app in (hubble-relay,hubble-ui)'
-  echo -n "HTTPRoute: "; kubectl get httproute -n kube-system hubble-ui -o jsonpath='{.status.parents[*].conditions[*].message}'; echo
+  kubectl get pods -n kube-system -l k8s-app=hubble-relay
 
 # Fuzzy-select a pod (all namespaces) and describe it
 fuzzypods:
@@ -87,58 +86,29 @@ db-connect HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.
 
 # --- Gateway ---------------------------------------------------------------
 
-# Verify Gateway routing (HOST defaults to the live Gateway IP, DOMAIN defaults to hubble.internal)
-gateway-check HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null` DOMAIN="hubble.internal":
+# Verify TLS and routing for a Gateway hostname (HOST defaults to the live Gateway IP)
+gateway-check DOMAIN HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null`:
   #!/usr/bin/env bash
   set -uo pipefail
-  HOST="{{HOST}}"
-  if [ -z "$HOST" ]; then
-    HOST=$(kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || true)
-  fi
-  if [ -z "$HOST" ]; then
-    echo "Error: Could not determine Gateway IP. Pass it explicitly: just gateway-check <HOST>" >&2
+  if [ -z "{{HOST}}" ]; then
+    echo "Error: Could not determine the Gateway IP. Pass it explicitly: just gateway-check {{DOMAIN}} <HOST>" >&2
     exit 1
   fi
-  curl -v --resolve "{{DOMAIN}}:443:$HOST" \
+  curl -v --resolve "{{DOMAIN}}:443:{{HOST}}" \
     --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
     "https://{{DOMAIN}}/"
 
 # --- Observability (Hubble) -----------------------------------------------
 
-# Open Hubble web UI
-hubble-ui:
-  #!/usr/bin/env bash
-  set -uo pipefail
-  mkdir -p ~/.hubble
-  if ! (exec 3<>/dev/tcp/127.0.0.1/12000) 2>/dev/null; then
-    nohup kubectl port-forward -n kube-system svc/hubble-ui 12000:80 >~/.hubble/ui-portforward.log 2>&1 &
-    disown
-    for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/12000) 2>/dev/null && break; sleep 0.1; done
-  else
-    exec 3<&- 3>&-
-  fi
-  echo "Hubble UI: http://localhost:12000"
-  command -v xdg-open >/dev/null 2>&1 && xdg-open http://localhost:12000 >/dev/null 2>&1 &
-  disown
-
-# Run Hubble CLI command against hubble-relay
+# Run Hubble CLI command against hubble-relay (localhost:4245 through a local redirect)
 hubble *ARGS='status':
   #!/usr/bin/env bash
   set -uo pipefail
   mkdir -p ~/.hubble/tls
-  [ -f ~/.hubble/tls/ca.crt ]  || kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath='{.data.ca\.crt}'  | base64 -d > ~/.hubble/tls/ca.crt
-  [ -f ~/.hubble/tls/tls.crt ] || kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath='{.data.tls\.crt}' | base64 -d > ~/.hubble/tls/tls.crt
-  [ -f ~/.hubble/tls/tls.key ] || kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath='{.data.tls\.key}' | base64 -d > ~/.hubble/tls/tls.key
-
-  if ! (exec 3<>/dev/tcp/127.0.0.1/4245) 2>/dev/null; then
-    logf=$(mktemp)
-    kubectl port-forward -n kube-system svc/hubble-relay 4245:443 >"$logf" 2>&1 &
-    pf_pid=$!
-    trap 'ec=$?; kill "$pf_pid" 2>/dev/null; rm -f "$logf"; exit $ec' EXIT
-    for _ in $(seq 1 50); do grep -q "Forwarding from" "$logf" && break; sleep 0.1; done
-  else
-    exec 3<&- 3>&-
-  fi
+  for file in ca.crt tls.crt tls.key; do
+    kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath="{.data.${file//./\\.}}" | base64 -d > ~/.hubble/tls/$file
+  done
+  chmod 600 ~/.hubble/tls/*
 
   hubble --server localhost:4245 --tls \
     --tls-server-name relay.hubble-relay.cilium.io \
@@ -147,29 +117,21 @@ hubble *ARGS='status':
     --tls-client-key-file ~/.hubble/tls/tls.key \
     {{ARGS}} 2> >(grep -v --line-buffered "Hubble CLI version is lower than Hubble Relay" >&2)
 
-# Port-forward to hubble-relay on localhost:4245
-hubble-pf:
-  kubectl port-forward -n kube-system svc/hubble-relay 4245:443
+# --- OpenBao ---------------------------------------------------------------
 
-# --- Vault -----------------------------------------------------------------
+bao_env := "unset BAO_TOKEN"
 
-vault_env := "unset VAULT_TOKEN"
+# Open interactive shell in openbao-0 pod
+bao-shell:
+  kubectl exec -it openbao-0 -n openbao -- sh -c '{{bao_env}}; exec sh'
 
-# Open interactive shell in vault-0 pod
-vault-shell:
-  kubectl exec -it vault-0 -n vault -- sh -c '{{vault_env}}; exec sh'
-
-# Port-forward in-cluster Vault to localhost:8210 and fetch its CA
-vault-pf:
+# Export OpenBao's CA and print its local address
+bao-ca:
   #!/usr/bin/env bash
   set -euo pipefail
-  mkdir -p ~/.vault-certs
-  kubectl get secret vault-server-cert -n vault -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.vault-certs/vault-internal-ca.crt
-  pkill -f "kubectl port-forward -n vault vault-0 8210:8200" 2>/dev/null || true
-  nohup kubectl port-forward -n vault vault-0 8210:8200 >~/.vault-certs/pf.log 2>&1 &
-  disown
-  for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/8210) 2>/dev/null && break; sleep 0.1; done
-  echo "Vault (in-cluster): https://127.0.0.1:8210  (CA: ~/.vault-certs/vault-internal-ca.crt)"
+  mkdir -p .local/openbao/certs
+  kubectl get secret openbao-server-cert -n openbao -o jsonpath='{.data.ca\.crt}' | base64 -d > .local/openbao/certs/openbao-internal-ca.crt
+  echo "OpenBao API: https://127.0.0.1:8210  UI: https://127.0.0.1:8210/ui/  (CA: .local/openbao/certs/openbao-internal-ca.crt)"
 
 # --- Development -------------------------------------------------------
 

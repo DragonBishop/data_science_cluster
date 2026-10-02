@@ -1,15 +1,18 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: coredns-upstream-egress
+  name: coredns
   namespace: kube-system
 spec:
   endpointSelector:
     matchLabels:
       k8s-app: kube-dns
   ingress:
-    - fromEntities:
-        - cluster
+    # Every pod resolves through CoreDNS
+    - fromEndpoints:
+        - matchExpressions:
+            - key: k8s:io.kubernetes.pod.namespace
+              operator: Exists
       toPorts:
         - ports:
             - port: "53"
@@ -17,6 +20,7 @@ spec:
             - port: "53"
               protocol: TCP
   egress:
+    # Upstream resolvers
     - toEntities:
         - world
       toPorts:

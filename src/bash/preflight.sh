@@ -23,15 +23,75 @@ check_host_tooling() {
     [ "$has_errors" = false ]
 }
 
-check_database_client() {
-    if command -v psql >/dev/null 2>&1; then
-        echo "✅ psql"
-    else
-        echo "⚠️  psql not found (only needed later for 'just db-connect'). See INSTALLATION.md Requirements."
-        echo ""
+get_cluster_config_value() {
+    local key="$1"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    grep "^  $key:" "$script_dir/../../infrastructure/cluster-config/cluster-config.yaml" | head -n 1 | awk -F'"' '{print $2}'
+}
+
+get_minor_version() {
+    local version="${1#v}"
+    version="${version#*.}"
+    printf '%s\n' "${version%%.*}"
+}
+
+check_kubectl_tooling() {
+    echo "== kubectl and plugins =="
+    if ! command -v kubectl >/dev/null 2>&1; then
+        echo "❌ kubectl not found. See INSTALLATION.md Requirements."
         return 1
     fi
-    echo ""
+    echo "✅ kubectl"
+
+    if ! kubectl cnpg version >/dev/null 2>&1; then
+        echo "❌ kubectl cnpg plugin not found. See INSTALLATION.md Requirements."
+        return 1
+    fi
+    echo "✅ kubectl cnpg"
+}
+
+# kubectl supports one minor version of skew from the cluster
+check_kubectl_skew() {
+    local kubectl_version k3s_version minor_gap
+    kubectl_version=$(kubectl version --client 2>/dev/null | awk '/Client Version/ {print $3}')
+    k3s_version=$(get_cluster_config_value K3S_VERSION)
+    minor_gap=$(( $(get_minor_version "$kubectl_version") - $(get_minor_version "$k3s_version") ))
+
+    if [ "${minor_gap#-}" -gt 1 ]; then
+        echo "⚠️  kubectl $kubectl_version is more than one minor version from k3s $k3s_version"
+        return 1
+    fi
+    echo "✅ kubectl $kubectl_version is within one minor version of k3s $k3s_version"
+}
+
+# The cnpg plugin must match the operator, whose version is the chart's appVersion
+check_cnpg_plugin_version() {
+    local chart_version operator_version plugin_version
+    chart_version=$(get_cluster_config_value CNPG_VERSION)
+    operator_version=$(helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts \
+        --version "$chart_version" 2>/dev/null | awk '/^appVersion:/ {print $2}')
+    plugin_version=$(kubectl cnpg version 2>/dev/null | sed -n 's/.*Version:\([0-9.]*\).*/\1/p')
+
+    if [ -z "$operator_version" ]; then
+        echo "⚠️  Could not read the CNPG operator version for chart $chart_version (helm show chart failed)"
+        return 1
+    fi
+    if [ "$plugin_version" != "$operator_version" ]; then
+        echo "⚠️  kubectl cnpg ${plugin_version:-unknown} differs from the CNPG operator $operator_version (chart $chart_version)"
+        return 1
+    fi
+    echo "✅ kubectl cnpg $plugin_version matches the CNPG operator"
+}
+
+# Tools the bootstrap runs without; a recipe needs them later
+check_optional_tool() {
+    local bin="$1" recipe="$2"
+    if ! command -v "$bin" >/dev/null 2>&1; then
+        echo "⚠️  $bin not found (only needed later for '$recipe'). See INSTALLATION.md Requirements."
+        return 1
+    fi
+    echo "✅ $bin"
 }
 
 check_github_auth() {
@@ -66,20 +126,6 @@ detect_distro() {
     fi
 
     printf '%s %s\n' "$distro_family" "$distro_id"
-}
-
-get_cluster_pod_cidr() {
-    local script_dir
-    local config_file
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    config_file="$script_dir/../../infrastructure/cluster-config/cluster-config.yaml"
-
-    if [ -f "$config_file" ]; then
-        grep 'POD_CIDR:' "$config_file" | head -n 1 | awk -F'"' '{print $2}'
-        return 0
-    fi
-
-    echo "10.42.0.0/16"
 }
 
 check_debian_firewall() {
@@ -127,7 +173,7 @@ check_fedora_firewall() {
     zone=$(firewall-cmd --get-default-zone 2>/dev/null || echo "FedoraWorkstation")
     zone_info=$(firewall-cmd --zone="$zone" --list-all 2>/dev/null)
     trusted_info=$(firewall-cmd --zone=trusted --list-all 2>/dev/null)
-    pod_cidr=$(get_cluster_pod_cidr)
+    pod_cidr=$(get_cluster_config_value POD_CIDR)
 
     echo "$zone_info" | grep -q "forward: yes" || missing+=("forward: yes in zone '$zone'")
     echo "$zone_info" | grep -q "443/tcp" || missing+=("443/tcp port in zone '$zone'")
@@ -221,7 +267,16 @@ main() {
     local had_warnings=false
 
     check_host_tooling || had_errors=true
-    check_database_client || had_warnings=true
+    check_optional_tool psql "just db-connect" || had_warnings=true
+    check_optional_tool hubble "just hubble" || had_warnings=true
+    echo ""
+    if check_kubectl_tooling; then
+        check_kubectl_skew || had_warnings=true
+        check_cnpg_plugin_version || had_warnings=true
+    else
+        had_errors=true
+    fi
+    echo ""
     check_github_auth || had_errors=true
 
     check_host_firewall || had_warnings=true

@@ -1,25 +1,17 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: vault-ingress-egress
-  namespace: vault
+  name: openbao-ingress
+  namespace: openbao
 spec:
   endpointSelector:
     matchLabels:
-      app.kubernetes.io/name: vault
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: databases
-            cnpg.io/cluster: postgis-cluster
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
+      app.kubernetes.io/name: openbao
   ingress:
     - fromEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: vso-system
+            k8s:io.kubernetes.pod.namespace: external-secrets
+            app.kubernetes.io/name: external-secrets
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: cert-manager
         - matchLabels:

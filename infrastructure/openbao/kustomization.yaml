@@ -1,13 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - hubble-networkpolicy.yaml
-  - hubble-localhost.yaml
+  - openbao-tls.yaml
+  - openbao-release.yaml
+  - openbao-networkpolicy.yaml
+  - openbao-localhost.yaml
 configMapGenerator:
-  - name: cilium-values-hubble
-    namespace: kube-system
+  - name: openbao-values
+    namespace: openbao
     files:
-      - values.yaml=cilium-values-hubble.yaml
+      - values.yaml=openbao-values.yaml
     options:
       disableNameSuffixHash: true
       labels:

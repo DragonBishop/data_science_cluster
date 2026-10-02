@@ -1,0 +1,21 @@
+# CiliumLocalRedirectPolicy exposing the OpenBao API and UI on the node's loopback interface at 8210
+apiVersion: cilium.io/v2
+kind: CiliumLocalRedirectPolicy
+metadata:
+  name: openbao-localhost
+  namespace: openbao
+spec:
+  redirectFrontend:
+    addressMatcher:
+      ip: "127.0.0.1"
+      toPorts:
+        - port: "8210"
+          protocol: TCP
+  redirectBackend:
+    localEndpointSelector:
+      matchLabels:
+        app.kubernetes.io/name: openbao
+        component: server
+    toPorts:
+      - port: "8200"
+        protocol: TCP

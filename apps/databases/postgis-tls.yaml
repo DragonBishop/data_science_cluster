@@ -1,4 +1,4 @@
-# PostgreSQL server TLS certificate issued via Vault PKI ClusterIssuer
+# PostgreSQL server TLS certificate issued via OpenBao PKI ClusterIssuer
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -6,8 +6,8 @@ metadata:
   namespace: databases
 spec:
   secretName: postgis-server-cert
-  duration: ${VAULT_PKI_CERT_DURATION}
-  renewBefore: ${VAULT_PKI_CERT_RENEW_BEFORE}
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
@@ -26,10 +26,10 @@ spec:
     - 127.0.0.1
     - ${GATEWAY_IP}
   issuerRef:
-    name: vault-pki-issuer
+    name: openbao-pki-issuer
     kind: ClusterIssuer
 ---
-# SeaweedFS S3 server TLS certificate issued via Vault PKI ClusterIssuer
+# SeaweedFS S3 server TLS certificate issued via OpenBao PKI ClusterIssuer
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -37,8 +37,8 @@ metadata:
   namespace: databases
 spec:
   secretName: seaweedfs-s3-tls
-  duration: ${VAULT_PKI_CERT_DURATION}
-  renewBefore: ${VAULT_PKI_CERT_RENEW_BEFORE}
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
@@ -49,5 +49,5 @@ spec:
     - seaweedfs-s3.databases.svc.cluster.local
     - localhost
   issuerRef:
-    name: vault-pki-issuer
+    name: openbao-pki-issuer
     kind: ClusterIssuer

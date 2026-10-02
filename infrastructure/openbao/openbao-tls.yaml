@@ -1,119 +1,119 @@
-# Vault TLS certificates, local CA, and cert-manager ClusterIssuer configuration
+# OpenBao TLS certificates, local CA, and cert-manager ClusterIssuer configuration
 
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: vault-selfsigned-bootstrap
+  name: openbao-selfsigned-bootstrap
 spec:
   selfSigned: {}
 ---
-# Dedicated local CA for Vault
+# Dedicated local CA for OpenBao
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: vault-local-ca
+  name: openbao-local-ca
   namespace: cert-manager
 spec:
   isCA: true
-  commonName: vault-local-ca
-  secretName: vault-local-ca-secret
+  commonName: openbao-local-ca
+  secretName: openbao-local-ca-secret
   duration: ${LOCAL_CA_ROOT_DURATION}
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
   issuerRef:
-    name: vault-selfsigned-bootstrap
+    name: openbao-selfsigned-bootstrap
     kind: ClusterIssuer
 ---
-# ClusterIssuer backed by the Vault local CA
+# ClusterIssuer backed by the OpenBao local CA
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: vault-ca-issuer
+  name: openbao-ca-issuer
 spec:
   ca:
-    secretName: vault-local-ca-secret
+    secretName: openbao-local-ca-secret
 ---
-# Server certificate for Vault
+# Server certificate for OpenBao
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: vault-server-cert
-  namespace: vault
+  name: openbao-server-cert
+  namespace: openbao
 spec:
-  secretName: vault-server-cert
+  secretName: openbao-server-cert
   duration: ${LOCAL_CA_CERT_DURATION}
   renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
   dnsNames:
-    - vault
-    - vault.vault
-    - vault.vault.svc
-    - vault.vault.svc.cluster.local
-    - vault-internal
-    - vault-internal.vault
-    - vault-internal.vault.svc.cluster.local
+    - openbao
+    - openbao.openbao
+    - openbao.openbao.svc
+    - openbao.openbao.svc.cluster.local
+    - openbao-internal
+    - openbao-internal.openbao
+    - openbao-internal.openbao.svc.cluster.local
     - localhost
   ipAddresses:
     - 127.0.0.1
   issuerRef:
-    name: vault-ca-issuer
+    name: openbao-ca-issuer
     kind: ClusterIssuer
 ---
-# Vault CA bundle for the databases namespace
+# OpenBao CA bundle for the databases namespace
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: vault-ca-databases
+  name: openbao-ca-databases
   namespace: databases
 spec:
-  commonName: vault-ca-bundle
-  secretName: vault-ca-bundle
+  commonName: openbao-ca-bundle
+  secretName: openbao-ca-bundle
   duration: ${LOCAL_CA_CERT_DURATION}
   renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
   dnsNames:
-    - vault-ca-bundle.unused.invalid
+    - openbao-ca-bundle.unused.invalid
   issuerRef:
-    name: vault-ca-issuer
+    name: openbao-ca-issuer
     kind: ClusterIssuer
 ---
-# Vault CA bundle for the tekton-pipelines namespace
+# OpenBao CA bundle for the tekton-pipelines namespace
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: vault-ca-tekton
+  name: openbao-ca-tekton
   namespace: tekton-pipelines
 spec:
-  commonName: vault-ca-bundle
-  secretName: vault-ca-bundle
+  commonName: openbao-ca-bundle
+  secretName: openbao-ca-bundle
   duration: ${LOCAL_CA_CERT_DURATION}
   renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
   dnsNames:
-    - vault-ca-bundle.unused.invalid
+    - openbao-ca-bundle.unused.invalid
   issuerRef:
-    name: vault-ca-issuer
+    name: openbao-ca-issuer
     kind: ClusterIssuer
 ---
-# ClusterIssuer backed by Vault's Intermediate PKI secrets engine.
+# ClusterIssuer backed by OpenBao's Intermediate PKI secrets engine.
 # Signs leaf certificates for Postgres (postgis-tls) and SeaweedFS S3.
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: vault-pki-issuer
+  name: openbao-pki-issuer
 spec:
   vault:
-    server: https://vault.vault.svc.cluster.local:8200
+    server: https://openbao.openbao.svc.cluster.local:8200
     path: pki_int/sign/internal-server
     caBundleSecretRef:
-      name: vault-local-ca-secret
+      name: openbao-local-ca-secret
       key: tls.crt
     auth:
       kubernetes:
@@ -122,7 +122,7 @@ spec:
         serviceAccountRef:
           name: cert-manager
 ---
-# RBAC allowing cert-manager to request tokens for Vault Kubernetes authentication.
+# RBAC allowing cert-manager to request tokens for OpenBao Kubernetes authentication.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
