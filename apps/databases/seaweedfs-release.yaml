@@ -25,8 +25,14 @@ spec:
   values:
     master:
       ipBind: "0.0.0.0"
+      data:
+        type: "hostPath"
+        hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
     filer:
       ipBind: "0.0.0.0"
+      data:
+        type: "hostPath"
+        hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
     volume:
       dataDirs:
         - name: data1

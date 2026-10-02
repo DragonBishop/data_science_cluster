@@ -493,7 +493,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
   * **`seaweedfs-networkpolicy.yaml`**: Restricts SeaweedFS ingress and egress to the `databases` namespace and `kube-dns`.
-  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master/filer data on the external storage via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created at install.
+  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created at install.
 * **`apps/databases-secrets/`** - The ESO objects that produce the `databases` Secrets, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after every Secret exists.
   * **`eso-setup.yaml`**: The `postgis-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
   * **`postgis-credentials.yaml`**: `ExternalSecret`s and the `VaultDynamicSecret` generator for static and dynamic PostGIS credentials.
