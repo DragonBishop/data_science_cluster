@@ -7,4 +7,3 @@ resources:
   - postgis-localhost.yaml
   - postgis-database.yaml
   - postgis-networkpolicy.yaml
-  - seaweedfs-release.yaml

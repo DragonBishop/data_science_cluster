@@ -270,7 +270,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
     # cnpg-backups
     ```
 
-    If it is missing, re-reconcile `apps/databases/seaweedfs-release.yaml` (`flux reconcile helmrelease seaweedfs -n databases`); `createBuckets` in that chart's values creates it at install.
+    If it is missing, re-reconcile `apps/seaweedfs/seaweedfs-release.yaml` (`flux reconcile helmrelease seaweedfs -n databases`); `createBuckets` in that chart's values creates it at install.
 
 > [!CAUTION]
 > A mismatch between the Secret's `ACCESS_KEY_ID`/`ACCESS_SECRET_KEY` fields and its `config` field produces no error until an archive is actually attempted — a "healthy" cluster can still be silently failing every backup.

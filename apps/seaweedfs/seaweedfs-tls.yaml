@@ -1,0 +1,22 @@
+# SeaweedFS S3 server TLS certificate issued via OpenBao PKI ClusterIssuer
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: seaweedfs-s3-tls
+  namespace: databases
+spec:
+  secretName: seaweedfs-s3-tls
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  dnsNames:
+    - seaweedfs-s3
+    - seaweedfs-s3.databases
+    - seaweedfs-s3.databases.svc
+    - seaweedfs-s3.databases.svc.cluster.local
+    - localhost
+  issuerRef:
+    name: openbao-pki-issuer
+    kind: ClusterIssuer
