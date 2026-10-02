@@ -7,6 +7,8 @@ spec:
   interval: 1h
   dependsOn:
     - name: tekton-operator
+    # The operator holds Results back until its database Secret exists
+    - name: tekton-results-secrets
     - name: cluster-config
   sourceRef:
     kind: GitRepository

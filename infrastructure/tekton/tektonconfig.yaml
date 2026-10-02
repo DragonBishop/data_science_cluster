@@ -15,4 +15,16 @@ spec:
   chain:
     disabled: true
   result:
-    disabled: true
+    disabled: false
+    is_external_db: true
+    db_host: postgis-cluster-rw.databases.svc.cluster.local
+    db_port: 5432
+    db_name: ${TEKTON_RESULTS_DB_NAME}
+    db_sslmode: verify-full
+    # tekton-results-tls is mounted at /etc/tls and its ca.crt is the root that signs Postgres
+    db_sslrootcert: /etc/tls/ca.crt
+    db_enable_auto_migration: true
+    db_secret_name: tekton-results-postgres
+    db_secret_user_key: username
+    db_secret_password_key: password
+    logs_api: false
