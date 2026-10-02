@@ -29,6 +29,24 @@ resource "vault_kubernetes_auth_backend_role" "postgis" {
   token_ttl                        = 86400 # 24h
 }
 
+resource "vault_policy" "tekton_results" {
+  name = "tekton-results-policy"
+
+  policy = <<EOT
+path "database/creds/tekton-results-app-role" { capabilities = ["read"] }
+EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "tekton_results" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "tekton-results-role"
+  bound_service_account_names      = ["tekton-results-openbao-auth"]
+  bound_service_account_namespaces = ["tekton-pipelines"]
+  audience                         = "openbao"
+  token_policies                   = [vault_policy.tekton_results.name]
+  token_ttl                        = 86400 # 24h
+}
+
 resource "vault_policy" "cert_manager_pki" {
   name   = "cert-manager-pki-policy"
   policy = <<EOT
