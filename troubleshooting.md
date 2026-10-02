@@ -256,7 +256,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
-  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgis-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgis.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `openbao-pki-issuer`. If the cluster or OpenBao PKI root was rebuilt, update your local `root.crt` from `kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.postgresql/root.crt`.
+  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgis-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgis.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `openbao-pki-issuer`. If the cluster or OpenBao PKI root was rebuilt, update your local `root.crt` from `kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > "${PGSSLROOTCERT:-$HOME/.config/postgresql/root.crt}"`.
 
 > [!NOTE]
 > Any new name added to `postgis-tls.yaml` must also be permitted in `terraform/openbao/pki.tf` (`permitted_dns_domains` and `allowed_domains`), or OpenBao PKI rejects the CSR before cert-manager can reissue.
