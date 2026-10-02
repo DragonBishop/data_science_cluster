@@ -82,26 +82,6 @@ spec:
     name: openbao-ca-issuer
     kind: ClusterIssuer
 ---
-# OpenBao CA bundle for the tekton-pipelines namespace
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: openbao-ca-tekton
-  namespace: tekton-pipelines
-spec:
-  commonName: openbao-ca-bundle
-  secretName: openbao-ca-bundle
-  duration: ${LOCAL_CA_CERT_DURATION}
-  renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
-  privateKey:
-    algorithm: ${CERT_KEY_ALGORITHM}
-    size: ${CERT_KEY_SIZE}
-  dnsNames:
-    - openbao-ca-bundle.unused.invalid
-  issuerRef:
-    name: openbao-ca-issuer
-    kind: ClusterIssuer
----
 # ClusterIssuer backed by OpenBao's Intermediate PKI secrets engine.
 # Signs leaf certificates for Postgres (postgis-tls) and SeaweedFS S3.
 apiVersion: cert-manager.io/v1
