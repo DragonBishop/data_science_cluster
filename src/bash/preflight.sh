@@ -23,6 +23,77 @@ check_host_tooling() {
     [ "$has_errors" = false ]
 }
 
+get_cluster_config_value() {
+    local key="$1"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    grep "^  $key:" "$script_dir/../../infrastructure/cluster-config/cluster-config.yaml" | head -n 1 | awk -F'"' '{print $2}'
+}
+
+get_minor_version() {
+    local version="$1"
+    version="${version#v}"
+    version="${version#*.}"
+    printf '%s\n' "${version%%.*}"
+}
+
+check_kubectl_tooling() {
+    echo "== kubectl and plugins =="
+    local has_errors=false
+
+    if command -v kubectl >/dev/null 2>&1; then
+        echo "✅ kubectl"
+    else
+        echo "❌ kubectl not found. See INSTALLATION.md Requirements."
+        has_errors=true
+    fi
+
+    if command -v kubectl >/dev/null 2>&1 && kubectl cnpg version >/dev/null 2>&1; then
+        echo "✅ kubectl cnpg"
+    else
+        echo "❌ kubectl cnpg plugin not found. See INSTALLATION.md Requirements."
+        has_errors=true
+    fi
+
+    [ "$has_errors" = false ]
+}
+
+# Versions must match the cluster: kubectl within one minor of k3s, the cnpg plugin equal to the operator.
+check_kubectl_versions() {
+    local has_warnings=false
+    local kubectl_version k3s_version kubectl_minor k3s_minor minor_gap
+    local chart_version expected_plugin_version plugin_version
+
+    kubectl_version=$(kubectl version --client 2>/dev/null | awk '/Client Version/ {print $3}')
+    k3s_version=$(get_cluster_config_value K3S_VERSION)
+    kubectl_minor=$(get_minor_version "$kubectl_version")
+    k3s_minor=$(get_minor_version "$k3s_version")
+    minor_gap=$(( kubectl_minor > k3s_minor ? kubectl_minor - k3s_minor : k3s_minor - kubectl_minor ))
+    if [ "$minor_gap" -le 1 ]; then
+        echo "✅ kubectl $kubectl_version is within one minor version of k3s $k3s_version"
+    else
+        echo "⚠️  kubectl $kubectl_version is more than one minor version from k3s $k3s_version"
+        has_warnings=true
+    fi
+
+    chart_version=$(get_cluster_config_value CNPG_VERSION)
+    expected_plugin_version=$(helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts \
+        --version "$chart_version" 2>/dev/null | awk '/^appVersion:/ {print $2}')
+    plugin_version=$(kubectl cnpg version 2>/dev/null | sed -n 's/.*Version:\([0-9.]*\).*/\1/p')
+    if [ -z "$expected_plugin_version" ]; then
+        echo "⚠️  Could not read the CNPG operator version for chart $chart_version (helm show chart failed)"
+        has_warnings=true
+    elif [ "$plugin_version" = "$expected_plugin_version" ]; then
+        echo "✅ kubectl cnpg $plugin_version matches the CNPG operator"
+    else
+        echo "⚠️  kubectl cnpg ${plugin_version:-unknown} differs from the CNPG operator $expected_plugin_version (chart $chart_version)"
+        has_warnings=true
+    fi
+    echo ""
+
+    [ "$has_warnings" = false ]
+}
+
 check_database_client() {
     if command -v psql >/dev/null 2>&1; then
         echo "✅ psql"
@@ -222,6 +293,12 @@ main() {
 
     check_host_tooling || had_errors=true
     check_database_client || had_warnings=true
+    if check_kubectl_tooling; then
+        check_kubectl_versions || had_warnings=true
+    else
+        had_errors=true
+        echo ""
+    fi
     check_github_auth || had_errors=true
 
     check_host_firewall || had_warnings=true
