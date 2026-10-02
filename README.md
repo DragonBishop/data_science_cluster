@@ -55,7 +55,10 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | Flux CLI | `v2.9.4` (`fluxcd.io`) | GitOps controller CLI used for pre-flight validation and repository bootstrapping. |
 | GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |
 | Helm | `v3.x` (`get_helm.sh`) | Package manager for Kubernetes charts and HelmRelease dependency resolution. |
+| Hubble CLI | `hubble` (`cilium/hubble` release) | Streams flows and policy verdicts from Hubble Relay (`just hubble`). |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
+| kubectl | matches `K3S_VERSION` | Kubernetes CLI for every cluster operation and recipe. |
+| kubectl cnpg plugin | matches the CNPG operator | CloudNativePG status, backups, `psql` and restarts (`kubectl cnpg ...`). |
 | OpenTofu | `1.9.0` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
 | PostgreSQL Client (`psql`) | `postgresql-client` | Host CLI client for local database administration and connectivity testing. |
 | uv | `astral-sh/uv` | Fast Python package manager and virtual environment resolver (`pyproject.toml`). |
@@ -76,7 +79,7 @@ These are the resources that make up the database core of the cluster. It is eng
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
 | OpenBao (in-cluster) | `2.7.1` (chart `0.30.2`) | Secrets backend on PebbleDB storage; `just start` unseals it from the GPG-encrypted keyfile in `.local/openbao/`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), transit signing key, and database secrets engine. |
 | Headlamp | `0.45.0` | Cluster GUI; can be installed as a desktop app, or deployed within the cluster. Has a number of plugins that assist with cluster management. |
-| Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay/UI run their own cert-manager mTLS trust domain; UI exposed at `hubble.internal` on the shared Gateway. |
+| Hubble | `v1.20.0` (Relay), `v0.13.5` (UI) | Cilium's network observability layer. Relay runs its own cert-manager mTLS trust domain; the `hubble` CLI reaches it at `localhost:4245` through a local redirect. |
 | k3s | `v1.36.4+k3s1` | Core control plane and execution environment. Host-installed, unpinned by this repo. |
 | [pgiscluster](https://pypi.org/project/pgiscluster/) | `0.2.0` | Python package providing `HostDBConnector`/`HostAdminDBConnector` classes for connecting ETL/ML job code to the database. |
 | PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` | Image the CNPG `Cluster` runs (`18.6` PostgreSQL, `3.6.4` PostGIS). |
@@ -243,16 +246,14 @@ One-time, first-install setup: see `INSTALLATION.md` for Requirements and what t
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just hubble-ui` | Open Hubble web UI | Quick local UI access; starts a background port-forward to `localhost:12000` and opens default browser |
 | `just hubble` / `just hubble observe --follow` | Stream Hubble flows (CLI) | Real-time network and security flow inspection over mTLS |
-| `just hubble-pf` | Port-forward Hubble Relay only | Direct local port-forward to Hubble Relay on `localhost:4245` |
 
 ### OpenBao
 
 | Command | Operation | When |
 | --- | --- | --- |
 | `just bao-shell` | Open interactive OpenBao shell | Direct `bao` CLI access inside `openbao-0` pod with a sanitized environment |
-| `just bao-pf` | Port-forward OpenBao API to host | Exposes in-cluster OpenBao API at `https://127.0.0.1:8210` and exports internal CA to `.local/openbao/certs/` |
+| `just bao-ca` | Export OpenBao CA and print its address | OpenBao API and UI are at `https://127.0.0.1:8210` through a local redirect; exports the internal CA to `.local/openbao/certs/` |
 | `kubectl exec -n openbao openbao-0 -- bao status` | Verify OpenBao seal state | Diagnostic check for OpenBao initialization, sealing, and storage type |
 
 ### Development
@@ -410,7 +411,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── clusterwide-networkpolicy.yaml
 │   │   ├── k3s-components-networkpolicy.yaml
 │   │   ├── kustomization.yaml
-│   │   ├── kustomizeconfig.yaml
 │   │   ├── lan-l2-policy.yaml
 │   │   └── lan-lb-pool.yaml
 │   ├── cluster-config/                  # Centralized cluster topology and configuration ConfigMap
@@ -440,7 +440,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   └── kustomization.yaml
 │   ├── hubble/
 │   │   ├── cilium-values-hubble.yaml
-│   │   ├── hubble-httproute.yaml
+│   │   ├── hubble-localhost.yaml
 │   │   ├── hubble-networkpolicy.yaml
 │   │   └── kustomization.yaml
 │   ├── namespaces/
@@ -448,7 +448,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   └── namespaces.yaml
 │   └── openbao/
 │       ├── kustomization.yaml
-│       ├── kustomizeconfig.yaml
+│       ├── openbao-localhost.yaml
 │       ├── openbao-networkpolicy.yaml
 │       ├── openbao-release.yaml
 │       ├── openbao-tls.yaml
@@ -541,7 +541,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 * **`infrastructure/`** - Cluster-wide platform components, listed alphabetically below:
   * **`barman-cloud/`**: `barman-cloud-release.yaml`, `kustomization.yaml`
   * **`cert-manager/`**: `cert-manager-networkpolicy.yaml`, `cert-manager-release.yaml`, `kustomization.yaml`
-  * **`cilium/`**: `cilium-release.yaml`, `cilium-values.yaml`, `clusterwide-networkpolicy.yaml`, `k3s-components-networkpolicy.yaml`, `kustomization.yaml`, `kustomizeconfig.yaml`, `lan-l2-policy.yaml`, `lan-lb-pool.yaml`
+  * **`cilium/`**: `cilium-release.yaml`, `cilium-values.yaml`, `clusterwide-networkpolicy.yaml`, `k3s-components-networkpolicy.yaml`, `kustomization.yaml`, `lan-l2-policy.yaml`, `lan-lb-pool.yaml`
   * **`cluster-config/`**: `cluster-config.yaml`, `kustomization.yaml` (centralized configuration ConfigMap)
   * **`cnpg-operator/`**: `cnpg-release.yaml`, `kustomization.yaml`
   * **`coredns-custom/`**: `coredns-custom.yaml`, `coredns-lan-service.yaml`, `kustomization.yaml` (internal zone on CoreDNS)
@@ -549,9 +549,9 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`flux-system-policies/`**: `flux-networkpolicy.yaml`, `kustomization.yaml`
   * **`gateway-api-crds/`**: `kustomization.yaml`, `standard-install.yaml` (vendored Gateway API CRDs)
   * **`gateway/`**: `gateway-networkpolicy.yaml`, `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
-  * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-httproute.yaml`, `hubble-networkpolicy.yaml`, `kustomization.yaml`
+  * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-localhost.yaml`, `hubble-networkpolicy.yaml`, `kustomization.yaml`
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
-  * **`openbao/`**: `kustomization.yaml`, `kustomizeconfig.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
+  * **`openbao/`**: `kustomization.yaml`, `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
 * **`src/`**
   * **`src/bash/`**:
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).

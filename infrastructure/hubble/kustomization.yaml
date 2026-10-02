@@ -1,15 +1,14 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - hubble-httproute.yaml
   - hubble-networkpolicy.yaml
+  - hubble-localhost.yaml
 configMapGenerator:
   - name: cilium-values-hubble
     namespace: kube-system
     files:
       - values.yaml=cilium-values-hubble.yaml
     options:
+      disableNameSuffixHash: true
       labels:
         reconcile.fluxcd.io/watch: Enabled
-generatorOptions:
-  disableNameSuffixHash: true

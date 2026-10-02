@@ -50,10 +50,6 @@ cilium_envoy_cpu_request: "{{ cluster_config.CILIUM_ENVOY_CPU_REQUEST }}"
 cilium_envoy_mem_request: "{{ cluster_config.CILIUM_ENVOY_MEM_REQUEST }}"
 hubble_relay_mem_request: "{{ cluster_config.HUBBLE_RELAY_MEM_REQUEST }}"
 hubble_relay_mem_limit: "{{ cluster_config.HUBBLE_RELAY_MEM_LIMIT }}"
-hubble_ui_frontend_mem_request: "{{ cluster_config.HUBBLE_UI_FRONTEND_MEM_REQUEST }}"
-hubble_ui_frontend_mem_limit: "{{ cluster_config.HUBBLE_UI_FRONTEND_MEM_LIMIT }}"
-hubble_ui_backend_mem_request: "{{ cluster_config.HUBBLE_UI_BACKEND_MEM_REQUEST }}"
-hubble_ui_backend_mem_limit: "{{ cluster_config.HUBBLE_UI_BACKEND_MEM_LIMIT }}"
 
 # --- Resource sizing: OpenBao ---
 openbao_cpu_request: "{{ cluster_config.OPENBAO_CPU_REQUEST }}"

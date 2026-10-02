@@ -1,4 +1,4 @@
-# Clients allowed to reach the shared Gateway's listeners: the LAN and the node itself
+# Gateway clients: the LAN and the node
 apiVersion: cilium.io/v2
 kind: CiliumClusterwideNetworkPolicy
 metadata:
@@ -12,9 +12,3 @@ spec:
     - fromCIDR:
         - "${LAN_CIDR}"
         - 127.0.0.1/32
-      toPorts:
-        - ports:
-            - port: "443"
-              protocol: TCP
-            - port: "5432"
-              protocol: TCP

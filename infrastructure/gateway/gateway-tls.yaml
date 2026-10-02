@@ -9,7 +9,6 @@ spec:
   dnsNames:
     - "*.${INTERNAL_DOMAIN}"
     - "${INTERNAL_DOMAIN}"
-    - "hubble.${INTERNAL_DOMAIN}"
   duration: ${OPENBAO_PKI_CERT_DURATION}
   renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
   privateKey:

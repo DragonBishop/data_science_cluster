@@ -4,10 +4,13 @@ resources:
   - openbao-tls.yaml
   - openbao-release.yaml
   - openbao-networkpolicy.yaml
-configurations:
-  - kustomizeconfig.yaml
+  - openbao-localhost.yaml
 configMapGenerator:
   - name: openbao-values
     namespace: openbao
     files:
       - values.yaml=openbao-values.yaml
+    options:
+      disableNameSuffixHash: true
+      labels:
+        reconcile.fluxcd.io/watch: Enabled

@@ -6,7 +6,7 @@ locals {
     "postgis-cluster-r.databases.svc.cluster.local", "localhost", "postgis.internal",
     "seaweedfs-s3", "seaweedfs-s3.databases", "seaweedfs-s3.databases.svc",
     "seaweedfs-s3.databases.svc.cluster.local",
-    "internal", "cilium.io", "cluster.local", "hubble-relay", "hubble-ui",
+    "internal", "cilium.io", "cluster.local", "hubble-relay",
   ]
 }
 

@@ -64,6 +64,19 @@ rm get_helm.sh
 helm version
 ```
 
+##### Hubble CLI
+
+```bash
+HUBBLE_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/hubble/main/stable.txt)
+HUBBLE_ARCH=amd64
+if [ "$(uname -m)" = "aarch64" ]; then HUBBLE_ARCH=arm64; fi
+curl -L --fail --remote-name-all https://github.com/cilium/hubble/releases/download/$HUBBLE_VERSION/hubble-linux-${HUBBLE_ARCH}.tar.gz{,.sha256sum}
+sha256sum --check hubble-linux-${HUBBLE_ARCH}.tar.gz.sha256sum
+sudo tar xzvfC hubble-linux-${HUBBLE_ARCH}.tar.gz /usr/local/bin
+rm hubble-linux-${HUBBLE_ARCH}.tar.gz{,.sha256sum}
+hubble version
+```
+
 ##### Just
 
 * **Ubuntu / Debian**:
@@ -76,6 +89,45 @@ helm version
 
   ```bash
   sudo dnf install -y just
+  ```
+
+##### kubectl
+
+Install the release matching `K3S_VERSION` in `cluster-config.yaml`, without the `+k3s` suffix:
+
+```bash
+KUBECTL_VERSION=v1.37.0
+KUBECTL_ARCH=amd64
+if [ "$(uname -m)" = "aarch64" ]; then KUBECTL_ARCH=arm64; fi
+curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl"
+sudo install -m 0755 kubectl /usr/local/bin/kubectl
+rm kubectl
+kubectl version --client
+```
+
+##### kubectl cnpg Plugin
+
+Install the release matching the CNPG operator, which is the `appVersion` of the chart pinned by `CNPG_VERSION` (`helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts --version <CNPG_VERSION>`). `preflight.sh` checks the match.
+
+```bash
+CNPG_PLUGIN_VERSION=1.30.0
+CNPG_ARCH=x86_64
+if [ "$(uname -m)" = "aarch64" ]; then CNPG_ARCH=arm64; fi
+CNPG_URL=https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${CNPG_PLUGIN_VERSION}/kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}
+```
+
+* **Ubuntu / Debian**:
+
+  ```bash
+  curl -LO "${CNPG_URL}.deb"
+  sudo apt install -y "./kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}.deb"
+  rm "kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}.deb"
+  ```
+
+* **Fedora / RHEL / Red Hat**:
+
+  ```bash
+  sudo dnf install -y "${CNPG_URL}.rpm"
   ```
 
 ##### OpenTofu
@@ -306,7 +358,7 @@ flowchart TD
 * `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap).
 * `external-secrets` and `gateway` depend on `openbao` (for secrets sync and PKI).
 * `cnpg-operator` depends on `external-secrets`, and `barman-cloud` depends on `cnpg-operator`.
-* `hubble` depends on `gateway` (attaching the `hubble.internal` HTTPRoute).
+* `hubble` depends on `gateway`.
 * `databases` depends on `barman-cloud`, `gateway`, `openbao`, and `external-secrets` (whose webhook must admit its `ExternalSecret`s).
 
 ---
@@ -487,27 +539,26 @@ Test Gateway listener routing and edge certificate termination:
 > **Just Recipe:**
 >
 > ```bash
-> just gateway-check
+> just gateway-check <name>.internal
 > ```
 
 > [!NOTE]
 > **Manual Shell Command:**
 >
 > ```bash
-> curl -v --resolve hubble.internal:443:192.0.2.240 \
+> curl -v --resolve <name>.internal:443:192.0.2.240 \
 >   --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
->   https://hubble.internal/
+>   https://<name>.internal/
 > ```
 
-Verify that the page responds and the certificate chains to `openbao-pki-issuer`'s CA (`internal-edge-cert`).
+Run it for any hostname with an HTTPRoute on the Gateway. Verify that the page responds and the certificate chains to `openbao-pki-issuer`'s CA (`internal-edge-cert`).
 
 ---
 
 ### Hubble Observability Access
 
-Verify network visibility and access the Hubble UI / CLI:
+Verify network visibility with the Hubble CLI:
 
-* **Web UI Access**: `just hubble-ui` port-forwards to `localhost:12000` and opens the UI in your default browser.
 * **CLI Flow Streaming**: `just hubble status` and `just hubble observe --follow` stream flows from Hubble Relay over mTLS (port 4245).
 
 ---

@@ -1,0 +1,20 @@
+# CiliumLocalRedirectPolicy exposing Hubble Relay (the hubble CLI's server) on the node's loopback interface at 4245
+apiVersion: cilium.io/v2
+kind: CiliumLocalRedirectPolicy
+metadata:
+  name: hubble-relay-localhost
+  namespace: kube-system
+spec:
+  redirectFrontend:
+    addressMatcher:
+      ip: "127.0.0.1"
+      toPorts:
+        - port: "4245"
+          protocol: TCP
+  redirectBackend:
+    localEndpointSelector:
+      matchLabels:
+        k8s-app: hubble-relay
+    toPorts:
+      - port: "4245"
+        protocol: TCP
