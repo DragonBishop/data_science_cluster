@@ -82,40 +82,14 @@
     content: "{{ opentofu_openbao_cert_secret.resources[0].data['ca.crt'] | b64decode }}"
     mode: "0600"
 
-- name: Stop any existing OpenBao port-forward
-  ansible.builtin.command: pkill -f "kubectl port-forward -n {{ openbao_namespace }} {{ openbao_pod }} 8210:8200"
-  register: opentofu_openbao_pf_kill
-  failed_when: false
-  changed_when: opentofu_openbao_pf_kill.rc == 0
-
-- name: Start local port-forward to in-cluster OpenBao
-  ansible.builtin.command: kubectl port-forward -n {{ openbao_namespace }} {{ openbao_pod }} 8210:8200
-  async: 3600
-  poll: 0
-  register: opentofu_openbao_pf_job
-  changed_when: true
-  environment:
-    KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
-
-- name: Wait for local OpenBao port-forward to accept connections
+- name: Wait for OpenBao on its local redirect
   ansible.builtin.wait_for:
     host: 127.0.0.1
     port: 8210
-    timeout: 10
-  register: opentofu_openbao_pf_wait
-  ignore_errors: true
-
-- name: Check port-forward job status if it never came up
-  ansible.builtin.async_status:
-    jid: "{{ opentofu_openbao_pf_job.ansible_job_id }}"
-  register: opentofu_openbao_pf_job_status
-  when: opentofu_openbao_pf_wait is failed
-
-- name: Fail with diagnostic if port-forward never came up
-  ansible.builtin.fail:
+    timeout: 30
     msg: >-
-      OpenBao port-forward to 127.0.0.1:8210 did not come up: {{ opentofu_openbao_pf_job_status.stderr | default('no output captured') }}
-  when: opentofu_openbao_pf_wait is failed
+      OpenBao did not answer on 127.0.0.1:8210. Check the openbao-localhost
+      CiliumLocalRedirectPolicy and that openbao-0 is Running.
 
 - name: Apply terraform/openbao
   cloud.terraform.terraform:

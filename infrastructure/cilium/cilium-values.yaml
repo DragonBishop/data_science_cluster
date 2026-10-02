@@ -52,6 +52,3 @@ egressGateway:
 
 # Enables the CiliumLocalRedirectPolicy CRD.
 localRedirectPolicy: true
-
-# Temporary: logs would-be drops instead of dropping while the policy rewrite is verified
-policyAuditMode: true

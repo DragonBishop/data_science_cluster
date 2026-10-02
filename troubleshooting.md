@@ -40,7 +40,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **How to fix it:** Generate a new key from the GitHub App's settings page ("Generate a private key") — this doesn't invalidate the App or its installation, both keep working. Save the new `.pem` wherever `GITHUB_APP_PRIVATE_KEY_PATH` points and re-run bootstrap.
 
 * **OpenTofu role fails to apply OpenBao configuration**
-  * **What's happening:** OpenBao is sealed, port-forwarding failed, or OpenTofu state encryption passphrase was mistyped.
+  * **What's happening:** OpenBao is sealed, its local redirect on 127.0.0.1:8210 is missing, or OpenTofu state encryption passphrase was mistyped.
   * **How to fix it:** Verify the `openbao-0` pod is Running and unsealed (`kubectl exec -n openbao openbao-0 -- bao status`). Run OpenTofu manually to inspect verbose output:
 
     ```bash
@@ -114,7 +114,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Gateway routing or TLS fails (`*.internal` domain unreachable)**
   * **What's happening:** The client cannot resolve the domain or route traffic to the Gateway IP.
-  * **How to fix it:** Run `just gateway-check` to verify listener routing and TLS termination. Confirm CoreDNS custom zone is responding (`dig @192.0.2.242 hubble.internal`) and verify that Gateway listeners are programmed (`kubectl get gateway -n gateway internal-gateway`).
+  * **How to fix it:** Run `just gateway-check` to verify listener routing and TLS termination. Confirm CoreDNS custom zone is responding (`dig @192.0.2.242 <name>.internal`) and verify that Gateway listeners are programmed (`kubectl get gateway -n gateway internal-gateway`).
 
 * **A `CiliumNetworkPolicy`/`CiliumClusterwideNetworkPolicy` `toPorts` rule doesn't allow traffic it should cover**
   * **What's happening:** Cilium enforces `toPorts` against the destination pod's actual container port, not a Service's externally-exposed `port`. Traffic to a `ClusterIP` gets DNAT'd to its backend port at the client's socket level before a packet exists on the wire, so a request to `some-service:80` is policy-checked as traffic to the pod's real listening port (e.g. `:9090`), not `:80`.

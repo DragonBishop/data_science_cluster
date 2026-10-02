@@ -1,6 +1,6 @@
 variable "openbao_address" {
   type        = string
-  description = "OpenBao API address Terraform talks to (typically a local port-forward to openbao-0)."
+  description = "OpenBao API address Terraform talks to (the openbao-localhost local redirect)."
   default     = "https://127.0.0.1:8210"
 }
 
