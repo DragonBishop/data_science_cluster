@@ -1,0 +1,18 @@
+# Results API serving certificate; its ca.crt is the OpenBao PKI root that also signs Postgres
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tekton-results-tls
+  namespace: tekton-pipelines
+spec:
+  secretName: tekton-results-tls
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  dnsNames:
+    - tekton-results-api-service.tekton-pipelines.svc.cluster.local
+  issuerRef:
+    name: openbao-pki-issuer
+    kind: ClusterIssuer

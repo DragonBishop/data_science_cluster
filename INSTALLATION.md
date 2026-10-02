@@ -354,6 +354,14 @@ flowchart TD
     seaweedfs --> db
     dbsecrets --> db
     gw --> db
+
+    %% CI
+    certmgr --> tektonop["tekton-operator"]
+    openbao --> trsecrets["tekton-results-secrets"]
+    eso --> trsecrets
+    db --> trsecrets
+    tektonop --> tekton["tekton"]
+    trsecrets --> tekton
 ```
 
 * `cilium` requires `gateway-api-crds` and `namespaces`.
@@ -365,6 +373,9 @@ flowchart TD
 * `databases-secrets` depends on `openbao` and `external-secrets` (whose webhook must admit its `ExternalSecret`s).
 * `seaweedfs` depends on `databases-secrets` (for `seaweedfs-credentials`) and is Ready only after its install hook creates the `cnpg-backups` bucket.
 * `databases` depends on `barman-cloud`, `seaweedfs`, `gateway`, and `databases-secrets`, so the PostGIS cluster starts with its backup bucket already in place.
+* `tekton-operator` depends on `cert-manager`.
+* `tekton-results-secrets` depends on `openbao`, `external-secrets`, and `databases`, whose `tekton_readwrite` role every Tekton Results login joins.
+* `tekton` depends on `tekton-operator` and `tekton-results-secrets`, since the operator holds Tekton Results back until its database Secret exists.
 
 ---
 

@@ -24,3 +24,17 @@ spec:
         - ports:
             - port: "5432"
               protocol: TCP
+    # Tekton Results stores PipelineRun and TaskRun records
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - tekton-results-api
+                - tekton-results-retention-policy-agent
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
