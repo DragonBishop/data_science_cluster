@@ -30,3 +30,7 @@ spec:
         # Docker Hub: auth and registry on docker.io, CDN on docker.com
         - matchPattern: "*.docker.io"
         - matchPattern: "**.docker.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

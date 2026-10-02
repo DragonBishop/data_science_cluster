@@ -1,0 +1,33 @@
+# Scaffold: Tekton Pipeline that checks live network behaviour against README.md "Network Policy".
+# Pseudocode, to be written. Not referenced by any Flux Kustomization until it exists.
+#
+# setup task:
+#   create throwaway namespaces, each with its same-namespace rule:
+#     netcheck-plain       no internet access
+#     netcheck-named       a domain-name rule allowing example.com
+#     netcheck-receiver    one small listening pod that accepts calls from the two above
+#
+# probe task, run from netcheck-plain and netcheck-named:
+#
+#   check                                          plain    named
+#   -------------------------------------------    -----    -----
+#   look up github.com through CoreDNS              works    works
+#   ask an outside resolver (8.8.8.8) directly      fails    fails
+#   call the Kubernetes API on 6443                 works    works
+#   connect to the host's SSH port (22)             fails    fails
+#   connect to the host's kubelet (10250)           fails    fails
+#   connect to the router (192.168.1.1)             fails    fails
+#   fetch https://example.com                       fails    works
+#   fetch any other site                            fails    fails
+#   reach a pod in its own namespace                works    works
+#   reach netcheck-receiver (which accepts it)      works    works
+#   reach OpenBao on 8200 (which doesn't)           fails    fails
+#   reach the Gateway's address                     fails    fails
+#
+#   each check compares its result to the expected one; any mismatch fails the task
+#
+# cleanup task (runs even on failure):
+#   delete the three namespaces
+#
+# The setup and cleanup tasks need permission to create and delete namespaces
+# (a ServiceAccount + Role, decided when the pipeline is written).

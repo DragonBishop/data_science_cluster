@@ -59,10 +59,16 @@
   retries: 12
   delay: 5
 
+# Policies Flux needs to fetch its source are applied here, ahead of Flux
 - name: Apply Cilium cluster-default network policy
   kubernetes.core.k8s:
     state: present
     src: "{{ repo_root }}/infrastructure/cilium/clusterwide-networkpolicy.yaml"
+
+- name: Apply CoreDNS network policy
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/infrastructure/coredns-custom/coredns-networkpolicy.yaml"
 
 - name: Apply flux-egress network policy
   kubernetes.core.k8s:

@@ -20,6 +20,7 @@ Customizable VS Code DevContainer configurations are provided in `.devcontainer/
 * [Cluster Architecture](#cluster-architecture)
   * [Host-Side Provisioning](#host-side-provisioning)
   * [Core Database Architecture](#core-database-architecture)
+  * [Network Policy](#network-policy)
   * [Cluster Monitoring Module](#cluster-monitoring-module)
   * [ETL Pipeline Module](#etl-pipeline-module)
   * [Machine Learning Module](#machine-learning-module)
@@ -82,6 +83,27 @@ These are the resources that make up the database core of the cluster. It is eng
 | SeaweedFS | `4.44.0` | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
 | OpenBao Database & PKI Engines | Same as OpenBao | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
 | External Secrets Operator (ESO) | `2.11.0` | Syncs OpenBao values into Kubernetes `Secret`s; refreshes static secrets hourly and generates new dynamic database credentials every 2h. |
+
+### Network Policy
+
+#### Baseline
+
+Every pod gets these policies, kept in `infrastructure/cilium/`, `infrastructure/gateway/` and `infrastructure/namespaces/`.
+
+1. Pods send freely to other pods, to DNS through CoreDNS, and to the Kubernetes API on port 6443.
+2. A pod accepts traffic from its own namespace, the kubelet and the Gateway.
+3. The Gateway carries traffic from the LAN and the node into the cluster. Pods talk to each other directly.
+
+* New namespace → add it with its same-namespace rule in `namespaces.yaml`
+* Reached from the LAN → add a Gateway route
+
+#### Additional Policies
+
+Other traffic needs a policy that names its ports and lives with the component that needs it.
+
+* Called from another namespace → incoming rule on the receiving pod, naming the caller. Sensitive services (OpenBao, Postgres) also check the caller's credentials.
+* Calls an internet site → outgoing rule on the sending pod, naming the domain.
+* Calls a host port → outgoing rule on the sending pod.
 
 ### Cluster Monitoring Module
 
@@ -345,7 +367,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── postgis-networkpolicy.yaml
 │       ├── postgis-tcproute.yaml
 │       ├── postgis-tls.yaml
-│   │   ├── seaweedfs-networkpolicy.yaml
 │   │   └── seaweedfs-release.yaml
 │   └── databases-secrets/               # ESO SecretStore + ExternalSecrets, applied before databases
 │       ├── eso-setup.yaml
@@ -354,13 +375,10 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       └── seaweedfs-credentials.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
-│       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap`
-│       │   ├── gotk-components.yaml
-│       │   ├── gotk-sync.yaml
-│       │   └── kustomization.yaml
 │       ├── barman-cloud.yaml            # Kustomization → infrastructure/barman-cloud/
 │       ├── cert-manager.yaml            # Kustomization → infrastructure/cert-manager/
 │       ├── cilium.yaml                  # Kustomization → infrastructure/cilium/
+│       ├── cluster-config.yaml          # Kustomization → infrastructure/cluster-config/
 │       ├── cnpg-operator.yaml           # Kustomization → infrastructure/cnpg-operator/
 │       ├── coredns-custom.yaml          # Kustomization → infrastructure/coredns-custom/
 │       ├── databases.yaml               # Kustomization → apps/databases/
@@ -375,7 +393,9 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── gateway.yaml                 # Kustomization → infrastructure/gateway/
 │       ├── hubble.yaml                  # Kustomization → infrastructure/hubble/
 │       ├── namespaces.yaml              # Kustomization → infrastructure/namespaces/
-│       └── openbao.yaml                 # Kustomization → infrastructure/openbao/
+│       ├── openbao.yaml                 # Kustomization → infrastructure/openbao/
+│       ├── tekton-operator.yaml         # Kustomization → infrastructure/tekton-operator/
+│       └── tekton.yaml                  # Kustomization → infrastructure/tekton/
 ├── infrastructure/                      # Cluster-wide platform components
 │   ├── barman-cloud/
 │   │   ├── barman-cloud-release.yaml
@@ -388,6 +408,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── cilium-release.yaml
 │   │   ├── cilium-values.yaml
 │   │   ├── clusterwide-networkpolicy.yaml
+│   │   ├── k3s-components-networkpolicy.yaml
 │   │   ├── kustomization.yaml
 │   │   ├── kustomizeconfig.yaml
 │   │   ├── lan-l2-policy.yaml
@@ -396,7 +417,6 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── cluster-config.yaml
 │   │   └── kustomization.yaml
 │   ├── cnpg-operator/
-│   │   ├── cnpg-networkpolicy.yaml
 │   │   ├── cnpg-release.yaml
 │   │   └── kustomization.yaml
 │   ├── coredns-custom/                  # internal zone on k3s's own CoreDNS
@@ -414,12 +434,14 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── kustomization.yaml
 │   │   └── standard-install.yaml        # Vendored Gateway API CRDs
 │   ├── gateway/
+│   │   ├── gateway-networkpolicy.yaml
 │   │   ├── gateway-tls.yaml
 │   │   ├── gateway.yaml
 │   │   └── kustomization.yaml
 │   ├── hubble/
 │   │   ├── cilium-values-hubble.yaml
 │   │   ├── hubble-httproute.yaml
+│   │   ├── hubble-networkpolicy.yaml
 │   │   └── kustomization.yaml
 │   ├── namespaces/
 │   │   ├── kustomization.yaml
@@ -489,10 +511,9 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`postgis-cluster.yaml`**: The CNPG `Cluster`, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
   * **`postgis-database.yaml`**: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
   * **`postgis-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
-  * **`postgis-networkpolicy.yaml`**: Restricts PostGIS database ingress (CNPG operator, OpenBao) and egress (kube-dns, SeaweedFS S3).
+  * **`postgis-networkpolicy.yaml`**: Accepts the CNPG operator's status checks and OpenBao's role management.
   * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
-  * **`seaweedfs-networkpolicy.yaml`**: Restricts SeaweedFS ingress and egress to the `databases` namespace and `kube-dns`.
   * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created at install.
 * **`apps/databases-secrets/`** - The ESO objects that produce the `databases` Secrets, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after every Secret exists.
   * **`eso-setup.yaml`**: The `postgis-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
@@ -502,6 +523,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`barman-cloud.yaml`**: Kustomization → `infrastructure/barman-cloud/`
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
   * **`cilium.yaml`**: Kustomization → `infrastructure/cilium/`
+  * **`cluster-config.yaml`**: Kustomization → `infrastructure/cluster-config/`
   * **`cnpg-operator.yaml`**: Kustomization → `infrastructure/cnpg-operator/`
   * **`coredns-custom.yaml`**: Kustomization → `infrastructure/coredns-custom/`
   * **`databases.yaml`**: Kustomization → `apps/databases/`
@@ -514,18 +536,20 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`hubble.yaml`**: Kustomization → `infrastructure/hubble/`
   * **`namespaces.yaml`**: Kustomization → `infrastructure/namespaces/`
   * **`openbao.yaml`**: Kustomization → `infrastructure/openbao/`
+  * **`tekton-operator.yaml`**: Kustomization → `infrastructure/tekton-operator/`
+  * **`tekton.yaml`**: Kustomization → `infrastructure/tekton/`
 * **`infrastructure/`** - Cluster-wide platform components, listed alphabetically below:
   * **`barman-cloud/`**: `barman-cloud-release.yaml`, `kustomization.yaml`
   * **`cert-manager/`**: `cert-manager-networkpolicy.yaml`, `cert-manager-release.yaml`, `kustomization.yaml`
-  * **`cilium/`**: `cilium-release.yaml`, `cilium-values.yaml`, `clusterwide-networkpolicy.yaml`, `kustomization.yaml`, `kustomizeconfig.yaml`, `lan-l2-policy.yaml`, `lan-lb-pool.yaml`
+  * **`cilium/`**: `cilium-release.yaml`, `cilium-values.yaml`, `clusterwide-networkpolicy.yaml`, `k3s-components-networkpolicy.yaml`, `kustomization.yaml`, `kustomizeconfig.yaml`, `lan-l2-policy.yaml`, `lan-lb-pool.yaml`
   * **`cluster-config/`**: `cluster-config.yaml`, `kustomization.yaml` (centralized configuration ConfigMap)
-  * **`cnpg-operator/`**: `cnpg-networkpolicy.yaml`, `cnpg-release.yaml`, `kustomization.yaml`
+  * **`cnpg-operator/`**: `cnpg-release.yaml`, `kustomization.yaml`
   * **`coredns-custom/`**: `coredns-custom.yaml`, `coredns-lan-service.yaml`, `kustomization.yaml` (internal zone on CoreDNS)
   * **`external-secrets/`**: `external-secrets-networkpolicy.yaml`, `external-secrets-release.yaml`, `kustomization.yaml`
   * **`flux-system-policies/`**: `flux-networkpolicy.yaml`, `kustomization.yaml`
   * **`gateway-api-crds/`**: `kustomization.yaml`, `standard-install.yaml` (vendored Gateway API CRDs)
-  * **`gateway/`**: `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
-  * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-httproute.yaml`, `kustomization.yaml`
+  * **`gateway/`**: `gateway-networkpolicy.yaml`, `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
+  * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-httproute.yaml`, `hubble-networkpolicy.yaml`, `kustomization.yaml`
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
   * **`openbao/`**: `kustomization.yaml`, `kustomizeconfig.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
 * **`src/`**
