@@ -14,9 +14,6 @@ spec:
             app.kubernetes.io/name: external-secrets
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: cert-manager
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: tekton-pipelines
-            app: tekton-chains-controller
       toPorts:
         - ports:
             - port: "8200"
