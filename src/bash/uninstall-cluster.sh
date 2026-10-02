@@ -40,8 +40,9 @@ clear_openbao_cache() {
 }
 
 clear_postgres_cache() {
-    echo "🧹 Clearing local PostgreSQL cache (~/.postgresql)..."
-    rm -rf "$HOME/.postgresql"
+    local root_cert_path="${PGSSLROOTCERT:-$HOME/.config/postgresql/root.crt}"
+    echo "🧹 Clearing local PostgreSQL root certificate ($root_cert_path)..."
+    rm -f "$root_cert_path"
 }
 
 clear_hubble_cache() {
