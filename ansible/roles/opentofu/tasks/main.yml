@@ -39,7 +39,21 @@
 # openbao_root_token is shared with the openbao role's default, not opentofu-local.
 - name: Resolve in-cluster OpenBao root token  # noqa: var-naming[no-role-prefix]
   ansible.builtin.set_fact:
-    openbao_root_token: "{{ openbao_root_token | default(lookup('ansible.builtin.env', 'OPENBAO_ROOT_TOKEN')) }}"
+    openbao_root_token: "{{ openbao_root_token | default(lookup('ansible.builtin.env', 'OPENBAO_ROOT_TOKEN'), true) }}"
+  no_log: true
+
+- name: Prompt for the OpenBao root token
+  ansible.builtin.pause:
+    prompt: "OpenBao root token (printed by the run that first initialized OpenBao)"
+    echo: false
+  register: opentofu_root_token_prompt
+  when: openbao_root_token | length == 0
+  no_log: true
+
+- name: Use the prompted OpenBao root token  # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    openbao_root_token: "{{ opentofu_root_token_prompt.user_input | trim }}"
+  when: opentofu_root_token_prompt is not skipped
   no_log: true
 
 - name: Verify in-cluster OpenBao root token is available
@@ -47,10 +61,8 @@
     that:
       - openbao_root_token | length > 0
     fail_msg: >-
-      No OpenBao root token available. Either let the openbao role's first-time init
-      run in this same invocation, or supply an existing token via
-      OPENBAO_ROOT_TOKEN=<token> ansible-playbook ... (the token printed at the
-      end of the run that first initialized OpenBao).
+      No OpenBao root token available. Enter it at the prompt, or supply it via
+      OPENBAO_ROOT_TOKEN=<token> ansible-playbook ...
 
 - name: Verify the Terraform state encryption passphrase and Postgres superuser password are available
   ansible.builtin.assert:
