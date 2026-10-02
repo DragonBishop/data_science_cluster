@@ -1,3 +1,38 @@
+## [2.0.0] - 2026-10-02
+
+### 🚀 Features
+
+- Add CILIUM_HELM_RETRIES configuration for Helm installation retries
+- [**breaking**] Replace Vault with OpenBao
+- [**breaking**] Replace Vault Secrets Operator with External Secrets Operator
+- *(network)* [**breaking**] Apply a default-deny baseline with named additional policies
+- *(preflight)* Enhance kubectl checks and version validation in preflight script
+- *(tekton)* Add Tekton results database and update kustomization
+- *(tofu)* Add Tekton results role and policy for database access
+- *(tekton)* Add Tekton Results secrets and configuration for OpenBao integration
+- *(tekton)* Add TLS certificate configuration for Tekton Results API
+- *(tekton)* Update Tekton Results configuration and network policy for database access
+- *(tekton)* Mint new Tekton Results database credentials on every pod start
+
+### 🐛 Bug Fixes
+
+- *(uninstall)* Leave bpffs mounted and require a reboot before reinstalling
+- *(flux)* Apply ESO secrets and Cilium Helm values before their consumers
+- *(seaweedfs)* Keep master and filer data under SEAWEEDFS_HOST_PATH
+- *(cilium)* Audit network policy and add LocalDirectPolicy for bao
+- *(just)* Keep the PostgreSQL root certificate under ~/.config/postgresql
+- *(ansible)* Prompt for the OpenBao root token when none is available
+- *(flux)* Reconcile SeaweedFS before databases so the backup bucket exists first
+
+### 📚 Documentation
+
+- Document OpenBao and External Secrets Operator
+- *(tekton)* Update documentation to include info on Tekton Results database.
+
+### ⚙️ Miscellaneous Tasks
+
+- *(flux)* Pin flux-system to openbao branch to test cluster rollout.
+- *(tekton)* Remove Tekton Chains
 ## [1.2.0] - 2026-10-01
 
 ### 🚀 Features
