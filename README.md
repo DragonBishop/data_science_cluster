@@ -116,8 +116,9 @@ These are the set of operators that need to be deployed in addition to the core 
 | --- | --- | --- | --- |
 | kube-prometheus-stack | `88.5.4` (chart, latest; not yet deployed) | Deploys the industry-standard Prometheus, Grafana, and Alertmanager bundle for comprehensive metric aggregation and dashboarding, to debug resource spikes and workload bottlenecks. | `victoria-metrics-k8s-stack` uses VictoriaMetrics instead of Prometheus. Lower footprint, but more work to customize. |
 | Loki | `v3.7.6` (latest; not yet deployed) | Log aggregation and processing, paired with kube-prometheus-stack to round out metrics + logs observability. | `VictoriaLogs` particularly if using the same stack as above. |
-| Tekton Pipelines | `v1.15.0` (latest; not yet deployed) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. | Woodpecker CI, if a single self-hosted binary with GitHub-Actions-like YAML is preferred over Tekton's CRD model. |
-| Tekton Triggers | `v0.37.0` (latest; not yet deployed) | EventListener reacting to GitHub webhook events (push/PR), starting the matching PipelineRun. | GitHubs Actions is the standard for ci workflow, and can offer basic complimentary CI services on github. |
+| Tekton Pipelines | `v1.15.0` (via Tekton Operator `v0.81.1`) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. | Woodpecker CI, if a single self-hosted binary with GitHub-Actions-like YAML is preferred over Tekton's CRD model. |
+| Tekton Triggers | `v0.37.0` (via Tekton Operator `v0.81.1`) | EventListener reacting to GitHub webhook events (push/PR), starting the matching PipelineRun. | GitHubs Actions is the standard for ci workflow, and can offer basic complimentary CI services on github. |
+| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.1`) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. Each pod start gets its own OpenBao database login. | The pruner alone, if history past the last `TEKTON_PRUNER_KEEP` runs isn't needed. Loki with a log forwarder for run logs, which Results doesn't store here. |
 | Tetragon | `v1.7.1` (latest release; not yet deployed) | Real-time, eBPF-based detection of anomalous behavior at the syscall level. Detects unexpected shell spawns inside a container, unauthorized reads of sensitive files, privilege escalation attempts. Shares the eBPF datapath Cilium uses, and comes from the same developer. | Falco is the more battle-tested choice, with a larger existing rule/policy ecosystem, if Tetragon's policy library proves too thin in practice. |
 
 ### ETL Pipeline Module
@@ -200,6 +201,7 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Prefect | [https://docs.prefect.io/](https://docs.prefect.io/) |
 | Tekton Pipelines | [https://tekton.dev/docs/pipelines/](https://tekton.dev/docs/pipelines/) |
 | Tekton Triggers | [https://tekton.dev/docs/triggers/](https://tekton.dev/docs/triggers/) |
+| Tekton Results | [https://tekton.dev/docs/results/](https://tekton.dev/docs/results/) |
 
 ---
 
@@ -367,16 +369,23 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── postgis-localhost.yaml
 │   │   ├── postgis-networkpolicy.yaml
 │   │   ├── postgis-tcproute.yaml
-│   │   └── postgis-tls.yaml
+│   │   ├── postgis-tls.yaml
+│   │   └── tekton-results-database.yaml
 │   ├── databases-secrets/               # ESO SecretStore + ExternalSecrets, applied before databases
 │   │   ├── eso-setup.yaml
 │   │   ├── kustomization.yaml
 │   │   ├── postgis-credentials.yaml
 │   │   └── seaweedfs-credentials.yaml
-│   └── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases
+│   ├── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases
+│   │   ├── kustomization.yaml
+│   │   ├── seaweedfs-release.yaml
+│   │   └── seaweedfs-tls.yaml
+│   └── tekton-results-secrets/          # Tekton Results credentials, RBAC and API certificate, applied before tekton
+│       ├── credential-renewal-rbac.yaml
+│       ├── eso-setup.yaml
 │       ├── kustomization.yaml
-│       ├── seaweedfs-release.yaml
-│       └── seaweedfs-tls.yaml
+│       ├── tekton-results-credentials.yaml
+│       └── tekton-results-tls.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
 │       ├── barman-cloud.yaml            # Kustomization → infrastructure/barman-cloud/
@@ -400,6 +409,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       ├── openbao.yaml                 # Kustomization → infrastructure/openbao/
 │       ├── seaweedfs.yaml               # Kustomization → apps/seaweedfs/
 │       ├── tekton-operator.yaml         # Kustomization → infrastructure/tekton-operator/
+│       ├── tekton-results-secrets.yaml  # Kustomization → apps/tekton-results-secrets/
 │       └── tekton.yaml                  # Kustomization → infrastructure/tekton/
 ├── infrastructure/                      # Cluster-wide platform components
 │   ├── barman-cloud/
@@ -450,13 +460,19 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   ├── namespaces/
 │   │   ├── kustomization.yaml
 │   │   └── namespaces.yaml
-│   └── openbao/
+│   ├── openbao/
+│   │   ├── kustomization.yaml
+│   │   ├── openbao-localhost.yaml
+│   │   ├── openbao-networkpolicy.yaml
+│   │   ├── openbao-release.yaml
+│   │   ├── openbao-tls.yaml
+│   │   └── openbao-values.yaml
+│   ├── tekton-operator/
+│   │   ├── kustomization.yaml
+│   │   └── tekton-operator-release.yaml
+│   └── tekton/                          # TektonConfig: Pipelines, Triggers, pruner and Results
 │       ├── kustomization.yaml
-│       ├── openbao-localhost.yaml
-│       ├── openbao-networkpolicy.yaml
-│       ├── openbao-release.yaml
-│       ├── openbao-tls.yaml
-│       └── openbao-values.yaml
+│       └── tektonconfig.yaml
 ├── notebooks/
 │   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
 │   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
@@ -512,12 +528,13 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`roles/`**: Reusable Ansible roles for configuring k3s systemd service, Gateway API CRDs & Cilium Helm release, GitHub Flux bootstrap, OpenBao initialization & GPG unseal automation, and OpenTofu state application.
 * **`apps/databases/`** - The PostGIS cluster and its networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
-  * **`postgis-cluster.yaml`**: The CNPG `Cluster`, the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
+  * **`postgis-cluster.yaml`**: The CNPG `Cluster` (with `tekton_readwrite` as a managed role), the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
   * **`postgis-database.yaml`**: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
   * **`postgis-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
-  * **`postgis-networkpolicy.yaml`**: Accepts the CNPG operator's status checks and OpenBao's role management.
+  * **`postgis-networkpolicy.yaml`**: Accepts the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
   * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
+  * **`tekton-results-database.yaml`**: CNPG `Database` declaring `tekton_results`, owned by `tekton_readwrite`.
 * **`apps/databases-secrets/`** - The ESO objects that produce the `databases` Secrets, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after every Secret exists.
   * **`eso-setup.yaml`**: The `postgis-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
   * **`postgis-credentials.yaml`**: `ExternalSecret`s and the `VaultDynamicSecret` generator for static and dynamic PostGIS credentials.
@@ -525,6 +542,11 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 * **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`) so `databases` is applied only after the `cnpg-backups` bucket exists.
   * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created by the chart's post-install hook.
   * **`seaweedfs-tls.yaml`**: cert-manager `Certificate` requesting the SeaweedFS S3 server certificate from `openbao-pki-issuer`.
+* **`apps/tekton-results-secrets/`** - Everything Tekton Results needs before it starts, in its own Flux `Kustomization` (`clusters/local/tekton-results-secrets.yaml`) so `tekton` is applied only after the database Secret exists.
+  * **`credential-renewal-rbac.yaml`**: `Role` and `RoleBinding` letting the Results API and retention-policy agent delete `tekton-results-postgres` at startup, so each pod start gets a new OpenBao login.
+  * **`eso-setup.yaml`**: The `tekton-results-openbao-auth` `ServiceAccount` ESO presents to OpenBao.
+  * **`tekton-results-credentials.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `tekton-results-postgres`, refreshed only when the Secret is missing.
+  * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`; its `ca.crt` also verifies Postgres.
 * **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/`/`apps/` below.
   * **`barman-cloud.yaml`**: Kustomization → `infrastructure/barman-cloud/`
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
@@ -544,6 +566,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`openbao.yaml`**: Kustomization → `infrastructure/openbao/`
   * **`seaweedfs.yaml`**: Kustomization → `apps/seaweedfs/`
   * **`tekton-operator.yaml`**: Kustomization → `infrastructure/tekton-operator/`
+  * **`tekton-results-secrets.yaml`**: Kustomization → `apps/tekton-results-secrets/`
   * **`tekton.yaml`**: Kustomization → `infrastructure/tekton/`
 * **`infrastructure/`** - Cluster-wide platform components, listed alphabetically below:
   * **`barman-cloud/`**: `barman-cloud-release.yaml`, `kustomization.yaml`
@@ -559,12 +582,14 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-localhost.yaml`, `hubble-networkpolicy.yaml`, `kustomization.yaml`
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
   * **`openbao/`**: `kustomization.yaml`, `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
+  * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`
+  * **`tekton/`**: `kustomization.yaml`, `tektonconfig.yaml` (Pipelines, Triggers, pruner, and Results on the external PostGIS database)
 * **`src/`**
   * **`src/bash/`**:
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).
     * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, unsealing the in-cluster OpenBao, and reactivating hibernated workloads.
     * **`stop-cluster.sh`**: Graceful shutdown: declaratively hibernating the CNPG cluster, waiting for pod termination, and stopping the k3s systemd unit.
 * **`terraform/`** - OpenTofu module configuring OpenBao's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
-  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic role (`postgis-cluster`, `postgis-app-role`).
+  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `tekton-results-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic roles (`postgis-cluster`, `postgis-app-role`, `tekton-results-app-role`).
 * **`tests/`**
   * **`conftest.py`**: Shared test fixtures and pytest configuration.
