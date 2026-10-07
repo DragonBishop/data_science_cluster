@@ -10,3 +10,6 @@
 
 - name: Apply terraform/openbao
   ansible.builtin.import_tasks: apply.yml
+
+- name: Verify what terraform/openbao configured
+  ansible.builtin.import_tasks: verify.yml

@@ -1,3 +1,2 @@
 ---
 openbao_keyfile: "{{ openbao_local_dir }}/unseal-keys.gpg"
-openbao_root_token: ""
