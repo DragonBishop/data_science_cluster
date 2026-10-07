@@ -213,7 +213,9 @@ def test_ansible_cilium_values_match_flux(
 ):
     """Check that Ansible renders the same Cilium values as Flux's cilium-values ConfigMap."""
     ansible_values = yaml.safe_load(
-        run_role_tasks("cilium", "render_values", tmp_path)["stdout"]
+        run_role_tasks("data_science.cluster.cilium", "render_values", tmp_path)[
+            "stdout"
+        ]
     )
 
     cilium_kustomization = next(

@@ -1,3 +1,0 @@
----
-- name: Converge
-  ansible.builtin.import_playbook: ../../playbooks/data_cluster.yml

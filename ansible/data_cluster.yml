@@ -47,11 +47,11 @@
           no_log: true
 
   roles:
-    - { role: k3s, tags: [k3s] }
-    - { role: cilium, tags: [cilium] }
-    - { role: flux, tags: [flux] }
-    - { role: openbao, tags: [openbao] }
-    - { role: opentofu, tags: [opentofu, openbao] }
+    - { role: data_science.cluster.k3s, tags: [k3s] }
+    - { role: data_science.cluster.cilium, tags: [cilium] }
+    - { role: data_science.cluster.flux, tags: [flux] }
+    - { role: data_science.cluster.openbao, tags: [openbao] }
+    - { role: data_science.cluster.opentofu, tags: [opentofu, openbao] }
 
   tasks:
     - name: Print freshly-generated OpenBao root token and unseal keys
