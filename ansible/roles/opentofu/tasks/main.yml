@@ -124,7 +124,7 @@
 #     cmd: kubectl exec -i -n {{ openbao_namespace }} {{ openbao_pod }} -- bao login -no-print -
 #     stdin: "{{ openbao_root_token }}\n"
 #   environment:
-#     KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
+#     KUBECONFIG: "{{ kubeconfig_path }}"
 #   no_log: true
 #   changed_when: true
 #

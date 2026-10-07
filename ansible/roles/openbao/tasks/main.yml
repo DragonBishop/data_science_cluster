@@ -114,7 +114,7 @@
     cmd: kubectl exec -i -n {{ openbao_namespace }} {{ openbao_pod }} -- bao write -format=json sys/unseal key=-
     stdin: "{{ item }}"
   environment:
-    KUBECONFIG: "{{ ansible_facts.env.HOME }}/.kube/config"
+    KUBECONFIG: "{{ kubeconfig_path }}"
   loop: "{{ openbao_unseal_keys }}"
   no_log: true
   changed_when: true

@@ -1,0 +1,24 @@
+---
+# --- cluster-config/cpu-memory.yaml ---
+cilium_cpu_request: "{{ cluster_config.CILIUM_CPU_REQUEST }}"
+cilium_envoy_cpu_request: "{{ cluster_config.CILIUM_ENVOY_CPU_REQUEST }}"
+cilium_envoy_mem_request: "{{ cluster_config.CILIUM_ENVOY_MEM_REQUEST }}"
+cilium_mem_limit: "{{ cluster_config.CILIUM_MEM_LIMIT }}"
+cilium_mem_request: "{{ cluster_config.CILIUM_MEM_REQUEST }}"
+cilium_operator_cpu_request: "{{ cluster_config.CILIUM_OPERATOR_CPU_REQUEST }}"
+cilium_operator_mem_limit: "{{ cluster_config.CILIUM_OPERATOR_MEM_LIMIT }}"
+cilium_operator_mem_request: "{{ cluster_config.CILIUM_OPERATOR_MEM_REQUEST }}"
+
+# --- cluster-config/networking.yaml ---
+git_forge_host: "{{ cluster_config.GIT_FORGE_HOST }}"
+k3s_api_host: "{{ cluster_config.K3S_API_HOST }}"
+k3s_api_port: "{{ cluster_config.K3S_API_PORT }}"
+pod_cidr: "{{ cluster_config.POD_CIDR }}"
+
+# --- cluster-config/replicas.yaml ---
+cilium_operator_replicas: "{{ cluster_config.CILIUM_OPERATOR_REPLICAS }}"
+
+# --- cluster-config/versions.yaml ---
+cilium_version: "{{ cluster_config.CILIUM_VERSION }}"
+gateway_api_version: "{{ cluster_config.GATEWAY_API_VERSION }}"
+k3s_version: "{{ cluster_config.K3S_VERSION }}"

@@ -1,6 +1,3 @@
 ---
-openbao_namespace: openbao
-openbao_pod: openbao-0
-openbao_local_dir: "{{ repo_root }}/.local/openbao"
 openbao_keyfile: "{{ openbao_local_dir }}/unseal-keys.gpg"
 openbao_root_token: ""

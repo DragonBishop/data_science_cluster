@@ -1,0 +1,19 @@
+---
+repo_root: "{{ lookup('ansible.builtin.pipe', 'git rev-parse --show-toplevel') }}"
+kubeconfig_path: "{{ ansible_facts.env.HOME }}/.kube/config"
+
+openbao_namespace: openbao
+openbao_pod: openbao-0
+openbao_local_dir: "{{ repo_root }}/.local/openbao"
+
+cluster_config_dir: "{{ repo_root }}/infrastructure/cluster-config"
+cluster_config_fragment_paths: >-
+  {{ (lookup('ansible.builtin.file', cluster_config_dir + '/kustomization.yaml') | from_yaml).patches
+     | map(attribute='path')
+     | map('regex_replace', '^', cluster_config_dir + '/')
+     | list }}
+cluster_config: >-
+  {{ query('ansible.builtin.file', *cluster_config_fragment_paths)
+     | map('from_yaml')
+     | map(attribute='data')
+     | combine }}
