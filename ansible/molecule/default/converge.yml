@@ -1,0 +1,14 @@
+---
+- name: Converge
+  ansible.builtin.import_playbook: ../../data_cluster.yml
+
+- name: Hand the OpenBao root token to later runs
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Write the root token into Molecule's inventory directory
+      ansible.builtin.copy:
+        dest: "{{ molecule_ephemeral_directory }}/inventory/openbao-root-token.yml"
+        content: "{{ {'all': {'vars': {'openbao_root_token': openbao_root_token}}} | to_nice_yaml }}"
+        mode: "0600"
+      no_log: true

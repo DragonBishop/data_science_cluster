@@ -1,0 +1,20 @@
+---
+ansible:
+  executor:
+    args:
+      ansible_playbook:
+        - --inventory=${MOLECULE_SCENARIO_DIRECTORY}/../../inventory/
+        - --extra-vars=openbao_gpg_passphrase=${OPENBAO_GPG_PASSPHRASE}
+        - --extra-vars=opentofu_state_encryption_passphrase=${OPENTOFU_STATE_ENCRYPTION_PASSPHRASE}
+        - --extra-vars=opentofu_postgres_superuser_password=${OPENTOFU_POSTGRES_SUPERUSER_PASSWORD}
+        - --extra-vars=opentofu_binary=${OPENTOFU_BINARY}
+
+scenario:
+  test_sequence:
+    - converge
+    - verify
+    - idempotence
+    - side_effect
+    - verify
+
+shared_state: false
