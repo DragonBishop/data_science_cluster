@@ -1,0 +1,26 @@
+---
+- name: Create temp file for rendered Cilium Helm values
+  ansible.builtin.tempfile:
+    state: file
+    suffix: cilium-values.yaml
+  register: cilium_values_rendered
+
+- name: Write rendered Cilium Helm values
+  ansible.builtin.copy:
+    dest: "{{ cilium_values_rendered.path }}"
+    content: "{{ cilium_values_substituted.stdout }}"
+    mode: "0600"
+
+- name: Install Cilium
+  kubernetes.core.helm:
+    name: cilium
+    chart_ref: oci://quay.io/cilium/charts/cilium
+    chart_version: "{{ cilium_version }}"
+    release_namespace: kube-system
+    values_files:
+      - "{{ cilium_values_rendered.path }}"
+
+- name: Clean up rendered Cilium Helm values
+  ansible.builtin.file:
+    path: "{{ cilium_values_rendered.path }}"
+    state: absent

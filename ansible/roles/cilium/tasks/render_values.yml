@@ -1,0 +1,21 @@
+---
+- name: Substitute cluster-config values into Cilium Helm values
+  ansible.builtin.shell:
+    cmd: |
+      while IFS= read -r line || [ -n "$line" ]; do eval "echo \"$line\""; done < "{{ repo_root }}/infrastructure/cilium/cilium-values.yaml"
+    executable: /bin/bash
+  environment:
+    CILIUM_CPU_REQUEST: "{{ cilium_cpu_request }}"
+    CILIUM_ENVOY_CPU_REQUEST: "{{ cilium_envoy_cpu_request }}"
+    CILIUM_ENVOY_MEM_REQUEST: "{{ cilium_envoy_mem_request }}"
+    CILIUM_MEM_LIMIT: "{{ cilium_mem_limit }}"
+    CILIUM_MEM_REQUEST: "{{ cilium_mem_request }}"
+    CILIUM_OPERATOR_CPU_REQUEST: "{{ cilium_operator_cpu_request }}"
+    CILIUM_OPERATOR_MEM_LIMIT: "{{ cilium_operator_mem_limit }}"
+    CILIUM_OPERATOR_MEM_REQUEST: "{{ cilium_operator_mem_request }}"
+    CILIUM_OPERATOR_REPLICAS: "{{ cilium_operator_replicas }}"
+    K3S_API_HOST: "{{ k3s_api_host }}"
+    K3S_API_PORT: "{{ k3s_api_port }}"
+    POD_CIDR: "{{ pod_cidr }}"
+  register: cilium_values_substituted
+  changed_when: false

@@ -1,0 +1,30 @@
+---
+- name: Ensure ~/.gnupg directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts.env.HOME }}/.gnupg"
+    state: directory
+    mode: "0700"
+
+# Required for gpg --pinentry-mode loopback (no TTY available for a real prompt).
+- name: Configure gpg-agent for loopback pinentry and zero caching
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_facts.env.HOME }}/.gnupg/gpg-agent.conf"
+    line: "{{ item }}"
+    create: true
+    mode: "0600"
+  loop:
+    - "allow-loopback-pinentry"
+    - "default-cache-ttl 0"
+    - "max-cache-ttl 0"
+  notify: Reload gpg-agent
+
+- name: Reload gpg-agent before the keyfile is encrypted or decrypted
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify the unseal-keyfile GPG passphrase is available
+  ansible.builtin.assert:
+    that:
+      - openbao_gpg_passphrase | default('') | length > 0
+    fail_msg: >-
+      No GPG passphrase supplied for {{ openbao_keyfile }}. Answer the
+      "GPG passphrase for the unseal keyfile" prompt at the start of the play.

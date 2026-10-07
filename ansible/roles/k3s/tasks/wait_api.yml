@@ -1,0 +1,10 @@
+---
+- name: Wait for Kubernetes API to respond
+  ansible.builtin.command: kubectl get nodes
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: k3s_api_check
+  until: k3s_api_check.rc == 0
+  retries: 12
+  delay: 5
+  changed_when: false

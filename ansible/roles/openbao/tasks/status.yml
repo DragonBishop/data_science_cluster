@@ -1,0 +1,9 @@
+---
+- name: Check whether in-cluster OpenBao is already initialized
+  kubernetes.core.k8s_exec:
+    namespace: "{{ openbao_namespace }}"
+    pod: "{{ openbao_pod }}"
+    command: bao status -format=json
+  register: openbao_status_result
+  changed_when: false
+  failed_when: false

@@ -1,0 +1,30 @@
+---
+- name: Fetch in-cluster OpenBao CA certificate
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: openbao-server-cert
+    namespace: "{{ openbao_namespace }}"
+  register: opentofu_openbao_cert_secret
+  failed_when: opentofu_openbao_cert_secret.resources | default([]) | length == 0
+
+- name: Ensure local OpenBao cert directory exists
+  ansible.builtin.file:
+    path: "{{ openbao_local_dir }}/certs"
+    state: directory
+    mode: "0700"
+
+- name: Write in-cluster OpenBao CA certificate locally
+  ansible.builtin.copy:
+    dest: "{{ openbao_local_dir }}/certs/openbao-internal-ca.crt"
+    content: "{{ opentofu_openbao_cert_secret.resources[0].data['ca.crt'] | b64decode }}"
+    mode: "0600"
+
+- name: Wait for OpenBao on its local redirect
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 8210
+    timeout: 30
+    msg: >-
+      OpenBao did not answer on 127.0.0.1:8210. Check the openbao-localhost
+      CiliumLocalRedirectPolicy and that openbao-0 is Running.

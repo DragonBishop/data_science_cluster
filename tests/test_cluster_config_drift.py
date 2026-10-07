@@ -12,7 +12,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CLUSTER_CONFIG_DIR = REPO_ROOT / "infrastructure/cluster-config"
 FLUX_KUSTOMIZATIONS_DIR = REPO_ROOT / "clusters/local"
 ANSIBLE_ROUTES_PATH = REPO_ROOT / "ansible/inventory/group_vars/all/cluster_config.yml"
-CILIUM_TASKS_PATH = REPO_ROOT / "ansible/roles/cilium/tasks/main.yml"
 ANSIBLE_JSON_OUTPUT = {
     "ANSIBLE_STDOUT_CALLBACK": "ansible.posix.json",
     "ANSIBLE_LOAD_CALLBACK_PLUGINS": "1",
@@ -125,14 +124,29 @@ def evaluate_ansible_variables(variable_names: list[str]) -> dict:
     return parse_ansible_task_result(output)["msg"]
 
 
-def run_ansible_task(task: dict, work_dir: Path) -> dict:
-    """Run one task in a throwaway playbook and return its localhost result.
+def run_role_tasks(role: str, tasks_from: str, work_dir: Path) -> dict:
+    """Run one of a role's task files in a throwaway playbook and return its first task's result.
 
     The playbook sits outside the repo, so repo_root is passed as an extra var.
     """
     playbook_file = work_dir / "playbook.yml"
     playbook_file.write_text(
-        yaml.safe_dump([{"hosts": "localhost", "gather_facts": False, "tasks": [task]}])
+        yaml.safe_dump(
+            [
+                {
+                    "hosts": "localhost",
+                    "gather_facts": False,
+                    "tasks": [
+                        {
+                            "ansible.builtin.import_role": {
+                                "name": role,
+                                "tasks_from": tasks_from,
+                            }
+                        }
+                    ],
+                }
+            ]
+        )
     )
     output = run_command(
         [
@@ -198,14 +212,9 @@ def test_ansible_cilium_values_match_flux(
     cluster_config_data: dict[str, str], tmp_path: Path
 ):
     """Check that Ansible renders the same Cilium values as Flux's cilium-values ConfigMap."""
-    render_task_name = "Substitute cluster-config values into Cilium Helm values"
-    cilium_tasks = yaml.safe_load(CILIUM_TASKS_PATH.read_text())
-    render_task = next(
-        (task for task in cilium_tasks if task.get("name") == render_task_name),
-        None,
+    ansible_values = yaml.safe_load(
+        run_role_tasks("cilium", "render_values", tmp_path)["stdout"]
     )
-    assert render_task, f"no task named {render_task_name!r} in {CILIUM_TASKS_PATH}"
-    ansible_values = yaml.safe_load(run_ansible_task(render_task, tmp_path)["stdout"])
 
     cilium_kustomization = next(
         (

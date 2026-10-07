@@ -1,0 +1,4 @@
+---
+- name: Reload gpg-agent
+  ansible.builtin.command: gpgconf --reload gpg-agent
+  changed_when: true
