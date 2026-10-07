@@ -17,6 +17,35 @@
       private: true
       default: ""
 
+  pre_tasks:
+    - name: Prompt for the OpenBao root token if OpenBao is already initialized
+      tags: [opentofu, openbao]
+      block:
+        - name: Check whether in-cluster OpenBao is already initialized
+          kubernetes.core.k8s_exec:
+            namespace: "{{ openbao_namespace }}"
+            pod: "{{ openbao_pod }}"
+            command: bao status -format=json
+          register: openbao_initial_status
+          changed_when: false
+          failed_when: false
+
+        - name: Prompt for the OpenBao root token
+          ansible.builtin.pause:
+            prompt: "OpenBao root token (printed by the run that first initialized OpenBao)"
+            echo: false
+          register: openbao_root_token_prompt
+          when:
+            - (openbao_initial_status.stdout | default('{}', true) | from_json).initialized | default(false)
+            - openbao_root_token | default(lookup('ansible.builtin.env', 'OPENBAO_ROOT_TOKEN'), true) | length == 0
+          no_log: true
+
+        - name: Use the prompted OpenBao root token
+          ansible.builtin.set_fact:
+            openbao_root_token: "{{ openbao_root_token_prompt.user_input | trim }}"
+          when: openbao_root_token_prompt is not skipped
+          no_log: true
+
   roles:
     - { role: k3s, tags: [k3s] }
     - { role: cilium, tags: [cilium] }
