@@ -1,0 +1,9 @@
+# Instance and replica counts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: flux-system
+data:
+  CILIUM_OPERATOR_REPLICAS: "1"
+  POSTGIS_INSTANCES: "1"

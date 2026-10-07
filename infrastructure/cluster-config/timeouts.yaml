@@ -1,0 +1,10 @@
+# Waits, delays and retry counts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: flux-system
+data:
+  CILIUM_HELM_RETRIES: "3"
+  POSTGIS_SMART_SHUTDOWN_TIMEOUT: "15"
+  POSTGIS_STOP_DELAY: "60"

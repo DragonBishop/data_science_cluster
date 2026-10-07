@@ -1,0 +1,15 @@
+# Certificate lifetimes, renewal windows, key algorithm and key size.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: flux-system
+data:
+  CERT_KEY_ALGORITHM: "ECDSA"
+  CERT_KEY_SIZE: "256"
+  HUBBLE_CERT_VALIDITY_DAYS: "30"
+  LOCAL_CA_CERT_DURATION: "2160h"
+  LOCAL_CA_CERT_RENEW_BEFORE: "360h"
+  LOCAL_CA_ROOT_DURATION: "87600h"
+  OPENBAO_PKI_CERT_DURATION: "720h"
+  OPENBAO_PKI_CERT_RENEW_BEFORE: "120h"

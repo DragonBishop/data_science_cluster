@@ -1,0 +1,13 @@
+# Volume sizes, storage classes, host paths and bucket names.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: flux-system
+data:
+  CNPG_BACKUP_BUCKET: "cnpg-backups"
+  OPENBAO_DATA_STORAGE_SIZE: "10Gi"
+  POSTGIS_STORAGE_CLASS: "local-path"
+  POSTGIS_STORAGE_SIZE: "100Gi"
+  SEAWEEDFS_HOST_PATH: "/mnt/vault13/seaweedfs"
+  SEAWEEDFS_MAX_VOLUMES: "90"

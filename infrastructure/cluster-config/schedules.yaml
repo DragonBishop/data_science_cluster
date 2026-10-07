@@ -1,0 +1,12 @@
+# When, or how often, something recurs.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: flux-system
+data:
+  ESO_DYNAMIC_REFRESH_INTERVAL: "2h"
+  ESO_REFRESH_INTERVAL: "1h"
+  POSTGIS_BACKUP_SCHEDULE: "0 0 0 * * *"
+  TEKTON_PRUNER_SCHEDULE: "0 8 * * *"
+  TEKTON_RESULTS_RETENTION_INTERVAL: "1h"

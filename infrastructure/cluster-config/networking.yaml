@@ -1,0 +1,18 @@
+# IPs, CIDRs, ports, hostnames, domains and interfaces.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: flux-system
+data:
+  COREDNS_LAN_IP: "192.0.2.242"
+  GATEWAY_IP: "192.0.2.240"
+  GIT_FORGE_HOST: "github.com"
+  INTERNAL_DOMAIN: "internal"
+  K3S_API_HOST: "127.0.0.1"
+  K3S_API_PORT: "6443"
+  LAN_CIDR: "192.168.1.0/24"
+  LAN_INTERFACE: "enp9s0"
+  LAN_LB_POOL_STOP: "192.0.2.250"
+  POD_CIDR: "10.42.0.0/16"
+  SEAWEEDFS_S3_PORT: "9000"

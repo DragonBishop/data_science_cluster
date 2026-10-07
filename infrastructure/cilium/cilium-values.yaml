@@ -1,4 +1,4 @@
-# Cilium Helm chart values (Gateway API version tracked in cluster-config.yaml GATEWAY_API_VERSION)
+# Cilium Helm chart values (Gateway API version tracked in cluster-config/versions.yaml GATEWAY_API_VERSION)
 
 kubeProxyReplacement: true
 
