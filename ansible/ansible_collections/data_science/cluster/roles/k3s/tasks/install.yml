@@ -46,9 +46,3 @@
     state: absent
   when: k3s_installed.rc != 0
   become: true
-
-- name: Ensure ~/.kube directory exists
-  ansible.builtin.file:
-    path: "{{ kubeconfig_path | dirname }}"
-    state: directory
-    mode: "0755"

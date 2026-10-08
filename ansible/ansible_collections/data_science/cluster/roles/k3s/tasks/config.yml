@@ -1,4 +1,14 @@
 ---
+# Created as the user before k3s runs; otherwise k3s creates it as root.
+- name: Ensure ~/.kube directory exists
+  ansible.builtin.file:
+    path: "{{ kubeconfig_path | dirname }}"
+    state: directory
+    owner: "{{ ansible_facts.user_id }}"
+    group: "{{ ansible_facts.user_gid }}"
+    mode: "0755"
+  become: true
+
 - name: Create /etc/rancher/k3s directory
   ansible.builtin.file:
     path: /etc/rancher/k3s
@@ -11,7 +21,8 @@
     dest: /etc/rancher/k3s/config.yaml
     mode: "0644"
     content: |
-      write-kubeconfig-mode: "0644"
+      write-kubeconfig-mode: "0660"
+      write-kubeconfig-group: "{{ ansible_facts.user_gid }}"
       write-kubeconfig: "{{ kubeconfig_path }}"
       disable:
         - traefik

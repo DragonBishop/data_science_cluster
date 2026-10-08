@@ -10,6 +10,10 @@
     - name: Parse the k3s config
       ansible.builtin.set_fact:
         k3s_config: "{{ k3s_config_file.content | b64decode | from_yaml }}"
+    - name: Check the kubeconfig directory
+      ansible.builtin.stat:
+        path: "{{ kubeconfig_path | dirname }}"
+      register: kubeconfig_dir_stat
     - name: It should leave pod networking to Cilium, not flannel
       ansible.builtin.assert:
         that:
@@ -45,3 +49,13 @@
         that:
           - k3s_config['write-kubeconfig'] == kubeconfig_path
         fail_msg: The kubeconfig is not landing in the correct location for the playbook.
+    - name: It should give the kubeconfig to the user's group
+      ansible.builtin.assert:
+        that:
+          - k3s_config['write-kubeconfig-group'] | string == ansible_facts.user_gid | string
+        fail_msg: "The kubeconfig group is {{ k3s_config['write-kubeconfig-group'] | default('unset') }}, not the user's group {{ ansible_facts.user_gid }}."
+    - name: It should give the user the kubeconfig directory
+      ansible.builtin.assert:
+        that:
+          - kubeconfig_dir_stat.stat.pw_name | default('missing') == ansible_facts.user_id
+        fail_msg: "The kubeconfig directory is {{ kubeconfig_dir_stat.stat.pw_name | default('missing') }}, not owned by {{ ansible_facts.user_id }}."

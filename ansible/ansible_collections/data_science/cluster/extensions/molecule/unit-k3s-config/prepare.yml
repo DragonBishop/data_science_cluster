@@ -1,9 +1,13 @@
 ---
 - name: The k3s config on a fresh host
   hosts: molecule
-  gather_facts: false
+  gather_facts: true
   tasks:
     - name: Remove /etc/rancher/k3s
       ansible.builtin.file:
         path: /etc/rancher/k3s
+        state: absent
+    - name: Remove the kubeconfig directory
+      ansible.builtin.file:
+        path: "{{ kubeconfig_path | dirname }}"
         state: absent
