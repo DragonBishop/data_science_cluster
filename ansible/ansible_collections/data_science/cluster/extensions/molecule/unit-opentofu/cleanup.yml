@@ -1,0 +1,11 @@
+---
+- name: OpenTofu inputs after a rotation request
+  hosts: molecule
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Remove the test secrets directory
+      ansible.builtin.file:
+        path: "{{ opentofu_secrets_dir }}"
+        state: absent

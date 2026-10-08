@@ -1,0 +1,51 @@
+---
+- name: OpenTofu inputs after a rotation request
+  hosts: molecule
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Check the version file
+      ansible.builtin.stat:
+        path: "{{ opentofu_secrets_wo_version_file }}"
+      register: opentofu_wo_version_stat
+
+    - name: Read the version file
+      ansible.builtin.slurp:
+        src: "{{ opentofu_secrets_wo_version_file }}"
+      register: opentofu_wo_version_content
+
+    - name: Check for the rotation marker
+      ansible.builtin.stat:
+        path: "{{ opentofu_rotate_secrets_marker }}"
+      register: opentofu_rotate_marker_stat
+
+    - name: It should keep the version file
+      ansible.builtin.assert:
+        that:
+          - opentofu_wo_version_stat.stat.exists
+        fail_msg: the version file is missing
+
+    - name: It should keep the version readable only by its owner
+      ansible.builtin.assert:
+        that:
+          - opentofu_wo_version_stat.stat.mode == '0600'
+        fail_msg: "the version file has mode {{ opentofu_wo_version_stat.stat.mode }}, not 0600"
+
+    - name: It should record an epoch as the version
+      ansible.builtin.assert:
+        that:
+          - opentofu_wo_version_content.content | b64decode | trim is match('^[0-9]+$')
+        fail_msg: the version file does not hold an epoch
+
+    - name: It should replace the previous version
+      ansible.builtin.assert:
+        that:
+          - opentofu_wo_version_content.content | b64decode | trim != opentofu_previous_wo_version
+        fail_msg: the version file still holds the previous version
+
+    - name: It should clear the rotation request
+      ansible.builtin.assert:
+        that:
+          - not opentofu_rotate_marker_stat.stat.exists
+        fail_msg: the rotation marker is still there, so the next run would rotate again

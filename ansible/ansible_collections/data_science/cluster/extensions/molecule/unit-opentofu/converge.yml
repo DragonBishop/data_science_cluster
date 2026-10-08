@@ -1,0 +1,28 @@
+---
+- name: OpenTofu inputs after a rotation request
+  hosts: molecule
+  gather_facts: true
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Record or rotate the secrets write-only version
+      ansible.builtin.import_role:
+        name: data_science.cluster.opentofu
+        tasks_from: wo_version
+
+    - name: Resolve the inputs OpenTofu needs
+      ansible.builtin.import_role:
+        name: data_science.cluster.opentofu
+        tasks_from: resolve_secrets
+
+    - name: It should hand OpenTofu an epoch as the version
+      ansible.builtin.assert:
+        that:
+          - opentofu_secrets_wo_version is match('[0-9]+$')
+        fail_msg: "OpenTofu received {{ opentofu_secrets_wo_version }}, not an epoch"
+
+    - name: It should hand OpenTofu the new version
+      ansible.builtin.assert:
+        that:
+          - opentofu_secrets_wo_version != opentofu_previous_wo_version
+        fail_msg: OpenTofu received the previous version
