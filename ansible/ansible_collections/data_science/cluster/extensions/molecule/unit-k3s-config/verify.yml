@@ -1,0 +1,47 @@
+---
+- name: The k3s config on a fresh host
+  hosts: molecule
+  gather_facts: true
+  tasks:
+    - name: Read the k3s config
+      ansible.builtin.slurp:
+        src: /etc/rancher/k3s/config.yaml
+      register: k3s_config_file
+    - name: Parse the k3s config
+      ansible.builtin.set_fact:
+        k3s_config: "{{ k3s_config_file.content | b64decode | from_yaml }}"
+    - name: It should leave pod networking to Cilium, not flannel
+      ansible.builtin.assert:
+        that:
+          - k3s_config['flannel-backend'] == 'none'
+        fail_msg: Flannel remains enabled.
+    - name: It should leave service routing to Cilium, not kube-proxy
+      ansible.builtin.assert:
+        that:
+          - k3s_config['disable-kube-proxy']
+        fail_msg: kube-proxy remains enabled.
+    - name: It should leave network policy to Cilium, not k3s's controller
+      ansible.builtin.assert:
+        that:
+          - k3s_config['disable-network-policy']
+        fail_msg: The k3s network policy controller remains enabled.
+    - name: It should disable the bundled ingress ('traefik')
+      ansible.builtin.assert:
+        that:
+          - "'traefik' in k3s_config.disable"
+        fail_msg: Traefik remains enabled.
+    - name: It should disable the bundled load balancer ('servicelb')
+      ansible.builtin.assert:
+        that:
+          - "'servicelb' in k3s_config.disable"
+        fail_msg: ServiceLB remains enabled.
+    - name: It should encrypt secrets at rest
+      ansible.builtin.assert:
+        that:
+          - k3s_config['secrets-encryption']
+        fail_msg: Encryption at rest is not enabled.
+    - name: It should write the kubeconfig to the designated path.
+      ansible.builtin.assert:
+        that:
+          - k3s_config['write-kubeconfig'] == kubeconfig_path
+        fail_msg: The kubeconfig is not landing in the correct location for the playbook.

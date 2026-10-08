@@ -1,0 +1,9 @@
+---
+- name: The k3s config on a fresh host
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Remove /etc/rancher/k3s
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: absent
