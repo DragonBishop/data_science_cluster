@@ -350,7 +350,9 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 ├── ansible/                             # Ansible playbooks and roles for cluster provisioning
 │   ├── inventory/
 │   │   ├── group_vars/
-│   │   │   └── all.yml
+│   │   │   └── all/
+│   │   │       ├── ansible.yml
+│   │   │       └── cluster_config.yml   # cluster-config keys Ansible uses
 │   │   └── hosts.ini
 │   ├── playbooks/
 │   │   └── data_cluster.yml
@@ -428,8 +430,18 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── lan-l2-policy.yaml
 │   │   └── lan-lb-pool.yaml
 │   ├── cluster-config/                  # Centralized cluster topology and configuration ConfigMap
-│   │   ├── cluster-config.yaml
-│   │   └── kustomization.yaml
+│   │   ├── certificates.yaml
+│   │   ├── cluster-config.yaml          # empty base; each fragment is a patch
+│   │   ├── cpu-memory.yaml
+│   │   ├── databases.yaml
+│   │   ├── kustomization.yaml
+│   │   ├── networking.yaml
+│   │   ├── replicas.yaml
+│   │   ├── retention.yaml
+│   │   ├── schedules.yaml
+│   │   ├── storage.yaml
+│   │   ├── timeouts.yaml
+│   │   └── versions.yaml
 │   ├── cnpg-operator/
 │   │   ├── cnpg-release.yaml
 │   │   └── kustomization.yaml
@@ -522,9 +534,9 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest`.
   * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR, and `git-cliff` commits `CHANGELOG.md` onto that PR's branch.
 * **`ansible/`** - Automated provisioning and orchestration playbooks for bootstrapping the cluster.
-  * **`inventory/`**: Inventory definition (`hosts.ini`) and global variable mapping (`group_vars/all.yml`) sourcing values directly from `infrastructure/cluster-config/cluster-config.yaml`.
+  * **`inventory/`**: Inventory definition (`hosts.ini`) and `group_vars/all/`. `cluster_config.yml` lists every cluster-config key Ansible uses, lowercased, under headings named for its `infrastructure/cluster-config/` fragment. `ansible.yml` holds Ansible-only values and merges the fragments.
   * **`playbooks/data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `openbao` → `opentofu`.
-  * **`requirements.yml`**: Ansible Galaxy collection dependencies (`kubernetes.core`, `cloud.terraform`, `containers.podman`).
+  * **`requirements.yml`**: The Ansible Galaxy collection the `ansible` package doesn't ship (`cloud.terraform`). `kubernetes.core`, `containers.podman` and `ansible.posix` come from the `ansible` package.
   * **`roles/`**: Reusable Ansible roles for configuring k3s systemd service, Gateway API CRDs & Cilium Helm release, GitHub Flux bootstrap, OpenBao initialization & GPG unseal automation, and OpenTofu state application.
 * **`apps/databases/`** - The PostGIS cluster and its networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
@@ -572,7 +584,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`barman-cloud/`**: `barman-cloud-release.yaml`, `kustomization.yaml`
   * **`cert-manager/`**: `cert-manager-networkpolicy.yaml`, `cert-manager-release.yaml`, `kustomization.yaml`
   * **`cilium/`**: `cilium-release.yaml`, `cilium-values.yaml`, `clusterwide-networkpolicy.yaml`, `k3s-components-networkpolicy.yaml`, `kustomization.yaml`, `lan-l2-policy.yaml`, `lan-lb-pool.yaml`
-  * **`cluster-config/`**: `cluster-config.yaml`, `kustomization.yaml` (centralized configuration ConfigMap)
+  * **`cluster-config/`**: `cluster-config.yaml` (empty base), `kustomization.yaml`, and one fragment per kind of value: `certificates.yaml`, `cpu-memory.yaml`, `databases.yaml`, `networking.yaml`, `replicas.yaml`, `retention.yaml`, `schedules.yaml`, `storage.yaml`, `timeouts.yaml`, `versions.yaml` (centralized configuration ConfigMap)
   * **`cnpg-operator/`**: `cnpg-release.yaml`, `kustomization.yaml`
   * **`coredns-custom/`**: `coredns-custom.yaml`, `coredns-lan-service.yaml`, `kustomization.yaml` (internal zone on CoreDNS)
   * **`external-secrets/`**: `external-secrets-networkpolicy.yaml`, `external-secrets-release.yaml`, `kustomization.yaml`

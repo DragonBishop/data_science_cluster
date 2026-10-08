@@ -16,7 +16,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 ## Ansible Provisioning
 
 * **Ansible playbook fails with missing collection errors**
-  * **What's happening:** The required Ansible Galaxy collections (`kubernetes.core`, `community.general`) are missing from the host environment.
+  * **What's happening:** The Galaxy collection `cloud.terraform` is missing. It isn't part of the `ansible` package, so it installs separately from `ansible/requirements.yml`.
   * **How to fix it:** Install Galaxy dependencies declared in the repository:
 
     ```bash

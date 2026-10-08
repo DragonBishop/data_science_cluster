@@ -93,7 +93,7 @@ hubble version
 
 ##### kubectl
 
-Install the release matching `K3S_VERSION` in `cluster-config.yaml`, without the `+k3s` suffix:
+Install the release matching `K3S_VERSION` in `infrastructure/cluster-config/versions.yaml`, without the `+k3s` suffix:
 
 ```bash
 KUBECTL_VERSION=v1.37.0
