@@ -1,0 +1,34 @@
+---
+- name: OpenBao unseal keyfile without a GPG passphrase
+  hosts: molecule
+  gather_facts: true
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Set the test unseal keys
+      ansible.builtin.set_fact:
+        openbao_fresh_unseal_keys: "{{ test_unseal_keys }}"
+      no_log: true
+
+    - name: Run the openbao role's gpg-agent and keyfile tasks
+      block:
+
+        - name: Prepare gpg-agent for the unseal keyfile
+          ansible.builtin.import_role:
+            name: data_science.cluster.openbao
+            tasks_from: gpg_agent
+
+        - name: Write and read the unseal keyfile
+          ansible.builtin.import_role:
+            name: data_science.cluster.openbao
+            tasks_from: keyfile
+
+        - name: Fail if gpg_agent.yml did not refuse
+          ansible.builtin.fail:
+            msg: gpg_agent.yml didn't refuse
+
+      rescue:
+        - name: It should refuse because no GPG passphrase was given
+          ansible.builtin.assert:
+            that: "'No GPG passphrase' in ansible_failed_result.msg"
+            fail_msg: "Error message from failed role: {{ ansible_failed_result.msg }}"
