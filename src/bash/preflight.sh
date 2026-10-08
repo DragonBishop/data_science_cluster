@@ -23,11 +23,18 @@ check_host_tooling() {
     [ "$has_errors" = false ]
 }
 
+# Reads the cluster-config ConfigMap Flux will build; preflight runs before the cluster exists
 get_cluster_config_value() {
     local key="$1"
-    local script_dir
+    local script_dir value
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    grep "^  $key:" "$script_dir/../../infrastructure/cluster-config/cluster-config.yaml" | head -n 1 | awk -F'"' '{print $2}'
+    value=$(kubectl kustomize "$script_dir/../../infrastructure/cluster-config" 2>/dev/null \
+        | awk -v prefix="  $key: " 'index($0, prefix) == 1 { value = substr($0, length(prefix) + 1); gsub(/"/, "", value); print value; exit }')
+    if [ -z "$value" ]; then
+        echo "❌ $key not found in infrastructure/cluster-config (kubectl kustomize)" >&2
+        return 1
+    fi
+    printf '%s\n' "$value"
 }
 
 get_minor_version() {
@@ -55,7 +62,7 @@ check_kubectl_tooling() {
 check_kubectl_skew() {
     local kubectl_version k3s_version minor_gap
     kubectl_version=$(kubectl version --client 2>/dev/null | awk '/Client Version/ {print $3}')
-    k3s_version=$(get_cluster_config_value K3S_VERSION)
+    k3s_version=$(get_cluster_config_value K3S_VERSION) || return 1
     minor_gap=$(( $(get_minor_version "$kubectl_version") - $(get_minor_version "$k3s_version") ))
 
     if [ "${minor_gap#-}" -gt 1 ]; then
@@ -68,7 +75,7 @@ check_kubectl_skew() {
 # The cnpg plugin must match the operator, whose version is the chart's appVersion
 check_cnpg_plugin_version() {
     local chart_version operator_version plugin_version
-    chart_version=$(get_cluster_config_value CNPG_VERSION)
+    chart_version=$(get_cluster_config_value CNPG_VERSION) || return 1
     operator_version=$(helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts \
         --version "$chart_version" 2>/dev/null | awk '/^appVersion:/ {print $2}')
     plugin_version=$(kubectl cnpg version 2>/dev/null | sed -n 's/.*Version:\([0-9.]*\).*/\1/p')
@@ -173,7 +180,7 @@ check_fedora_firewall() {
     zone=$(firewall-cmd --get-default-zone 2>/dev/null || echo "FedoraWorkstation")
     zone_info=$(firewall-cmd --zone="$zone" --list-all 2>/dev/null)
     trusted_info=$(firewall-cmd --zone=trusted --list-all 2>/dev/null)
-    pod_cidr=$(get_cluster_config_value POD_CIDR)
+    pod_cidr=$(get_cluster_config_value POD_CIDR) || return 1
 
     echo "$zone_info" | grep -q "forward: yes" || missing+=("forward: yes in zone '$zone'")
     echo "$zone_info" | grep -q "443/tcp" || missing+=("443/tcp port in zone '$zone'")
@@ -229,11 +236,14 @@ check_host_firewall() {
 }
 
 check_reserved_ips() {
-    echo "== Reserved IP range (192.0.2.240-192.0.2.250) =="
     local has_warnings=false
-    local ip
+    local gateway_ip coredns_lan_ip pool_stop ip
+    gateway_ip=$(get_cluster_config_value GATEWAY_IP) || return 1
+    coredns_lan_ip=$(get_cluster_config_value COREDNS_LAN_IP) || return 1
+    pool_stop=$(get_cluster_config_value LAN_LB_POOL_STOP) || return 1
+    echo "== Reserved IP range ($gateway_ip-$pool_stop) =="
 
-    for ip in 192.0.2.240 192.0.2.242; do
+    for ip in "$gateway_ip" "$coredns_lan_ip"; do
         if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
             echo "⚠️  $ip already answers on the LAN: check for a DHCP conflict (see INSTALLATION.md Requirements)."
             has_warnings=true

@@ -56,18 +56,17 @@ detect_distro() {
     echo "$distro_family $distro_id"
 }
 
+# Reads POD_CIDR from the cluster-config ConfigMap Flux will build; the firewall is set up before the cluster exists
 get_cluster_pod_cidr() {
-    local script_dir
-    local config_file
+    local script_dir pod_cidr
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    config_file="$script_dir/../../infrastructure/cluster-config/cluster-config.yaml"
-
-    if [ -f "$config_file" ]; then
-        grep 'POD_CIDR:' "$config_file" | head -n 1 | awk -F'"' '{print $2}'
-        return 0
+    pod_cidr=$(kubectl kustomize "$script_dir/../../infrastructure/cluster-config" 2>/dev/null \
+        | awk -v prefix="  POD_CIDR: " 'index($0, prefix) == 1 { value = substr($0, length(prefix) + 1); gsub(/"/, "", value); print value; exit }')
+    if [ -z "$pod_cidr" ]; then
+        echo "❌ POD_CIDR not found in infrastructure/cluster-config (kubectl kustomize)" >&2
+        return 1
     fi
-
-    echo "10.42.0.0/16"
+    printf '%s\n' "$pod_cidr"
 }
 
 print_header() {
