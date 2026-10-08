@@ -1,7 +1,6 @@
----
 namespace: data_science
 name: cluster
-version: 1.2.0
+version: 2.0.0
 readme: README.md
 authors:
   - DragonBishop
@@ -12,5 +11,5 @@ tags:
   - infrastructure
 repository: https://github.com/DragonBishop/data_science_cluster
 dependencies:
-  kubernetes.core: ">=6.5.0"
-  cloud.terraform: ">=4.0.0"
+  kubernetes.core: '>=6.5.0'
+  cloud.terraform: '>=4.0.0'
