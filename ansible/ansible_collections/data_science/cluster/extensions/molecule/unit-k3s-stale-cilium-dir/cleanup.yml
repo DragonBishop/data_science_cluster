@@ -1,0 +1,9 @@
+---
+- name: The k3s install over a previous cluster's /run/cilium directory
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Remove /run/cilium
+      ansible.builtin.file:
+        path: /run/cilium
+        state: absent
