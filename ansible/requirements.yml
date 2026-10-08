@@ -1,8 +1,4 @@
 ---
 collections:
-  - name: kubernetes.core
-    version: ">=6.5.0"
   - name: cloud.terraform
     version: ">=4.0.0"
-  - name: containers.podman
-    version: ">=1.10.0"
