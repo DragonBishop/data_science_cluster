@@ -9,7 +9,26 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  molecule-unit:
+    runs-on: ubuntu-26.04
+    env:
+      CONTAINER_HOST: unix:///run/podman/podman.sock
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+      - name: Give the runner user root's podman socket
+        run: |
+          sudo systemctl start podman.socket
+          sudo chmod 0711 /run/podman
+          sudo chown "$USER" /run/podman/podman.sock
+      - run: uv sync --frozen
+      - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
+      - run: uv run molecule test --all
+        working-directory: ansible/ansible_collections/data_science/cluster
+  pytest:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -19,6 +38,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version-file: ".python-version"
+      - uses: fluxcd/flux2/action@main
+        with:
+          version: 2.9.4
       - name: Install the project
         run: uv sync --all-extras --all-groups --frozen
       - name: unit tests

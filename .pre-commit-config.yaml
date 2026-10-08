@@ -22,3 +22,11 @@ repos:
     hooks:
       - id: rumdl      # Lint only (fails on issues)
       - id: rumdl-fmt  # Auto-format and fail if issues remain
+-   repo: local
+    hooks:
+    -   id: ansible-lint
+        name: ansible-lint
+        entry: bash -c 'cd ansible && uv run ansible-lint'
+        language: system
+        pass_filenames: false
+        files: ^ansible/
