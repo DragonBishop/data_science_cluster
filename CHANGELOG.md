@@ -1,4 +1,4 @@
-## [unreleased]
+## [2.0.0] - 2026-10-08
 
 ### 🚀 Features
 
@@ -28,6 +28,7 @@
 - *(ansible)* Stop reporting changes on every bootstrap re-run
 - *(flux)* Deploy the dynamic PostGIS credentials with postgis-cluster
 - *(bash)* Read cluster-config values from the ConfigMap kustomize builds
+- *(k3s)* Give the bootstrap user write access to the kubeconfig
 
 ### 📚 Documentation
 
