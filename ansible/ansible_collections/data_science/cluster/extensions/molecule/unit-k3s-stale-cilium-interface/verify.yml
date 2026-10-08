@@ -1,0 +1,27 @@
+---
+- name: The k3s install over a previous cluster's cilium_host interface
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Check for the k3s installer script
+      ansible.builtin.stat:
+        path: /tmp/k3s-install.sh
+      register: k3s_installer_script
+
+    - name: Check whether k3s runs
+      ansible.builtin.command: k3s -v
+      register: k3s_version_check
+      changed_when: false
+      failed_when: false
+
+    - name: It should not download the k3s installer
+      ansible.builtin.assert:
+        that:
+          - not k3s_installer_script.stat.exists
+        fail_msg: the k3s installer was downloaded despite the leftover cilium_host interface
+
+    - name: It should not install k3s
+      ansible.builtin.assert:
+        that:
+          - k3s_version_check.rc != 0
+        fail_msg: k3s was installed despite the leftover cilium_host interface

@@ -16,7 +16,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 ## Ansible Provisioning
 
 * **Ansible playbook fails with missing collection errors**
-  * **What's happening:** The required Ansible Galaxy collections (`kubernetes.core`, `community.general`) are missing from the host environment.
+  * **What's happening:** The Galaxy collection `cloud.terraform` is missing. It isn't part of the `ansible` package, so it installs separately from `ansible/requirements.yml`.
   * **How to fix it:** Install Galaxy dependencies declared in the repository:
 
     ```bash
@@ -208,10 +208,10 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **A freshly-typed or corrected value (e.g. fixing a mistyped superuser password) doesn't reach OpenBao after re-running bootstrap**
   * **What's happening:** `postgres_superuser_password`, `s3_access_key`, and `s3_secret_key` all share one write-only version counter (`secrets_wo_version`). Terraform only pushes a new write-only value when its version changes; an ordinary rerun leaves the version unchanged by design, so a differing typed value is silently not written.
-  * **How to fix it:** Re-run with `just bootstrap -e opentofu_rotate_openbao_secrets=true` to bump the version and force all three secrets to be rewritten (this also regenerates the S3 keys as a side effect).
+  * **How to fix it:** Run `touch ~/.config/data_science_cluster/rotate-openbao-secrets`, then `just bootstrap`. The run bumps the version, forces all three secrets to be rewritten (this also regenerates the S3 keys as a side effect), and deletes the marker.
 
 > [!IMPORTANT]
-> `opentofu_rotate_openbao_secrets=true` regenerates the S3 keys as a side effect of bumping the shared write-only version — don't set it just to fix one of the three secrets unless you're prepared for all three to rotate.
+> The `rotate-openbao-secrets` marker regenerates the S3 keys as a side effect of bumping the shared write-only version — don't set it just to fix one of the three secrets unless you're prepared for all three to rotate.
 
 * **Secrets or certificates are failing to issue/mount into Kubernetes**
   * **How to fix it:** Run `kubectl describe externalsecret <name> -n databases` (and `kubectl describe secretstore openbao -n databases` for auth or connection errors). For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why ESO or cert-manager could not pull or mint the resource.
@@ -251,7 +251,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > `DROP ROLE` at lease expiry fails with `cannot be dropped because some objects depend on it` until ownership is reassigned — OpenBao will keep leaving the stale role behind on every expiry until you fix this.
 
 * **Application credentials stop working after a password rotation**
-  * **What's happening:** App-role rotations (static or dynamic) reload automatically, as `postgis-app-credentials` and `postgis-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label in `postgis-cluster.yaml`, so CNPG picks up the new Secret on its own.
+  * **What's happening:** App-role rotations (static or dynamic) reload automatically, as `postgis-app-credentials` and `postgis-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label (in `apps/databases-secrets/postgis-credentials.yaml` and `apps/databases/postgis-dynamic-credentials.yaml`), so CNPG picks up the new Secret on its own.
   * **How to fix it:** For the superuser password, update `database/config/postgis-cluster` in OpenBao (via `terraform/openbao/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgis-app-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**

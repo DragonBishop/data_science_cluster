@@ -1,0 +1,61 @@
+---
+- name: Provision k3s Data Science Cluster
+  hosts: "{{ target_host | default('localhost') }}"
+  become: false
+
+  vars_prompt:
+    - name: openbao_gpg_passphrase
+      prompt: "GPG passphrase for the unseal keyfile"
+      private: true
+      default: ""
+    - name: opentofu_state_encryption_passphrase
+      prompt: "State encryption passphrase for terraform/openbao's state file"
+      private: true
+      default: ""
+    - name: opentofu_postgres_superuser_password
+      prompt: "Postgres superuser password"
+      private: true
+      default: ""
+
+  pre_tasks:
+    - name: Prompt for the OpenBao root token if OpenBao is already initialized
+      tags: [opentofu, openbao]
+      block:
+        - name: Check whether in-cluster OpenBao is already initialized
+          kubernetes.core.k8s_exec:
+            namespace: "{{ openbao_namespace }}"
+            pod: "{{ openbao_pod }}"
+            command: bao status -format=json
+          register: openbao_initial_status
+          changed_when: false
+          failed_when: false
+
+        - name: Prompt for the OpenBao root token
+          ansible.builtin.pause:
+            prompt: "OpenBao root token (printed by the run that first initialized OpenBao)"
+            echo: false
+          register: openbao_root_token_prompt
+          when:
+            - (openbao_initial_status.stdout | default('{}', true) | from_json).initialized | default(false)
+            - openbao_root_token | default(lookup('ansible.builtin.env', 'OPENBAO_ROOT_TOKEN'), true) | length == 0
+          no_log: true
+
+        - name: Use the prompted OpenBao root token
+          ansible.builtin.set_fact:
+            openbao_root_token: "{{ openbao_root_token_prompt.user_input | trim }}"
+          when: openbao_root_token_prompt is not skipped
+          no_log: true
+
+  roles:
+    - { role: data_science.cluster.k3s, tags: [k3s] }
+    - { role: data_science.cluster.cilium, tags: [cilium] }
+    - { role: data_science.cluster.flux, tags: [flux] }
+    - { role: data_science.cluster.openbao, tags: [openbao] }
+    - { role: data_science.cluster.opentofu, tags: [opentofu, openbao] }
+
+  tasks:
+    - name: Print freshly-generated OpenBao root token and unseal keys
+      ansible.builtin.debug:
+        msg: "{{ ['Root Token:', openbao_root_token, 'Fresh Unseal Keys:'] + openbao_fresh_unseal_keys }}"
+      when: openbao_fresh_unseal_keys is defined
+      tags: always

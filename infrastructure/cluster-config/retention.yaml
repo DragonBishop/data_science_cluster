@@ -1,0 +1,10 @@
+# How long, or how many, things are kept.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: flux-system
+data:
+  POSTGIS_BACKUP_RETENTION: "4d"
+  TEKTON_PRUNER_KEEP: "100"
+  TEKTON_RESULTS_RETENTION: "7d"

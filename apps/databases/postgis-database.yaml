@@ -4,7 +4,7 @@ metadata:
   name: data-science
   namespace: databases
 spec:
-  name: data_science
+  name: ${DATA_SCIENCE_DB_NAME}
   owner: app_readwrite
   cluster:
     name: postgis-cluster

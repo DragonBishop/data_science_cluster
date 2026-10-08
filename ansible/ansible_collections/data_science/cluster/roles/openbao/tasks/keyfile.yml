@@ -1,0 +1,57 @@
+---
+- name: Write a new unseal keyfile
+  when: openbao_fresh_unseal_keys is defined
+  block:
+    - name: Ensure local OpenBao directory exists
+      ansible.builtin.file:
+        path: "{{ openbao_local_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Create tmpfs workdir for unseal keyfile
+      ansible.builtin.tempfile:
+        state: directory
+        path: /dev/shm
+        prefix: openbao-setup-
+      register: openbao_setup_workdir
+
+    - name: Write unseal keys to tmpfs keyfile
+      ansible.builtin.copy:
+        dest: "{{ openbao_setup_workdir.path }}/keys.txt"
+        content: "{{ (openbao_fresh_unseal_keys | join('\n')) + '\n' }}"
+        mode: "0600"
+      no_log: true
+
+    - name: GPG-encrypt unseal keyfile
+      ansible.builtin.command:
+        cmd: >-
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0
+          --cipher-algo AES256 --s2k-mode 3 --s2k-count 65011712
+          --s2k-digest-algo SHA512 --symmetric --output {{ openbao_keyfile }}
+          {{ openbao_setup_workdir.path }}/keys.txt
+        stdin: "{{ openbao_gpg_passphrase }}\n"
+      no_log: true
+      changed_when: true
+
+    - name: Set unseal keyfile permissions
+      ansible.builtin.file:
+        path: "{{ openbao_keyfile }}"
+        mode: "0600"
+
+    - name: Remove tmpfs workdir
+      ansible.builtin.file:
+        path: "{{ openbao_setup_workdir.path }}"
+        state: absent
+
+- name: Decrypt unseal keyfile
+  ansible.builtin.command:
+    cmd: gpg --quiet --batch --pinentry-mode loopback --passphrase-fd 0 --decrypt {{ openbao_keyfile }}
+    stdin: "{{ openbao_gpg_passphrase }}\n"
+  register: openbao_decrypt_result
+  changed_when: false
+  no_log: true
+
+- name: Collect unseal keys from decrypted keyfile
+  ansible.builtin.set_fact:
+    openbao_unseal_keys: "{{ openbao_decrypt_result.stdout_lines | select('truthy') | list }}"
+  no_log: true

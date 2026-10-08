@@ -1,0 +1,53 @@
+---
+- name: OpenBao unseal keyfile on a fresh host
+  hosts: molecule
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Check the unseal keyfile
+      ansible.builtin.stat:
+        path: "{{ openbao_keyfile }}"
+      register: openbao_keyfile_stat
+
+    - name: Decrypt the keyfile with the passphrase
+      ansible.builtin.command:
+        cmd: gpg --quiet --batch --pinentry-mode loopback --passphrase-fd 0 --decrypt {{ openbao_keyfile }}
+        stdin: "{{ openbao_gpg_passphrase }}\n"
+      register: openbao_decrypt_result
+      changed_when: false
+      no_log: true
+
+    - name: Decrypt the keyfile with a wrong passphrase
+      ansible.builtin.command:
+        cmd: gpg --quiet --batch --pinentry-mode loopback --passphrase-fd 0 --decrypt {{ openbao_keyfile }}
+        stdin: "wrong-passphrase\n"
+      register: openbao_wrong_decrypt_result
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: It should store the keyfile
+      ansible.builtin.assert:
+        that:
+          - openbao_keyfile_stat.stat.exists
+        fail_msg: the unseal keyfile is missing
+
+    - name: It should make the keyfile readable only by its owner
+      ansible.builtin.assert:
+        that:
+          - openbao_keyfile_stat.stat.mode == '0600'
+        fail_msg: "the unseal keyfile has mode {{ openbao_keyfile_stat.stat.mode }}, not 0600"
+
+    - name: It should decrypt to the keys from init
+      ansible.builtin.assert:
+        that:
+          - openbao_decrypt_result.stdout_lines | select('truthy') | list == test_unseal_keys
+        fail_msg: the keyfile does not decrypt to the keys it was given
+      no_log: true
+
+    - name: It should not decrypt without the passphrase
+      ansible.builtin.assert:
+        that:
+          - openbao_wrong_decrypt_result.rc != 0
+        fail_msg: the keyfile decrypted with a wrong passphrase

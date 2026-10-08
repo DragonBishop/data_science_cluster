@@ -1,0 +1,11 @@
+---
+- name: Unseal OpenBao
+  ansible.builtin.command:
+    cmd: kubectl exec -i -n {{ openbao_namespace }} {{ openbao_pod }} -- bao write -format=json sys/unseal key=-
+    stdin: "{{ item }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  loop: "{{ openbao_unseal_keys }}"
+  when: (openbao_status_result.stdout | default('{}', true) | from_json).sealed | default(true)
+  no_log: true
+  changed_when: true

@@ -1,0 +1,11 @@
+---
+- name: Prepare the runner for the bootstrap playbook
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create the SeaweedFS host path
+      ansible.builtin.file:
+        path: "{{ cluster_config.SEAWEEDFS_HOST_PATH }}"
+        state: directory
+        mode: "0755"
+      become: true

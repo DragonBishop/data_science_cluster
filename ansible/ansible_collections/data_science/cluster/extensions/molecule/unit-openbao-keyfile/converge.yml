@@ -1,0 +1,27 @@
+---
+- name: OpenBao unseal keyfile on a fresh host
+  hosts: molecule
+  gather_facts: true
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Check whether an unseal keyfile already exists
+      ansible.builtin.stat:
+        path: "{{ openbao_keyfile }}"
+      register: openbao_keyfile_stat
+
+    - name: Stand in for a fresh OpenBao init
+      ansible.builtin.set_fact:
+        openbao_fresh_unseal_keys: "{{ test_unseal_keys }}"
+      when: not openbao_keyfile_stat.stat.exists
+      no_log: true
+
+    - name: Prepare gpg-agent for the unseal keyfile
+      ansible.builtin.import_role:
+        name: data_science.cluster.openbao
+        tasks_from: gpg_agent
+
+    - name: Write and read the unseal keyfile
+      ansible.builtin.import_role:
+        name: data_science.cluster.openbao
+        tasks_from: keyfile

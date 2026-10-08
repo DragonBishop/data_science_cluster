@@ -16,7 +16,7 @@ preflight:
 
 # Run full cluster bootstrap via Ansible (prompts for sudo; accepts flags like --tags, --check, -v)
 bootstrap *ARGS:
-  ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/data_cluster.yml --ask-become-pass {{ARGS}}
+  ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass {{ARGS}}
 
 # --- Cluster lifecycle -------------------------------------------------
 
@@ -80,10 +80,15 @@ db-connect HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.
   set -uo pipefail
   LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
   LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
+  DATABASE_NAME=$(kubectl get configmap cluster-config -n flux-system -o jsonpath='{.data.DATA_SCIENCE_DB_NAME}')
+  if [ -z "$DATABASE_NAME" ]; then
+    echo "Error: DATA_SCIENCE_DB_NAME not found in the live cluster-config ConfigMap." >&2
+    exit 1
+  fi
   ROOT_CERT_PATH="${PGSSLROOTCERT:-$HOME/.config/postgresql/root.crt}"
   mkdir -p "$(dirname "$ROOT_CERT_PATH")"
   [ -f "$ROOT_CERT_PATH" ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > "$ROOT_CERT_PATH"
-  PGPASSWORD="$LEASE_PASS" psql "host={{HOST}} port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full sslrootcert=$ROOT_CERT_PATH"
+  PGPASSWORD="$LEASE_PASS" psql "host={{HOST}} port=5432 dbname=$DATABASE_NAME user=$LEASE_USER sslmode=verify-full sslrootcert=$ROOT_CERT_PATH"
 
 # --- Gateway ---------------------------------------------------------------
 

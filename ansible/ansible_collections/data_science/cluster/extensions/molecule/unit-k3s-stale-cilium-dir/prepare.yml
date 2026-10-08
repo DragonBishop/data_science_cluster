@@ -1,0 +1,10 @@
+---
+- name: The k3s install over a previous cluster's /run/cilium directory
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Create /run/cilium to stand in for leftover Cilium state
+      ansible.builtin.file:
+        path: /run/cilium
+        state: directory
+        mode: "0755"

@@ -1,0 +1,9 @@
+---
+- name: Configure k3s
+  ansible.builtin.import_tasks: config.yml
+
+- name: Install k3s
+  ansible.builtin.import_tasks: install.yml
+
+- name: Wait for the k3s API
+  ansible.builtin.import_tasks: wait_api.yml

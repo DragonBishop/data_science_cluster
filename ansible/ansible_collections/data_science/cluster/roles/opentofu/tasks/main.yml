@@ -1,0 +1,15 @@
+---
+- name: Record the secrets write-only version
+  ansible.builtin.import_tasks: wo_version.yml
+
+- name: Resolve the inputs Terraform needs
+  ansible.builtin.import_tasks: resolve_secrets.yml
+
+- name: Fetch the OpenBao CA and wait for OpenBao
+  ansible.builtin.import_tasks: openbao_ca.yml
+
+- name: Apply terraform/openbao
+  ansible.builtin.import_tasks: apply.yml
+
+- name: Verify what terraform/openbao configured
+  ansible.builtin.import_tasks: verify.yml

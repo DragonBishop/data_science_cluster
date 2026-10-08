@@ -1,0 +1,40 @@
+---
+- name: Ensure secrets directory exists
+  ansible.builtin.file:
+    path: "{{ opentofu_secrets_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Check for a secrets rotation request
+  ansible.builtin.stat:
+    path: "{{ opentofu_rotate_secrets_marker }}"
+  register: opentofu_rotate_secrets_marker_stat
+
+- name: Remove secrets write-only version to force S3 key rotation
+  ansible.builtin.file:
+    path: "{{ opentofu_secrets_wo_version_file }}"
+    state: absent
+  when: opentofu_rotate_secrets_marker_stat.stat.exists
+
+- name: Check whether a secrets write-only version is already recorded
+  ansible.builtin.stat:
+    path: "{{ opentofu_secrets_wo_version_file }}"
+  register: opentofu_secrets_wo_version_stat
+
+- name: Record a new secrets write-only version
+  ansible.builtin.copy:
+    dest: "{{ opentofu_secrets_wo_version_file }}"
+    content: "{{ ansible_facts.date_time.epoch }}"
+    mode: "0600"
+  when: not opentofu_secrets_wo_version_stat.stat.exists
+
+- name: Clear the secrets rotation request
+  ansible.builtin.file:
+    path: "{{ opentofu_rotate_secrets_marker }}"
+    state: absent
+  when: opentofu_rotate_secrets_marker_stat.stat.exists
+
+- name: Read secrets write-only version
+  ansible.builtin.slurp:
+    src: "{{ opentofu_secrets_wo_version_file }}"
+  register: opentofu_secrets_wo_version_raw

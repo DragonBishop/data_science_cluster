@@ -1,0 +1,15 @@
+---
+- name: Check OpenBao's status
+  ansible.builtin.import_tasks: status.yml
+
+- name: Prepare gpg-agent for the unseal keyfile
+  ansible.builtin.import_tasks: gpg_agent.yml
+
+- name: Initialize OpenBao if needed
+  ansible.builtin.import_tasks: init.yml
+
+- name: Write and read the unseal keyfile
+  ansible.builtin.import_tasks: keyfile.yml
+
+- name: Unseal OpenBao
+  ansible.builtin.import_tasks: unseal.yml

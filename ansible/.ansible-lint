@@ -1,0 +1,5 @@
+---
+exclude_paths:
+  - ansible_collections/cloud/
+skip_list:
+  - galaxy[no-changelog]

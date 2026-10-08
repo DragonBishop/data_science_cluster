@@ -1,0 +1,15 @@
+---
+- name: Apply terraform/openbao
+  cloud.terraform.terraform:
+    project_path: "{{ repo_root }}/terraform/openbao"
+    binary_path: "{{ opentofu_binary }}"
+    state: present
+    force_init: true
+  environment:
+    TF_VAR_openbao_token: "{{ openbao_root_token }}"
+    TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_passphrase }}"
+    TF_VAR_postgres_superuser_password: "{{ opentofu_postgres_superuser_password }}"
+    TF_VAR_s3_access_key: "{{ opentofu_s3_access_key }}"
+    TF_VAR_s3_secret_key: "{{ opentofu_s3_secret_key }}"
+    TF_VAR_secrets_wo_version: "{{ opentofu_secrets_wo_version }}"
+  no_log: true

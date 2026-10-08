@@ -1,0 +1,54 @@
+---
+- name: Confirm k3s install
+  ansible.builtin.command: k3s -v
+  register: k3s_installed
+  changed_when: false
+  failed_when: false
+
+- name: Check for Cilium runtime state left by a previous cluster
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /sys/class/net/cilium_host
+    - /run/cilium
+  register: k3s_stale_cilium_state
+  when: k3s_installed.rc != 0
+
+- name: Refuse to install k3s over stale Cilium state
+  ansible.builtin.assert:
+    that:
+      - k3s_stale_cilium_state.results | selectattr('stat.exists') | list | length == 0
+    fail_msg: >-
+      Cilium runtime state from a previous cluster is still present
+      ({{ k3s_stale_cilium_state.results | selectattr('stat.exists') | map(attribute='item') | join(', ') }}).
+      Its BPF programs stay attached after k3s-uninstall and break pod networking. Reboot, then re-run just bootstrap.
+  when: k3s_installed.rc != 0
+
+- name: Download k3s installation script
+  ansible.builtin.get_url:
+    url: "{{ k3s_install_script_url }}"
+    dest: /tmp/k3s-install.sh
+    mode: "0700"
+  when: k3s_installed.rc != 0
+  become: true
+
+- name: Execute k3s installation script
+  ansible.builtin.command: /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  when: k3s_installed.rc != 0
+  become: true
+  changed_when: true
+
+- name: Remove temporary k3s installation script
+  ansible.builtin.file:
+    path: /tmp/k3s-install.sh
+    state: absent
+  when: k3s_installed.rc != 0
+  become: true
+
+- name: Ensure ~/.kube directory exists
+  ansible.builtin.file:
+    path: "{{ kubeconfig_path | dirname }}"
+    state: directory
+    mode: "0755"

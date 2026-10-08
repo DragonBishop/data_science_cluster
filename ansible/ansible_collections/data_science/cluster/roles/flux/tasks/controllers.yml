@@ -1,0 +1,5 @@
+---
+- name: Apply Flux controllers (gotk-components)
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/clusters/local/flux-system/gotk-components.yaml"

@@ -51,7 +51,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
-| Ansible | `2.18+` (`ansible-core`) | Idempotent cluster bootstrap playbook and host setup (`ansible/playbooks/data_cluster.yml`). |
+| Ansible | `2.19+` (`ansible-core`) | Idempotent cluster bootstrap playbook and host setup (`ansible/data_cluster.yml`). |
 | Flux CLI | `v2.9.4` (`fluxcd.io`) | GitOps controller CLI used for pre-flight validation and repository bootstrapping. |
 | GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |
 | Helm | `v3.x` (`get_helm.sh`) | Package manager for Kubernetes charts and HelmRelease dependency resolution. |
@@ -344,28 +344,40 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── feature-proposal.yml
 │   │   └── technical-debt-resolution.yml
 │   └── workflows/
-│       ├── lint.yml                     # ruff check/format
-│       ├── tests.yml                    # pytest + coverage
+│       ├── e2e.yml                      # bootstrap a cluster on a runner, then Flux on the PR branch
+│       ├── lint.yml                     # ruff check/format + ansible-lint
+│       ├── tests.yml                    # pytest + coverage, Molecule unit scenarios
 │       └── release.yml                  # PR-title lint + release-please + git-cliff changelog
-├── ansible/                             # Ansible playbooks and roles for cluster provisioning
+├── ansible/                             # Bootstrap playbook, inventory and the data_science.cluster collection
+│   ├── .ansible-lint
+│   ├── ansible.cfg
+│   ├── ansible_collections/
+│   │   └── data_science/cluster/        # The roles and their Molecule unit scenarios
+│   │       ├── extensions/molecule/
+│   │       ├── galaxy.yml
+│   │       ├── meta/runtime.yml
+│   │       └── roles/
+│   │           ├── cilium/
+│   │           ├── flux/
+│   │           ├── k3s/
+│   │           ├── openbao/
+│   │           └── opentofu/
+│   ├── data_cluster.yml
 │   ├── inventory/
 │   │   ├── group_vars/
-│   │   │   └── all.yml
+│   │   │   └── all/
+│   │   │       ├── ansible.yml
+│   │   │       └── cluster_config.yml   # cluster-config keys Ansible uses
 │   │   └── hosts.ini
-│   ├── playbooks/
-│   │   └── data_cluster.yml
-│   ├── requirements.yml
-│   └── roles/
-│       ├── cilium/
-│       ├── flux/
-│       ├── k3s/
-│       ├── openbao/
-│       └── opentofu/
+│   ├── molecule/
+│   │   └── default/                     # integration scenario: the whole playbook on a GitHub runner
+│   └── requirements.yml
 ├── apps/
 │   ├── databases/                       # PostGIS cluster, one Flux Kustomization
 │   │   ├── kustomization.yaml
 │   │   ├── postgis-cluster.yaml
 │   │   ├── postgis-database.yaml
+│   │   ├── postgis-dynamic-credentials.yaml
 │   │   ├── postgis-localhost.yaml
 │   │   ├── postgis-networkpolicy.yaml
 │   │   ├── postgis-tcproute.yaml
@@ -428,14 +440,25 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   ├── lan-l2-policy.yaml
 │   │   └── lan-lb-pool.yaml
 │   ├── cluster-config/                  # Centralized cluster topology and configuration ConfigMap
-│   │   ├── cluster-config.yaml
-│   │   └── kustomization.yaml
+│   │   ├── certificates.yaml
+│   │   ├── cluster-config.yaml          # empty base; each fragment is a patch
+│   │   ├── cpu-memory.yaml
+│   │   ├── databases.yaml
+│   │   ├── kustomization.yaml
+│   │   ├── networking.yaml
+│   │   ├── replicas.yaml
+│   │   ├── retention.yaml
+│   │   ├── schedules.yaml
+│   │   ├── storage.yaml
+│   │   ├── timeouts.yaml
+│   │   └── versions.yaml
 │   ├── cnpg-operator/
 │   │   ├── cnpg-release.yaml
 │   │   └── kustomization.yaml
 │   ├── coredns-custom/                  # internal zone on k3s's own CoreDNS
 │   │   ├── coredns-custom.yaml
 │   │   ├── coredns-lan-service.yaml
+│   │   ├── coredns-networkpolicy.yaml
 │   │   └── kustomization.yaml
 │   ├── external-secrets/
 │   │   ├── external-secrets-networkpolicy.yaml
@@ -460,6 +483,8 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   ├── namespaces/
 │   │   ├── kustomization.yaml
 │   │   └── namespaces.yaml
+│   ├── network-tests/                   # scaffold, not applied by Flux yet
+│   │   └── network-checks-pipeline.yaml
 │   ├── openbao/
 │   │   ├── kustomization.yaml
 │   │   ├── openbao-localhost.yaml
@@ -473,14 +498,13 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   └── tekton/                          # TektonConfig: Pipelines, Triggers, pruner and Results
 │       ├── kustomization.yaml
 │       └── tektonconfig.yaml
-├── notebooks/
-│   ├── data_analysis_notebook.ipynb     # Exploratory analysis and findings
-│   └── data_processing_notebook.ipynb   # Data cleaning and integrity checks
 ├── src/
 │   └── bash/
 │       ├── preflight.sh                 # Read-only host readiness checks
+│       ├── setup-firewall.sh            # Host firewall rules for Kubernetes and Cilium (firewalld or ufw)
 │       ├── start-cluster.sh             # Boot sequence: API, in-cluster OpenBao unseal, readiness checks
-│       └── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
+│       ├── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
+│       └── uninstall-cluster.sh         # Tears down k3s and clears stale local cluster state
 ├── terraform/                           # OpenTofu module configuring OpenBao's internals
 │   └── openbao/                         # In-cluster OpenBao: KV mounts, Kubernetes auth, 2-tier PKI engine, DB secrets
 │       ├── .gitignore
@@ -494,15 +518,25 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │       └── versions.tf
 ├── tests/
 │   ├── __init__.py
-│   └── conftest.py
+│   ├── conftest.py
+│   ├── test_cluster_config_drift.py
+│   ├── test_network_policy.py
+│   └── test_release_versions.py
 ├── .copier-answers.yml                  # Records copier template + answers, for future `copier update`
 ├── .gitattributes
 ├── .gitignore
+├── .pre-commit-config.yaml              # pre-commit/prek hooks, ansible-lint included
 ├── .python-version
+├── .release-please-manifest.json        # The cluster's current release version
+├── ansible.cfg                          # Lets Ansible run from the repo root: inventory and collections path
+├── CHANGELOG.md                         # Generated by git-cliff from Conventional Commit subjects
+├── cliff.toml                           # git-cliff groups and filters
 ├── INSTALLATION.md                      # First-time cluster bootstrap: Requirements, then `just bootstrap`
 ├── justfile                             # `just setup` (review for more commands)
+├── LICENSE
 ├── pyproject.toml                       # uv-managed project dependency + dev tooling
 ├── README.md                            # Architecture, setup, and operations reference
+├── release-please-config.json           # Release type, and the extra files each release bumps
 ├── troubleshooting.md                   # Symptom → cause → fix, by subsystem
 └── uv.lock
 ```
@@ -518,26 +552,29 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
     * **`Dockerfile`**: Builds the host management environment including `kubectl`, `helm`, `kubectl-cnpg`, `cilium`, `hubble`, `flux`, `postgresql-client`, `just`, and `uv`.
 * **`.github/`**
   * **`ISSUE_TEMPLATE/`**: Issue templates for bug reports, documentation updates, feature proposals, and technical-debt resolution.
-  * **`workflows/lint.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `ruff check`/`ruff format --check`.
-  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest`.
+  * **`workflows/e2e.yml`**: On pull requests that touch `ansible/`, `clusters/`, `infrastructure/`, `apps/` or `terraform/`, runs the Molecule integration scenario on a GitHub runner (bootstrap, idempotence, a sealed-OpenBao restart), then points Flux at the PR branch and waits for every Kustomization. Uses the Flux GitHub App through the `FLUX_GITHUB_APP_*` repository secrets.
+  * **`workflows/lint.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `ruff check`/`ruff format --check` and `ansible-lint` from `ansible/`.
+  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest` (with the `flux` CLI) and every Molecule unit scenario against root's podman.
   * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR, and `git-cliff` commits `CHANGELOG.md` onto that PR's branch.
-* **`ansible/`** - Automated provisioning and orchestration playbooks for bootstrapping the cluster.
-  * **`inventory/`**: Inventory definition (`hosts.ini`) and global variable mapping (`group_vars/all.yml`) sourcing values directly from `infrastructure/cluster-config/cluster-config.yaml`.
-  * **`playbooks/data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `openbao` → `opentofu`.
-  * **`requirements.yml`**: Ansible Galaxy collection dependencies (`kubernetes.core`, `cloud.terraform`, `containers.podman`).
-  * **`roles/`**: Reusable Ansible roles for configuring k3s systemd service, Gateway API CRDs & Cilium Helm release, GitHub Flux bootstrap, OpenBao initialization & GPG unseal automation, and OpenTofu state application.
+* **`ansible/`** - The bootstrap playbook, its inventory, and the `data_science.cluster` collection that holds the roles.
+  * **`ansible_collections/data_science/cluster/`**: The collection. `roles/` holds the five roles; each role's `tasks/main.yml` imports named task files. `extensions/molecule/` holds the unit scenarios, which share one podman container: `molecule test --all` from this directory runs them.
+  * **`data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `openbao` → `opentofu`.
+  * **`molecule/default/`**: The integration scenario: the whole playbook on a GitHub runner, run by `e2e.yml`.
+  * **`inventory/`**: Inventory definition (`hosts.ini`) and `group_vars/all/`. `cluster_config.yml` lists every cluster-config key Ansible uses, lowercased, under headings named for its `infrastructure/cluster-config/` fragment. `ansible.yml` holds Ansible-only values and merges the fragments.
+  * **`requirements.yml`**: The Ansible Galaxy collection the `ansible` package doesn't ship (`cloud.terraform`). `kubernetes.core`, `containers.podman` and `ansible.posix` come from the `ansible` package.
 * **`apps/databases/`** - The PostGIS cluster and its networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
   * **`postgis-cluster.yaml`**: The CNPG `Cluster` (with `tekton_readwrite` as a managed role), the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
   * **`postgis-database.yaml`**: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
+  * **`postgis-dynamic-credentials.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `postgis-app-dynamic-credentials`, a login OpenBao creates in Postgres, so it deploys with `postgis-cluster`.
   * **`postgis-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
   * **`postgis-networkpolicy.yaml`**: Accepts the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
   * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
   * **`tekton-results-database.yaml`**: CNPG `Database` declaring `tekton_results`, owned by `tekton_readwrite`.
-* **`apps/databases-secrets/`** - The ESO objects that produce the `databases` Secrets, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after every Secret exists.
+* **`apps/databases-secrets/`** - The ESO SecretStore and the static ExternalSecrets for `databases`, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after those Secrets exist. The dynamic `postgis-app-dynamic-credentials` lives in `apps/databases/postgis-dynamic-credentials.yaml`, because OpenBao needs `postgis-cluster-rw` to issue it.
   * **`eso-setup.yaml`**: The `postgis-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
-  * **`postgis-credentials.yaml`**: `ExternalSecret`s and the `VaultDynamicSecret` generator for static and dynamic PostGIS credentials.
+  * **`postgis-credentials.yaml`**: `ExternalSecret` syncing the static PostGIS credentials from `secret/postgis`.
   * **`seaweedfs-credentials.yaml`**: `ExternalSecret` syncing S3 credentials from `secret/seaweedfs`.
 * **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`) so `databases` is applied only after the `cnpg-backups` bucket exists.
   * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, and `cnpg-backups` bucket created by the chart's post-install hook.
@@ -572,24 +609,30 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`barman-cloud/`**: `barman-cloud-release.yaml`, `kustomization.yaml`
   * **`cert-manager/`**: `cert-manager-networkpolicy.yaml`, `cert-manager-release.yaml`, `kustomization.yaml`
   * **`cilium/`**: `cilium-release.yaml`, `cilium-values.yaml`, `clusterwide-networkpolicy.yaml`, `k3s-components-networkpolicy.yaml`, `kustomization.yaml`, `lan-l2-policy.yaml`, `lan-lb-pool.yaml`
-  * **`cluster-config/`**: `cluster-config.yaml`, `kustomization.yaml` (centralized configuration ConfigMap)
+  * **`cluster-config/`**: `cluster-config.yaml` (empty base), `kustomization.yaml`, and one fragment per kind of value: `certificates.yaml`, `cpu-memory.yaml`, `databases.yaml`, `networking.yaml`, `replicas.yaml`, `retention.yaml`, `schedules.yaml`, `storage.yaml`, `timeouts.yaml`, `versions.yaml` (centralized configuration ConfigMap)
   * **`cnpg-operator/`**: `cnpg-release.yaml`, `kustomization.yaml`
-  * **`coredns-custom/`**: `coredns-custom.yaml`, `coredns-lan-service.yaml`, `kustomization.yaml` (internal zone on CoreDNS)
+  * **`coredns-custom/`**: `coredns-custom.yaml`, `coredns-lan-service.yaml`, `coredns-networkpolicy.yaml`, `kustomization.yaml` (internal zone on CoreDNS)
   * **`external-secrets/`**: `external-secrets-networkpolicy.yaml`, `external-secrets-release.yaml`, `kustomization.yaml`
   * **`flux-system-policies/`**: `flux-networkpolicy.yaml`, `kustomization.yaml`
   * **`gateway-api-crds/`**: `kustomization.yaml`, `standard-install.yaml` (vendored Gateway API CRDs)
   * **`gateway/`**: `gateway-networkpolicy.yaml`, `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
   * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-localhost.yaml`, `hubble-networkpolicy.yaml`, `kustomization.yaml`
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
+  * **`network-tests/`**: `network-checks-pipeline.yaml`, a scaffold (pseudocode) for a Tekton Pipeline that checks live network behaviour against "Network Policy". No Flux Kustomization applies it yet.
   * **`openbao/`**: `kustomization.yaml`, `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
   * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`
   * **`tekton/`**: `kustomization.yaml`, `tektonconfig.yaml` (Pipelines, Triggers, pruner, and Results on the external PostGIS database)
 * **`src/`**
   * **`src/bash/`**:
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).
+    * **`setup-firewall.sh`**: Host firewall rules for Kubernetes and Cilium, for Fedora/RHEL (`firewalld`) or Ubuntu/Debian (`ufw`).
     * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, unsealing the in-cluster OpenBao, and reactivating hibernated workloads.
     * **`stop-cluster.sh`**: Graceful shutdown: declaratively hibernating the CNPG cluster, waiting for pod termination, and stopping the k3s systemd unit.
+    * **`uninstall-cluster.sh`**: Tears down k3s and clears stale local cluster state: Cilium's persistent host files and `terraform/openbao` state. Asks for a reboot before reinstalling.
 * **`terraform/`** - OpenTofu module configuring OpenBao's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
   * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `tekton-results-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic roles (`postgis-cluster`, `postgis-app-role`, `tekton-results-app-role`).
 * **`tests/`**
-  * **`conftest.py`**: Shared test fixtures and pytest configuration.
+  * **`conftest.py`**: Stops the session before collection if `kubectl`, `flux`, `ansible` or `ansible-playbook` is missing.
+  * **`test_cluster_config_drift.py`**: Flux and Ansible resolve every cluster-config variable they use, to the same values.
+  * **`test_network_policy.py`**: Scaffold: pseudocode for tests that network policies follow the README's "Network Policy" rules; not written yet.
+  * **`test_release_versions.py`**: `galaxy.yml` carries the cluster's release version.

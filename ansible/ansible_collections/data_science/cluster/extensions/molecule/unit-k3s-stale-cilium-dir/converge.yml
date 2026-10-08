@@ -1,0 +1,20 @@
+---
+- name: The k3s install over a previous cluster's /run/cilium directory
+  hosts: molecule
+  tasks:
+    - name: Run the k3s role's install tasks
+      block:
+        - name: Install k3s
+          ansible.builtin.import_role:
+            name: data_science.cluster.k3s
+            tasks_from: install
+
+        - name: Fail if the install was not refused
+          ansible.builtin.fail:
+            msg: install.yml finished without refusing
+      rescue:
+        - name: It should refuse because of the leftover /run/cilium
+          ansible.builtin.assert:
+            that:
+              - "'/run/cilium' in ansible_failed_result.msg"
+            fail_msg: "the install stopped for another reason: {{ ansible_failed_result.msg }}"

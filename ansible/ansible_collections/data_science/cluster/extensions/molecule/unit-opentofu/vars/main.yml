@@ -1,0 +1,8 @@
+---
+opentofu_secrets_dir: /root/opentofu-test
+opentofu_secrets_wo_version_file: "{{ opentofu_secrets_dir }}/openbao-secrets-wo-version"
+opentofu_rotate_secrets_marker: "{{ opentofu_secrets_dir }}/rotate-openbao-secrets"
+opentofu_previous_wo_version: "1000000000"
+openbao_root_token: "{{ lookup('ansible.builtin.password', '/dev/null', length=28, seed='unit-opentofu-root-token') }}"
+opentofu_state_encryption_passphrase: "{{ lookup('ansible.builtin.password', '/dev/null', length=32, seed='unit-opentofu-state-passphrase') }}"
+opentofu_postgres_superuser_password: "{{ lookup('ansible.builtin.password', '/dev/null', length=32, seed='unit-opentofu-superuser-password') }}"

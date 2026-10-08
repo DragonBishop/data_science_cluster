@@ -1,0 +1,54 @@
+---
+- name: Render GitHub App authentication secret
+  ansible.builtin.command: >
+    flux create secret githubapp flux-system
+    --app-id="{{ lookup('env', 'GITHUB_APP_ID') }}"
+    --app-installation-id="{{ lookup('env', 'GITHUB_APP_INSTALLATION_ID') }}"
+    --app-private-key="{{ lookup('env', 'GITHUB_APP_PRIVATE_KEY_PATH') }}"
+    --namespace=flux-system
+    --export
+  register: flux_githubapp_secret
+  changed_when: false
+  when: lookup('env', 'GITHUB_APP_ID') != ""
+  no_log: true
+
+- name: Obtain token for fallback github auth
+  ansible.builtin.command: gh auth token
+  delegate_to: localhost
+  register: flux_auth_token
+  changed_when: false
+  when: lookup('env', 'GITHUB_APP_ID') == ""
+
+- name: Get git remote origin URL # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: git config --get remote.origin.url
+    chdir: "{{ repo_root }}"
+  delegate_to: localhost
+  register: flux_git_remote_url
+  changed_when: false
+  when: lookup('env', 'GITHUB_APP_ID') == ""
+
+- name: Format repository URL for HTTPS
+  ansible.builtin.set_fact:
+    flux_git_https_url: "{{ flux_git_remote_url.stdout | regex_replace('^git@github.com:', 'https://github.com/') | regex_replace('\\.git$', '') }}"
+  when: lookup('env', 'GITHUB_APP_ID') == ""
+
+- name: Render generic Git authentication secret (Fallback)
+  ansible.builtin.command: >
+    flux create secret git flux-system
+    --url="{{ flux_git_https_url }}"
+    --username=git
+    --password="{{ flux_auth_token.stdout }}"
+    --namespace=flux-system
+    --export
+  register: flux_git_secret
+  changed_when: false
+  when: lookup('env', 'GITHUB_APP_ID') == ""
+  no_log: true
+
+- name: Apply the Flux Git authentication secret
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    definition: "{{ (flux_githubapp_secret.stdout if lookup('env', 'GITHUB_APP_ID') != '' else flux_git_secret.stdout) | from_yaml }}"
+    apply: true
+  no_log: true

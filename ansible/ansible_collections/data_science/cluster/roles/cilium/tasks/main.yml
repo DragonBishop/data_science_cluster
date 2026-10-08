@@ -1,0 +1,9 @@
+---
+- name: Install the Gateway API CRDs
+  ansible.builtin.import_tasks: gateway_crds.yml
+
+- name: Render the Cilium Helm values
+  ansible.builtin.import_tasks: render_values.yml
+
+- name: Install Cilium
+  ansible.builtin.import_tasks: install.yml

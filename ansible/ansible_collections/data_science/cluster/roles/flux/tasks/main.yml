@@ -1,0 +1,15 @@
+---
+- name: Install the Flux controllers
+  ansible.builtin.import_tasks: controllers.yml
+
+- name: Create the Flux Git authentication secret
+  ansible.builtin.import_tasks: auth.yml
+
+- name: Point Flux at the Git repository
+  ansible.builtin.import_tasks: sync.yml
+
+- name: Apply the network policies Flux needs
+  ansible.builtin.import_tasks: policies.yml
+
+- name: Reconcile OpenBao through Flux
+  ansible.builtin.import_tasks: reconcile_openbao.yml

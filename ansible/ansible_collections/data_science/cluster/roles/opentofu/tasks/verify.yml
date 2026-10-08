@@ -1,0 +1,42 @@
+---
+# A failed login shows up as permission errors in the checks below.
+- name: Log in to in-cluster OpenBao CLI
+  ansible.builtin.command:
+    cmd: kubectl exec -i -n {{ openbao_namespace }} {{ openbao_pod }} -- bao login -no-print -
+    stdin: "{{ openbao_root_token }}\n"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Check what terraform/openbao configured
+  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- {{ item.value }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  loop: "{{ opentofu_verify_checks | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    opentofu_verify_checks:
+      postgis secret: bao kv metadata get -mount=secret postgis
+      seaweedfs secret: bao kv metadata get -mount=secret seaweedfs
+      internal-server PKI role: bao read pki_int/roles/internal-server
+      cert-manager auth role: bao read auth/kubernetes/role/cert-manager-pki-role
+  register: opentofu_verify_check
+  changed_when: false
+  failed_when: false
+
+- name: Show why each failed check failed
+  ansible.builtin.debug:
+    msg: "{{ item.stderr | default(item.msg, true) }}"
+  loop: "{{ opentofu_verify_check.results | rejectattr('rc', 'equalto', 0) }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+
+- name: Fail if any terraform/openbao check failed
+  ansible.builtin.assert:
+    that:
+      - opentofu_verify_check.results | rejectattr('rc', 'equalto', 0) | length == 0
+    fail_msg: terraform/openbao checks failed; see the reasons above.
+    quiet: true

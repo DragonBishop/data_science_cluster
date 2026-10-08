@@ -1,0 +1,98 @@
+name: e2e
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "ansible/**"
+      - "clusters/**"
+      - "infrastructure/**"
+      - "apps/**"
+      - "terraform/**"
+      - ".github/workflows/e2e.yml"
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    env:
+      GITHUB_APP_ID: ${{ secrets.FLUX_GITHUB_APP_ID }}
+      GITHUB_APP_INSTALLATION_ID: ${{ secrets.FLUX_GITHUB_APP_INSTALLATION_ID }}
+      BRANCH_UNDER_TEST: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+      - uses: fluxcd/flux2/action@main
+        with:
+          version: 2.9.4
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: 1.12.6
+          tofu_wrapper: false
+      - run: uv sync --frozen
+      - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Generate the test secrets
+        run: |
+          for variable_name in OPENBAO_GPG_PASSPHRASE OPENTOFU_STATE_ENCRYPTION_PASSPHRASE OPENTOFU_POSTGRES_SUPERUSER_PASSWORD; do
+            secret_value="$(openssl rand -hex 32)"
+            echo "::add-mask::$secret_value"
+            echo "$variable_name=$secret_value" >> "$GITHUB_ENV"
+          done
+          echo "OPENTOFU_BINARY=$(command -v tofu)" >> "$GITHUB_ENV"
+
+      - name: Write the Flux GitHub App private key
+        env:
+          FLUX_GITHUB_APP_PRIVATE_KEY: ${{ secrets.FLUX_GITHUB_APP_PRIVATE_KEY }}
+        run: |
+          key_path="$RUNNER_TEMP/flux-github-app.pem"
+          printf '%s\n' "$FLUX_GITHUB_APP_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "GITHUB_APP_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Bootstrap the cluster with the integration scenario
+        run: uv run molecule test
+        working-directory: ansible
+
+      # Suspending flux-system keeps main's gotk-sync.yaml from resetting the branch; nothing is pruned.
+      - name: Point Flux at the branch under test
+        run: |
+          flux suspend kustomization flux-system
+          kubectl -n flux-system patch gitrepository flux-system --type merge \
+            --patch "{\"spec\":{\"ref\":{\"branch\":\"$BRANCH_UNDER_TEST\"}}}"
+          flux reconcile source git flux-system
+          kubectl apply --server-side --field-manager=kustomize-controller -f clusters/local/
+
+      - name: Wait for every Kustomization to be Ready
+        run: |
+          # flux-system is suspended, so its Ready condition never reaches the new generation.
+          kustomizations=$(kubectl -n flux-system get kustomization -o name | grep -v '/flux-system$')
+          deadline=$((SECONDS + 1200))
+          until kubectl -n flux-system wait $kustomizations --for=condition=ready --timeout=0s > /dev/null 2>&1; do
+            if (( SECONDS >= deadline )); then
+              echo "Kustomizations not Ready after 20 minutes"
+              exit 1
+            fi
+            flux get kustomizations
+            sleep 60
+          done
+          flux get kustomizations
+
+      - name: Show the cluster state
+        if: failure()
+        run: |
+          flux get all -A || true
+          for controller in source-controller kustomize-controller helm-controller; do
+            kubectl -n flux-system logs deploy/$controller --tail=200 || true
+          done
+          kubectl get pods -A || true
+          kubectl get events -A --sort-by=.lastTimestamp | tail -n 100 || true

@@ -1,0 +1,5 @@
+---
+opentofu_binary: /usr/local/bin/tofu
+opentofu_secrets_dir: "{{ ansible_facts.env.HOME }}/.config/data_science_cluster"
+opentofu_secrets_wo_version_file: "{{ opentofu_secrets_dir }}/openbao-secrets-wo-version"
+opentofu_rotate_secrets_marker: "{{ opentofu_secrets_dir }}/rotate-openbao-secrets"

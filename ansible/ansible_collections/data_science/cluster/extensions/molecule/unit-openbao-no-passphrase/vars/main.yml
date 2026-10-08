@@ -1,0 +1,8 @@
+---
+openbao_local_dir: /root/openbao-test
+openbao_keyfile: "{{ openbao_local_dir }}/unseal-keys.gpg"
+openbao_gpg_passphrase: ""
+test_unseal_keys:
+  - "{{ lookup('ansible.builtin.password', '/dev/null', length=44, chars=['ascii_letters', 'digits', '+/'], seed='unit-openbao-no-passphrase-key-1') }}"
+  - "{{ lookup('ansible.builtin.password', '/dev/null', length=44, chars=['ascii_letters', 'digits', '+/'], seed='unit-openbao-no-passphrase-key-2') }}"
+  - "{{ lookup('ansible.builtin.password', '/dev/null', length=44, chars=['ascii_letters', 'digits', '+/'], seed='unit-openbao-no-passphrase-key-3') }}"
