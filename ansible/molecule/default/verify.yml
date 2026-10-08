@@ -1,0 +1,86 @@
+---
+- name: Host state the bootstrap playbook leaves on the runner
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../../ansible_collections/data_science/cluster/roles/openbao/defaults/main.yml
+  tasks:
+    - name: Check the unseal keyfile
+      ansible.builtin.stat:
+        path: "{{ openbao_keyfile }}"
+      register: openbao_keyfile_stat
+
+    - name: Decrypt the unseal keyfile with the GPG passphrase
+      ansible.builtin.command:
+        cmd: gpg --quiet --batch --pinentry-mode loopback --passphrase-fd 0 --decrypt {{ openbao_keyfile }}
+        stdin: "{{ openbao_gpg_passphrase }}\n"
+      register: openbao_decrypt_result
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Check the k3s config
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_stat
+
+    - name: List the resources in the terraform/openbao state
+      ansible.builtin.command:
+        argv:
+          - "{{ opentofu_binary }}"
+          - -chdir={{ repo_root }}/terraform/openbao
+          - state
+          - list
+      environment:
+        TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_passphrase }}"
+      register: opentofu_state_list
+      changed_when: false
+
+    - name: It should store the unseal keyfile
+      ansible.builtin.assert:
+        that:
+          - openbao_keyfile_stat.stat.exists
+        fail_msg: the unseal keyfile is missing
+
+    - name: It should make the keyfile readable only by its owner
+      ansible.builtin.assert:
+        that:
+          - openbao_keyfile_stat.stat.mode == '0600'
+        fail_msg: "the unseal keyfile has mode {{ openbao_keyfile_stat.stat.mode }}, not 0600"
+
+    - name: It should decrypt the keyfile with the GPG passphrase
+      ansible.builtin.assert:
+        that:
+          - openbao_decrypt_result.rc == 0
+        fail_msg: the unseal keyfile does not decrypt with the GPG passphrase
+
+    - name: It should hold three unseal keys
+      ansible.builtin.assert:
+        that:
+          - openbao_decrypt_result.stdout_lines | select('truthy') | list | length == 3
+        fail_msg: the unseal keyfile does not hold three keys
+      no_log: true
+
+    - name: It should write the k3s config
+      ansible.builtin.assert:
+        that:
+          - k3s_config_stat.stat.exists
+        fail_msg: /etc/rancher/k3s/config.yaml is missing
+
+    - name: It should record the root PKI mount in the OpenTofu state
+      ansible.builtin.assert:
+        that:
+          - "'vault_mount.pki_root' in opentofu_state_list.stdout_lines"
+        fail_msg: the terraform/openbao state has no vault_mount.pki_root
+
+    - name: It should record the intermediate PKI mount in the OpenTofu state
+      ansible.builtin.assert:
+        that:
+          - "'vault_mount.pki_int' in opentofu_state_list.stdout_lines"
+        fail_msg: the terraform/openbao state has no vault_mount.pki_int
+
+    - name: It should record the database mount in the OpenTofu state
+      ansible.builtin.assert:
+        that:
+          - "'vault_mount.db' in opentofu_state_list.stdout_lines"
+        fail_msg: the terraform/openbao state has no vault_mount.db

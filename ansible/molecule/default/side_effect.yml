@@ -1,0 +1,68 @@
+---
+- name: OpenBao restarted after the bootstrap
+  hosts: localhost
+  gather_facts: true
+  tasks:
+    - name: Read the running OpenBao pod
+      kubernetes.core.k8s_info:
+        kind: Pod
+        name: "{{ openbao_pod }}"
+        namespace: "{{ openbao_namespace }}"
+      register: openbao_pod_before
+
+    - name: Delete the OpenBao pod
+      kubernetes.core.k8s:
+        state: absent
+        kind: Pod
+        name: "{{ openbao_pod }}"
+        namespace: "{{ openbao_namespace }}"
+
+    - name: Wait for the StatefulSet to bring back a new OpenBao pod
+      kubernetes.core.k8s_info:
+        kind: Pod
+        name: "{{ openbao_pod }}"
+        namespace: "{{ openbao_namespace }}"
+      register: openbao_pod_after
+      until: >-
+        (openbao_pod_after.resources | default([]) | length > 0)
+        and openbao_pod_after.resources[0].metadata.uid != openbao_pod_before.resources[0].metadata.uid
+        and openbao_pod_after.resources[0].status.phase | default('') == 'Running'
+      retries: 30
+      delay: 10
+
+    - name: Read OpenBao's status after the restart
+      kubernetes.core.k8s_exec:
+        namespace: "{{ openbao_namespace }}"
+        pod: "{{ openbao_pod }}"
+        command: bao status -format=json
+      register: openbao_status_restarted
+      until: openbao_status_restarted.stdout | default('') | length > 0
+      retries: 12
+      delay: 5
+      changed_when: false
+      failed_when: false
+
+    - name: It should come back sealed after a restart
+      ansible.builtin.assert:
+        that:
+          - (openbao_status_restarted.stdout | from_json).sealed
+        fail_msg: OpenBao came back unsealed, so the unseal path was not exercised
+
+    - name: Unseal OpenBao with the openbao role
+      ansible.builtin.include_role:
+        name: data_science.cluster.openbao
+
+    - name: Read OpenBao's status after the role
+      kubernetes.core.k8s_exec:
+        namespace: "{{ openbao_namespace }}"
+        pod: "{{ openbao_pod }}"
+        command: bao status -format=json
+      register: openbao_status_unsealed
+      changed_when: false
+      failed_when: false
+
+    - name: It should unseal OpenBao from the keyfile
+      ansible.builtin.assert:
+        that:
+          - not (openbao_status_unsealed.stdout | from_json).sealed
+        fail_msg: OpenBao is still sealed after the openbao role ran
