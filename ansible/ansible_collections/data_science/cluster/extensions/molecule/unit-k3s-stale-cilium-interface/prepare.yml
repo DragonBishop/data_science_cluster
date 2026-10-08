@@ -1,0 +1,14 @@
+---
+- name: The k3s install over a previous cluster's cilium_host interface
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Remove /run/cilium so the interface is the only leftover
+      ansible.builtin.file:
+        path: /run/cilium
+        state: absent
+
+    - name: Create a dummy cilium_host to stand in for the leftover interface
+      ansible.builtin.command:
+        cmd: ip link add cilium_host type dummy
+        creates: /sys/class/net/cilium_host

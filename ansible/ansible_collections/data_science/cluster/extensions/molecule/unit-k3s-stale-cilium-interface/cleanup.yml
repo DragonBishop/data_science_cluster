@@ -1,0 +1,9 @@
+---
+- name: The k3s install over a previous cluster's cilium_host interface
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Remove the dummy cilium_host
+      ansible.builtin.command:
+        cmd: ip link del cilium_host
+        removes: /sys/class/net/cilium_host

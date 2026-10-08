@@ -12,6 +12,7 @@
         systemd: "{{ hostvars[item]['container_systemd'] }}"
         volumes: "{{ hostvars[item]['container_volumes'] | default(omit) }}"
         security_opt: "{{ hostvars[item]['container_security_opt'] | default(omit) }}"
+        cap_add: "{{ hostvars[item]['container_cap_add'] | default(omit) }}"
         state: started
       register: result
       loop: "{{ groups['molecule'] }}"
