@@ -4,6 +4,7 @@ resources:
   - postgis-tls.yaml
   - postgis-networkpolicy.yaml
   - postgis-cluster.yaml
+  - postgis-dynamic-credentials.yaml
   - postgis-database.yaml
   - tekton-results-database.yaml
   - postgis-tcproute.yaml

@@ -26,6 +26,7 @@
 - *(ansible)* Prompt for the OpenBao root token when none is available
 - *(flux)* Reconcile SeaweedFS before databases so the backup bucket exists first
 - *(ansible)* Stop reporting changes on every bootstrap re-run
+- *(flux)* Deploy the dynamic PostGIS credentials with postgis-cluster
 
 ### 📚 Documentation
 

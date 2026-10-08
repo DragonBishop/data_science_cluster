@@ -547,7 +547,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
   * **`tekton-results-database.yaml`**: CNPG `Database` declaring `tekton_results`, owned by `tekton_readwrite`.
-* **`apps/databases-secrets/`** - The ESO objects that produce the `databases` Secrets, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after every Secret exists.
+* **`apps/databases-secrets/`** - The ESO SecretStore and the static ExternalSecrets for `databases`, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after those Secrets exist. The dynamic `postgis-app-dynamic-credentials` lives in `apps/databases/postgis-dynamic-credentials.yaml`, because OpenBao needs `postgis-cluster-rw` to issue it.
   * **`eso-setup.yaml`**: The `postgis-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
   * **`postgis-credentials.yaml`**: `ExternalSecret`s and the `VaultDynamicSecret` generator for static and dynamic PostGIS credentials.
   * **`seaweedfs-credentials.yaml`**: `ExternalSecret` syncing S3 credentials from `secret/seaweedfs`.
