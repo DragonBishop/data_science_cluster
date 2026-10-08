@@ -5,7 +5,8 @@
   "skip-changelog": true,
   "extra-files": [
     { "type": "toml", "path": "pyproject.toml", "jsonpath": "$.project.version" },
-    { "type": "toml", "path": "uv.lock", "jsonpath": "$.package[?(@.source && @.source.virtual && @.source.virtual.value=='.')].version" }
+    { "type": "toml", "path": "uv.lock", "jsonpath": "$.package[?(@.source && @.source.virtual && @.source.virtual.value=='.')].version" },
+    { "type": "yaml", "path": "ansible/ansible_collections/data_science/cluster/galaxy.yml", "jsonpath": "$.version" }
   ],
   "packages": {
     ".": {}
