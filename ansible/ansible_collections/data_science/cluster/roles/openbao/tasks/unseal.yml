@@ -6,5 +6,6 @@
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   loop: "{{ openbao_unseal_keys }}"
+  when: (openbao_status_result.stdout | default('{}', true) | from_json).sealed | default(true)
   no_log: true
   changed_when: true
