@@ -27,12 +27,14 @@
 - *(flux)* Reconcile SeaweedFS before databases so the backup bucket exists first
 - *(ansible)* Stop reporting changes on every bootstrap re-run
 - *(flux)* Deploy the dynamic PostGIS credentials with postgis-cluster
+- *(bash)* Read cluster-config values from the ConfigMap kustomize builds
 
 ### 📚 Documentation
 
 - Document OpenBao and External Secrets Operator
 - *(tekton)* Describe the Tekton Results database
 - Describe the cluster-config patch files, group_vars/all/ and Galaxy collections
+- Bring the README tree and file descriptions up to date
 
 ### ♻️ Refactor
 

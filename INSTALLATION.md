@@ -260,7 +260,7 @@ If you do not have a GitHub App configured, the bootstrap process will fall back
   sudo firewall-cmd --get-policies
   ```
 
-* [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (edit `terraform/cluster-config/terraform.tfvars` to change this). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
+* [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (`GATEWAY_IP` through `LAN_LB_POOL_STOP`, plus `COREDNS_LAN_IP`, in `infrastructure/cluster-config/networking.yaml`; `just preflight` checks them). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
 
   ```bash
   ping -c 2 -W 1 192.0.2.240
@@ -298,7 +298,7 @@ cd data_science_cluster
 
 #### Step 2: Execute Ansible Bootstrap
 
-Runs the full setup via Ansible (`ansible/playbooks/data_cluster.yml`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
+Runs the full setup via Ansible (`ansible/data_cluster.yml`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
 > [!TIP]
 > **Just Recipe (automatically prompts for sudo):**
@@ -311,7 +311,7 @@ Runs the full setup via Ansible (`ansible/playbooks/data_cluster.yml`): k3s, Cil
 > **Manual Shell Command:**
 >
 > ```bash
-> ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/data_cluster.yml --ask-become-pass
+> ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass
 > ```
 
 #### Step 3: Secure OpenBao Credentials & Unseal Keys
