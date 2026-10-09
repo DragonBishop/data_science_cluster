@@ -497,6 +497,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
 │   │   └── tekton-operator-release.yaml
 │   └── tekton/                          # TektonConfig: Pipelines, Triggers, pruner and Results
 │       ├── kustomization.yaml
+│       ├── run-egress-networkpolicy.yaml
 │       └── tektonconfig.yaml
 ├── src/
 │   └── bash/
@@ -621,7 +622,7 @@ kubectl delete pvc -n databases -l cnpg.io/cluster=postgis-restore
   * **`network-tests/`**: `network-checks-pipeline.yaml`, a scaffold (pseudocode) for a Tekton Pipeline that checks live network behaviour against "Network Policy". No Flux Kustomization applies it yet.
   * **`openbao/`**: `kustomization.yaml`, `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
   * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`
-  * **`tekton/`**: `kustomization.yaml`, `tektonconfig.yaml` (Pipelines, Triggers, pruner, and Results on the external PostGIS database)
+  * **`tekton/`**: `kustomization.yaml`, `tektonconfig.yaml` (Pipelines, Triggers, pruner, run defaults, component resources, and Results on the external PostGIS database), `run-egress-networkpolicy.yaml` (TaskRun pods reach the Git forge and PyPI)
 * **`src/`**
   * **`src/bash/`**:
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).
