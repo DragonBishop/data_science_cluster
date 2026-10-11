@@ -6,8 +6,10 @@ metadata:
 spec:
   endpointSelector: {}
   ingress:
-    - fromEntities:
-        - cluster
+    # Artifacts and events; Ansible applies this before Flux delivers allow-same-namespace
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: flux-system
       toPorts:
         - ports:
             - port: "9090"

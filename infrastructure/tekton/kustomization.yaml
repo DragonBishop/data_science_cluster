@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - tektonconfig.yaml
   - run-egress-networkpolicy.yaml
+  - resolver-egress-networkpolicy.yaml

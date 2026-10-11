@@ -12,12 +12,12 @@ classifiers = [
 ]
 version = "1.2.0"
 dependencies = [
-  "ansible>=14.3.1",
   "pgiscluster>=0.2.0",
 ]
 
 [dependency-groups]
 dev = [
+  "ansible>=14.3.1",
   "pytest>=9.1.1",
   "pytest-cov>=7.1.0",
   "prek>=0.5.0",

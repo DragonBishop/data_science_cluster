@@ -503,12 +503,12 @@ name = "data-science-cluster"
 version = "1.2.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "ansible" },
     { name = "pgiscluster" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "ansible" },
     { name = "ansible-lint" },
     { name = "jsonpatch" },
     { name = "molecule" },
@@ -521,13 +521,11 @@ lint = [
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "ansible", specifier = ">=14.3.1" },
-    { name = "pgiscluster", specifier = ">=0.2.0" },
-]
+requires-dist = [{ name = "pgiscluster", specifier = ">=0.2.0" }]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "ansible", specifier = ">=14.3.1" },
     { name = "ansible-lint", specifier = ">=26.9.0" },
     { name = "jsonpatch", specifier = ">=1.33" },
     { name = "molecule", specifier = ">=26.8.0" },

@@ -16,7 +16,7 @@ preflight:
 
 # Run full cluster bootstrap via Ansible (prompts for sudo; accepts flags like --tags, --check, -v)
 bootstrap *ARGS:
-  ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass {{ARGS}}
+  uv run ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass {{ARGS}}
 
 # --- Cluster lifecycle -------------------------------------------------
 
