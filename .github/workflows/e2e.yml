@@ -33,7 +33,7 @@ jobs:
           python-version-file: ".python-version"
       - uses: fluxcd/flux2/action@main
         with:
-          version: 2.9.4
+          version: 2.9.6
       - uses: opentofu/setup-opentofu@v2
         with:
           tofu_version: 1.12.6
