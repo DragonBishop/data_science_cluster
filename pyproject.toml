@@ -13,6 +13,12 @@ classifiers = [
 version = "1.2.0"
 dependencies = [
   "pgiscluster>=0.2.0",
+  "geopandas>=1.1.4",
+  "hvac>=2.4.0",
+  "kubernetes>=36.0.3",
+  "pandas>=3.0.5",
+  "psycopg[binary]>=3.3.5",
+  "sqlalchemy>=2.0.52",
 ]
 
 [dependency-groups]
