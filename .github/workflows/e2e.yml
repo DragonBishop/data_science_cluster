@@ -24,7 +24,7 @@ jobs:
     env:
       GITHUB_APP_ID: ${{ secrets.FLUX_GITHUB_APP_ID }}
       GITHUB_APP_INSTALLATION_ID: ${{ secrets.FLUX_GITHUB_APP_INSTALLATION_ID }}
-      BRANCH_UNDER_TEST: ${{ github.head_ref || github.ref_name }}
+      FLUX_GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -63,19 +63,9 @@ jobs:
         run: uv run molecule test
         working-directory: ansible
 
-      # Suspending flux-system keeps main's gotk-sync.yaml from resetting the branch; nothing is pruned.
-      - name: Point Flux at the branch under test
-        run: |
-          flux suspend kustomization flux-system
-          kubectl -n flux-system patch gitrepository flux-system --type merge \
-            --patch "{\"spec\":{\"ref\":{\"branch\":\"$BRANCH_UNDER_TEST\"}}}"
-          flux reconcile source git flux-system
-          kubectl apply --server-side --field-manager=kustomize-controller -f clusters/local/
-
       - name: Wait for every Kustomization to be Ready
         run: |
-          # flux-system is suspended, so its Ready condition never reaches the new generation.
-          kustomizations=$(kubectl -n flux-system get kustomization -o name | grep -v '/flux-system$')
+          kustomizations=$(kubectl -n flux-system get kustomization -o name)
           deadline=$((SECONDS + 1200))
           until kubectl -n flux-system wait $kustomizations --for=condition=ready --timeout=0s > /dev/null 2>&1; do
             if (( SECONDS >= deadline )); then
