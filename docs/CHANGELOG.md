@@ -1,4 +1,4 @@
-## [unreleased]
+## [2.0.0] - 2026-10-12
 
 ### 🚀 Features
 
@@ -15,6 +15,7 @@
 - *(tekton)* Mint new Tekton Results database credentials on every pod start
 - *(ansible)* Ask for the OpenBao root token up front, only when OpenBao is already initialized
 - *(ansible)* Verify what terraform/openbao configured after each apply
+- *(tekton)* Allow run egress to GitHub and PyPI, set run defaults
 
 ### 🐛 Bug Fixes
 
@@ -28,6 +29,10 @@
 - *(ansible)* Stop reporting changes on every bootstrap re-run
 - *(flux)* Deploy the dynamic PostGIS credentials with postgis-cluster
 - *(bash)* Read cluster-config values from the ConfigMap kustomize builds
+- *(k3s)* Give the bootstrap user write access to the kubeconfig
+- Update dependencies and versions.
+- *(just)* Install Ansible collections before bootstrap
+- Update e2e workflow and sync tasks to use FLUX_GIT_BRANCH for dynamic branch handling
 
 ### 📚 Documentation
 
@@ -35,6 +40,7 @@
 - *(tekton)* Describe the Tekton Results database
 - Describe the cluster-config patch files, group_vars/all/ and Galaxy collections
 - Bring the README tree and file descriptions up to date
+- Move the docs into docs/ and update them for 2.0
 
 ### ♻️ Refactor
 
@@ -61,6 +67,8 @@
 - Run ansible-lint and the Molecule unit scenarios on pull requests
 - *(e2e)* Bootstrap a cluster from the integration scenario on pull requests
 - *(release)* Keep the ansible collection version in step with the cluster
+- *(flux)* Upgrade the controllers to v2.9.6
+- *(devcontainer)* List only installed extensions
 
 ### ◀️ Revert
 
