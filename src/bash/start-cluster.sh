@@ -133,7 +133,7 @@ attempt_unseal_openbao() {
     local keyfile="$REPO_ROOT/.local/openbao/unseal-keys.gpg"
     if [ ! -f "$keyfile" ]; then
         echo "❌ ERROR: $keyfile not found. Cannot unseal OpenBao."
-        echo "💡 TROUBLESHOOTING: Did the GPG keyfile get created during 'just bootstrap' (INSTALLATION.md)?."
+        echo "💡 TROUBLESHOOTING: Did the GPG keyfile get created during 'just bootstrap' (docs/INSTALLATION.md)?."
         return 1
     fi
 

@@ -51,7 +51,7 @@ exclude_also = [
 
 [tool.rumdl]
 disable = ["MD013"]
-exclude = ["CHANGELOG.md"]
+exclude = ["docs/CHANGELOG.md"]
 
 [tool.rumdl.MD024]
 siblings-only = true

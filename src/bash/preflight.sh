@@ -15,7 +15,7 @@ check_host_tooling() {
         if command -v "$bin" >/dev/null 2>&1; then
             echo "✅ $bin"
         else
-            echo "❌ $bin not found. See INSTALLATION.md Requirements."
+            echo "❌ $bin not found. See docs/INSTALLATION.md Requirements."
             has_errors=true
         fi
     done
@@ -46,13 +46,13 @@ get_minor_version() {
 check_kubectl_tooling() {
     echo "== kubectl and plugins =="
     if ! command -v kubectl >/dev/null 2>&1; then
-        echo "❌ kubectl not found. See INSTALLATION.md Requirements."
+        echo "❌ kubectl not found. See docs/INSTALLATION.md Requirements."
         return 1
     fi
     echo "✅ kubectl"
 
     if ! kubectl cnpg version >/dev/null 2>&1; then
-        echo "❌ kubectl cnpg plugin not found. See INSTALLATION.md Requirements."
+        echo "❌ kubectl cnpg plugin not found. See docs/INSTALLATION.md Requirements."
         return 1
     fi
     echo "✅ kubectl cnpg"
@@ -95,7 +95,7 @@ check_cnpg_plugin_version() {
 check_optional_tool() {
     local bin="$1" recipe="$2"
     if ! command -v "$bin" >/dev/null 2>&1; then
-        echo "⚠️  $bin not found (only needed later for '$recipe'). See INSTALLATION.md Requirements."
+        echo "⚠️  $bin not found (only needed later for '$recipe'). See docs/INSTALLATION.md Requirements."
         return 1
     fi
     echo "✅ $bin"
@@ -112,7 +112,7 @@ check_github_auth() {
         echo ""
         return 0
     else
-        echo "❌ No GitHub App provided and gh not authenticated. See INSTALLATION.md."
+        echo "❌ No GitHub App provided and gh not authenticated. See docs/INSTALLATION.md."
         echo ""
         return 1
     fi
@@ -137,7 +137,7 @@ detect_distro() {
 
 check_debian_firewall() {
     if ! command -v ufw >/dev/null 2>&1; then
-        echo "⚠️  ufw not found on a Debian/Ubuntu host (expected on this distro family). Verify firewall state manually (see INSTALLATION.md Requirements)."
+        echo "⚠️  ufw not found on a Debian/Ubuntu host (expected on this distro family). Verify firewall state manually (see docs/INSTALLATION.md Requirements)."
         return 1
     fi
 
@@ -155,7 +155,7 @@ check_debian_firewall() {
     done
 
     if [ "$fwd_policy" != "ACCEPT" ] || [ ${#missing[@]} -gt 0 ]; then
-        echo "⚠️  ufw is active but not configured for Cilium (see INSTALLATION.md Requirements)."
+        echo "⚠️  ufw is active but not configured for Cilium (see docs/INSTALLATION.md Requirements)."
         [ "$fwd_policy" != "ACCEPT" ] && echo "   - DEFAULT_FORWARD_POLICY is '${fwd_policy:-unset}', expected ACCEPT"
         [ ${#missing[@]} -gt 0 ] && echo "   - missing ALLOW IN rules for: ${missing[*]}"
         return 1
@@ -167,7 +167,7 @@ check_debian_firewall() {
 
 check_fedora_firewall() {
     if ! command -v firewall-cmd >/dev/null 2>&1; then
-        echo "⚠️  firewall-cmd not found on a Fedora/RHEL host (expected on this distro family). Verify firewall state manually (see INSTALLATION.md Requirements)."
+        echo "⚠️  firewall-cmd not found on a Fedora/RHEL host (expected on this distro family). Verify firewall state manually (see docs/INSTALLATION.md Requirements)."
         return 1
     fi
 
@@ -200,11 +200,11 @@ check_fedora_firewall() {
     echo "$policies" | grep -q "k8s-forwarding-host" || missing+=("policy 'k8s-forwarding-host'")
 
     if [ ${#missing[@]} -gt 0 ]; then
-        echo "⚠️  firewalld is active but missing required rules/policies for Kubernetes/Cilium (see INSTALLATION.md Requirements):"
+        echo "⚠️  firewalld is active but missing required rules/policies for Kubernetes/Cilium (see docs/INSTALLATION.md Requirements):"
         for item in "${missing[@]}"; do
             echo "   - missing $item"
         done
-        echo "   Run the commands in INSTALLATION.md under 'Host Firewall Configuration' to apply them."
+        echo "   Run the commands in docs/INSTALLATION.md under 'Host Firewall Configuration' to apply them."
         return 1
     fi
 
@@ -227,7 +227,7 @@ check_host_firewall() {
             check_fedora_firewall || rc=$?
             ;;
         *)
-            echo "⚠️  Unrecognized distro ('$distro_id'): firewall check is only verified for Ubuntu/Debian and Fedora/RHEL. Skipping automated check; verify manually per INSTALLATION.md Requirements."
+            echo "⚠️  Unrecognized distro ('$distro_id'): firewall check is only verified for Ubuntu/Debian and Fedora/RHEL. Skipping automated check; verify manually per docs/INSTALLATION.md Requirements."
             rc=1
             ;;
     esac
@@ -245,7 +245,7 @@ check_reserved_ips() {
 
     for ip in "$gateway_ip" "$coredns_lan_ip"; do
         if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
-            echo "⚠️  $ip already answers on the LAN: check for a DHCP conflict (see INSTALLATION.md Requirements)."
+            echo "⚠️  $ip already answers on the LAN: check for a DHCP conflict (see docs/INSTALLATION.md Requirements)."
             has_warnings=true
         else
             echo "✅ $ip free"

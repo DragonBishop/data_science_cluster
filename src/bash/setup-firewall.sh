@@ -83,7 +83,7 @@ print_unsupported_os() {
     local distro_family="$1"
     local distro_id="$2"
     echo "⚠️  Unsupported or unrecognized OS family '$distro_family' ($distro_id)."
-    echo "   Please refer to INSTALLATION.md for manual firewall configuration."
+    echo "   Please refer to docs/INSTALLATION.md for manual firewall configuration."
 }
 
 print_next_steps() {
