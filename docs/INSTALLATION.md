@@ -31,10 +31,28 @@ Once host-side prerequisites are met, running `just bootstrap` orchestrates the 
 
 ##### Flux CLI
 
+Install the version the committed `clusters/local/flux-system/gotk-components.yaml` pins:
+
 ```bash
-curl -s https://fluxcd.io/install.sh | sudo bash
-flux check --pre
+curl -s https://fluxcd.io/install.sh | sudo FLUX_VERSION=2.9.6 bash
+flux version --client
 ```
+
+##### fzf
+
+Used by `just fuzzypods`.
+
+* **Ubuntu / Debian**:
+
+  ```bash
+  sudo apt update && sudo apt install -y fzf
+  ```
+
+* **Fedora / RHEL / Red Hat**:
+
+  ```bash
+  sudo dnf install -y fzf
+  ```
 
 ##### GitHub CLI (`gh`)
 
@@ -54,10 +72,26 @@ flux check --pre
   sudo dnf install -y gh
   ```
 
+##### GnuPG and OpenSSL
+
+`gpg` encrypts the OpenBao unseal keyfile during `just bootstrap` and decrypts it on every `just start`. `just preflight` checks that both are installed.
+
+* **Ubuntu / Debian**:
+
+  ```bash
+  sudo apt update && sudo apt install -y gnupg openssl
+  ```
+
+* **Fedora / RHEL / Red Hat**:
+
+  ```bash
+  sudo dnf install -y gnupg2 openssl
+  ```
+
 ##### Helm
 
 ```bash
-curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
 chmod +x get_helm.sh
 ./get_helm.sh
 rm get_helm.sh
@@ -93,10 +127,10 @@ hubble version
 
 ##### kubectl
 
-Install the release matching `K3S_VERSION` in `infrastructure/cluster-config/versions.yaml`, without the `+k3s` suffix:
+Install the release `KUBECTL_VERSION` pins in `infrastructure/cluster-config/versions.yaml`, which matches `K3S_VERSION` without the `+k3s` suffix:
 
 ```bash
-KUBECTL_VERSION=v1.37.0
+KUBECTL_VERSION=v1.37.1
 KUBECTL_ARCH=amd64
 if [ "$(uname -m)" = "aarch64" ]; then KUBECTL_ARCH=arm64; fi
 curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl"
@@ -110,7 +144,7 @@ kubectl version --client
 Install the release matching the CNPG operator, which is the `appVersion` of the chart pinned by `CNPG_VERSION` (`helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts --version <CNPG_VERSION>`). `preflight.sh` checks the match.
 
 ```bash
-CNPG_PLUGIN_VERSION=1.30.0
+CNPG_PLUGIN_VERSION=1.30.1
 CNPG_ARCH=x86_64
 if [ "$(uname -m)" = "aarch64" ]; then CNPG_ARCH=arm64; fi
 CNPG_URL=https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${CNPG_PLUGIN_VERSION}/kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}
@@ -135,7 +169,7 @@ CNPG_URL=https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${C
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
 chmod +x install-opentofu.sh
-sudo ./install-opentofu.sh --install-method standalone
+sudo ./install-opentofu.sh --install-method standalone --opentofu-version 1.12.6
 rm install-opentofu.sh
 tofu version
 ```
@@ -153,6 +187,15 @@ tofu version
   ```bash
   sudo dnf install -y postgresql
   ```
+
+##### uv
+
+`just bootstrap` runs Ansible through `uv run`, which builds `.venv` from `uv.lock` on first use, Python included.
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv --version
+```
 
 #### GitHub Authentication
 
@@ -298,7 +341,7 @@ cd data_science_cluster
 
 #### Step 2: Execute Ansible Bootstrap
 
-Runs the full setup via Ansible (`ansible/data_cluster.yml`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
+Installs the Ansible collections in `ansible/requirements.yml`, then runs the full setup via Ansible (`ansible/data_cluster.yml`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. On a fresh clone, `uv run` first builds `.venv` from `uv.lock`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
 > [!TIP]
 > **Just Recipe (automatically prompts for sudo):**
@@ -311,7 +354,8 @@ Runs the full setup via Ansible (`ansible/data_cluster.yml`): k3s, Cilium, Flux,
 > **Manual Shell Command:**
 >
 > ```bash
-> ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass
+> uv run ansible-galaxy collection install -r ansible/requirements.yml
+> uv run ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass
 > ```
 
 #### Step 3: Secure OpenBao Credentials & Unseal Keys
@@ -626,9 +670,19 @@ Verify `suspend: false` and scheduled backup intervals.
 
 #### Trigger Manual Test Backup
 
-```bash
-kubectl cnpg backup postgis-cluster -n databases
-```
+> [!TIP]
+> **Just Recipe:**
+>
+> ```bash
+> just backup
+> ```
+
+> [!NOTE]
+> **Manual Shell Command:**
+>
+> ```bash
+> kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
+> ```
 
 #### Confirm Backup Status
 

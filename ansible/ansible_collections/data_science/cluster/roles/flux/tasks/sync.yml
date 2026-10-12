@@ -2,4 +2,29 @@
 - name: Apply Flux GitRepository (gotk-sync)
   kubernetes.core.k8s:
     state: present
-    src: "{{ repo_root }}/clusters/local/flux-system/gotk-sync.yaml"
+    definition: >-
+      {{ lookup('file', repo_root + '/clusters/local/flux-system/gotk-sync.yaml')
+      | regex_replace('branch: main', 'branch: ' + lookup('ansible.builtin.env', 'FLUX_GIT_BRANCH', default='main')) }}
+
+# gotk-sync.yaml pins main, so Flux would reset the branch on its first sync without this patch
+- name: Keep Flux on the branch under test
+  kubernetes.core.k8s:
+    state: present
+    server_side_apply:
+      field_manager: ansible
+    definition:
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: flux-system
+        namespace: flux-system
+      spec:
+        patches:
+          - target:
+              kind: GitRepository
+              name: flux-system
+            patch: |
+              - op: replace
+                path: /spec/ref/branch
+                value: {{ lookup('ansible.builtin.env', 'FLUX_GIT_BRANCH') }}
+  when: lookup('ansible.builtin.env', 'FLUX_GIT_BRANCH', default='main') != 'main'

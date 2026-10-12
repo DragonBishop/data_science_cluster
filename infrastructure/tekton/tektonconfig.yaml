@@ -5,6 +5,121 @@ metadata:
 spec:
   targetNamespace: tekton-pipelines
   profile: basic
+  pipeline:
+    default-timeout-minutes: ${TEKTON_DEFAULT_TIMEOUT_MINUTES}
+    # One node, so the per-run affinity-assistant pod has nothing to co-locate
+    coschedule: disabled
+    options:
+      configMaps:
+        config-defaults:
+          data:
+            default-container-resource-requirements: |
+              default:
+                requests:
+                  cpu: ${TEKTON_STEP_CPU_REQUEST}
+                  memory: ${TEKTON_STEP_MEM_REQUEST}
+                limits:
+                  memory: ${TEKTON_STEP_MEM_LIMIT}
+      deployments:
+        tekton-pipelines-controller:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tekton-pipelines-controller
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_PIPELINES_CONTROLLER_CPU_REQUEST}
+                        memory: ${TEKTON_PIPELINES_CONTROLLER_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_PIPELINES_CONTROLLER_MEM_LIMIT}
+        tekton-pipelines-webhook:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: webhook
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_PIPELINES_WEBHOOK_CPU_REQUEST}
+                        memory: ${TEKTON_PIPELINES_WEBHOOK_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_PIPELINES_WEBHOOK_MEM_LIMIT}
+        tekton-pipelines-remote-resolvers:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: controller
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESOLVERS_CPU_REQUEST}
+                        memory: ${TEKTON_RESOLVERS_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESOLVERS_MEM_LIMIT}
+        tekton-events-controller:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tekton-events-controller
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_EVENTS_CONTROLLER_CPU_REQUEST}
+                        memory: ${TEKTON_EVENTS_CONTROLLER_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_EVENTS_CONTROLLER_MEM_LIMIT}
+        tekton-operator-proxy-webhook:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: proxy
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_PROXY_WEBHOOK_CPU_REQUEST}
+                        memory: ${TEKTON_PROXY_WEBHOOK_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_PROXY_WEBHOOK_MEM_LIMIT}
+  trigger:
+    options:
+      deployments:
+        tekton-triggers-controller:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tekton-triggers-controller
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_TRIGGERS_CONTROLLER_CPU_REQUEST}
+                        memory: ${TEKTON_TRIGGERS_CONTROLLER_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_TRIGGERS_CONTROLLER_MEM_LIMIT}
+        tekton-triggers-webhook:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: webhook
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_TRIGGERS_WEBHOOK_CPU_REQUEST}
+                        memory: ${TEKTON_TRIGGERS_WEBHOOK_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_TRIGGERS_WEBHOOK_MEM_LIMIT}
+        tekton-triggers-core-interceptors:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tekton-triggers-core-interceptors
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_TRIGGERS_INTERCEPTORS_CPU_REQUEST}
+                        memory: ${TEKTON_TRIGGERS_INTERCEPTORS_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_TRIGGERS_INTERCEPTORS_MEM_LIMIT}
   pruner:
     disabled: false
     schedule: "${TEKTON_PRUNER_SCHEDULE}"
@@ -40,6 +155,14 @@ spec:
           spec:
             template:
               spec:
+                containers:
+                  - name: api
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESULTS_API_CPU_REQUEST}
+                        memory: ${TEKTON_RESULTS_API_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESULTS_API_MEM_LIMIT}
                 initContainers:
                   # ESO re-creates the deleted Secret with a new OpenBao login; the kubelet retries the main container until it exists
                   - name: delete-db-credentials
@@ -64,6 +187,14 @@ spec:
           spec:
             template:
               spec:
+                containers:
+                  - name: retention-policy-agent
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESULTS_RETENTION_AGENT_CPU_REQUEST}
+                        memory: ${TEKTON_RESULTS_RETENTION_AGENT_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESULTS_RETENTION_AGENT_MEM_LIMIT}
                 initContainers:
                   - name: delete-db-credentials
                     image: registry.k8s.io/kubectl:${KUBECTL_VERSION}
@@ -83,3 +214,15 @@ spec:
                         drop: ["ALL"]
                       seccompProfile:
                         type: RuntimeDefault
+        tekton-results-watcher:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: watcher
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESULTS_WATCHER_CPU_REQUEST}
+                        memory: ${TEKTON_RESULTS_WATCHER_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESULTS_WATCHER_MEM_LIMIT}

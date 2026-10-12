@@ -503,12 +503,18 @@ name = "data-science-cluster"
 version = "1.2.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "ansible" },
+    { name = "geopandas" },
+    { name = "hvac" },
+    { name = "kubernetes" },
+    { name = "pandas" },
     { name = "pgiscluster" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "sqlalchemy" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "ansible" },
     { name = "ansible-lint" },
     { name = "jsonpatch" },
     { name = "molecule" },
@@ -522,12 +528,18 @@ lint = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ansible", specifier = ">=14.3.1" },
+    { name = "geopandas", specifier = ">=1.1.4" },
+    { name = "hvac", specifier = ">=2.4.0" },
+    { name = "kubernetes", specifier = ">=36.0.3" },
+    { name = "pandas", specifier = ">=3.0.5" },
     { name = "pgiscluster", specifier = ">=0.2.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.5" },
+    { name = "sqlalchemy", specifier = ">=2.0.52" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "ansible", specifier = ">=14.3.1" },
     { name = "ansible-lint", specifier = ">=26.9.0" },
     { name = "jsonpatch", specifier = ">=1.33" },
     { name = "molecule", specifier = ">=26.8.0" },

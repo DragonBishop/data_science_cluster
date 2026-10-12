@@ -12,6 +12,6 @@ def pytest_sessionstart(session: pytest.Session):
     missing_tools = [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
     if missing_tools:
         pytest.exit(
-            f"{', '.join(missing_tools)} not found. See INSTALLATION.md Requirements.",
+            f"{', '.join(missing_tools)} not found. See docs/INSTALLATION.md Requirements.",
             returncode=pytest.ExitCode.USAGE_ERROR,
         )

@@ -198,6 +198,21 @@ def test_ansible_cluster_config_matches_flux_configmap(
     assert ansible_cluster_config == cluster_config_data
 
 
+def test_gateway_api_crds_match_their_version(cluster_config_data: dict[str, str]):
+    """Check that every vendored Gateway API CRD carries GATEWAY_API_VERSION as its bundle version."""
+    crd_documents = yaml.safe_load_all(
+        (
+            REPO_ROOT / "infrastructure/gateway-api-crds/standard-install.yaml"
+        ).read_text()
+    )
+    bundle_versions = {
+        document["metadata"]["annotations"]["gateway.networking.k8s.io/bundle-version"]
+        for document in crd_documents
+        if document and document["kind"] == "CustomResourceDefinition"
+    }
+    assert bundle_versions == {cluster_config_data["GATEWAY_API_VERSION"]}
+
+
 def test_ansible_routed_variables_resolve():
     """Check that every routed Ansible variable resolves to a non-empty value."""
     routed_variable_names = list(yaml.safe_load(ANSIBLE_ROUTES_PATH.read_text()))

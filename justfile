@@ -4,7 +4,7 @@ module_name := "clusterpgis"
 default:
   @just --list
 
-# --- Bootstrap (first-time install, see INSTALLATION.md) -------------------
+# --- Bootstrap (first-time install, see docs/INSTALLATION.md) --------------
 
 # Configure host firewall rules for Kubernetes and Cilium (Fedora firewalld or Ubuntu ufw)
 setup-firewall:
@@ -16,7 +16,8 @@ preflight:
 
 # Run full cluster bootstrap via Ansible (prompts for sudo; accepts flags like --tags, --check, -v)
 bootstrap *ARGS:
-  ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass {{ARGS}}
+  uv run ansible-galaxy collection install -r ansible/requirements.yml
+  uv run ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass {{ARGS}}
 
 # --- Cluster lifecycle -------------------------------------------------
 
@@ -24,7 +25,7 @@ bootstrap *ARGS:
 start:
   ./src/bash/start-cluster.sh
 
-# Read-only cluster health check (Flux, Gateway/DNS, cert-manager, database, backups, Hubble)
+# Read-only cluster health check (Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, Hubble)
 status:
   #!/usr/bin/env bash
   set -uo pipefail
@@ -60,10 +61,6 @@ status:
   echo "== Hubble =="
   kubectl get pods -n kube-system -l k8s-app=hubble-relay
 
-# Fuzzy-select a pod (all namespaces) and describe it
-fuzzypods:
-  kubectl get pods -A --no-headers | fzf | awk '{print $2, $1}' | xargs -n 2 sh -c 'kubectl describe pod $0 -n $1'
-
 # Stop the cluster (pass --force to skip confirmation on a stuck stop)
 stop *ARGS:
   ./src/bash/stop-cluster.sh {{ARGS}}
@@ -71,6 +68,53 @@ stop *ARGS:
 # Uninstall k3s and clear stale local cluster state (sudo required)
 uninstall:
   ./src/bash/uninstall-cluster.sh
+
+# Fuzzy-select a pod (all namespaces) and describe it
+fuzzypods:
+  kubectl get pods -A --no-headers | fzf | awk '{print $2, $1}' | xargs -n 2 sh -c 'kubectl describe pod $0 -n $1'
+
+# Verify TLS and routing for a Gateway hostname (HOST defaults to the live Gateway IP)
+gateway-check DOMAIN HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null`:
+  #!/usr/bin/env bash
+  set -uo pipefail
+  if [ -z "{{HOST}}" ]; then
+    echo "Error: Could not determine the Gateway IP. Pass it explicitly: just gateway-check {{DOMAIN}} <HOST>" >&2
+    exit 1
+  fi
+  curl -v --resolve "{{DOMAIN}}:443:{{HOST}}" \
+    --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
+    "https://{{DOMAIN}}/"
+
+# Run Hubble CLI command against hubble-relay (localhost:4245 through a local redirect)
+hubble *ARGS='status':
+  #!/usr/bin/env bash
+  set -uo pipefail
+  mkdir -p ~/.hubble/tls
+  for file in ca.crt tls.crt tls.key; do
+    kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath="{.data.${file//./\\.}}" | base64 -d > ~/.hubble/tls/$file
+  done
+  chmod 600 ~/.hubble/tls/*
+
+  hubble --server localhost:4245 --tls \
+    --tls-server-name relay.hubble-relay.cilium.io \
+    --tls-ca-cert-files ~/.hubble/tls/ca.crt \
+    --tls-client-cert-file ~/.hubble/tls/tls.crt \
+    --tls-client-key-file ~/.hubble/tls/tls.key \
+    {{ARGS}} 2> >(grep -v --line-buffered "Hubble CLI version is lower than Hubble Relay" >&2)
+
+bao_env := "unset BAO_TOKEN"
+
+# Export OpenBao's CA and print its local address
+bao-ca:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  mkdir -p .local/openbao/certs
+  kubectl get secret openbao-server-cert -n openbao -o jsonpath='{.data.ca\.crt}' | base64 -d > .local/openbao/certs/openbao-internal-ca.crt
+  echo "OpenBao API: https://127.0.0.1:8210  UI: https://127.0.0.1:8210/ui/  (CA: .local/openbao/certs/openbao-internal-ca.crt)"
+
+# Open interactive shell in openbao-0 pod
+bao-shell:
+  kubectl exec -it openbao-0 -n openbao -- sh -c '{{bao_env}}; exec sh'
 
 # --- Database ------------------------------------------------------------
 
@@ -90,54 +134,9 @@ db-connect HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.
   [ -f "$ROOT_CERT_PATH" ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > "$ROOT_CERT_PATH"
   PGPASSWORD="$LEASE_PASS" psql "host={{HOST}} port=5432 dbname=$DATABASE_NAME user=$LEASE_USER sslmode=verify-full sslrootcert=$ROOT_CERT_PATH"
 
-# --- Gateway ---------------------------------------------------------------
-
-# Verify TLS and routing for a Gateway hostname (HOST defaults to the live Gateway IP)
-gateway-check DOMAIN HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null`:
-  #!/usr/bin/env bash
-  set -uo pipefail
-  if [ -z "{{HOST}}" ]; then
-    echo "Error: Could not determine the Gateway IP. Pass it explicitly: just gateway-check {{DOMAIN}} <HOST>" >&2
-    exit 1
-  fi
-  curl -v --resolve "{{DOMAIN}}:443:{{HOST}}" \
-    --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
-    "https://{{DOMAIN}}/"
-
-# --- Observability (Hubble) -----------------------------------------------
-
-# Run Hubble CLI command against hubble-relay (localhost:4245 through a local redirect)
-hubble *ARGS='status':
-  #!/usr/bin/env bash
-  set -uo pipefail
-  mkdir -p ~/.hubble/tls
-  for file in ca.crt tls.crt tls.key; do
-    kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath="{.data.${file//./\\.}}" | base64 -d > ~/.hubble/tls/$file
-  done
-  chmod 600 ~/.hubble/tls/*
-
-  hubble --server localhost:4245 --tls \
-    --tls-server-name relay.hubble-relay.cilium.io \
-    --tls-ca-cert-files ~/.hubble/tls/ca.crt \
-    --tls-client-cert-file ~/.hubble/tls/tls.crt \
-    --tls-client-key-file ~/.hubble/tls/tls.key \
-    {{ARGS}} 2> >(grep -v --line-buffered "Hubble CLI version is lower than Hubble Relay" >&2)
-
-# --- OpenBao ---------------------------------------------------------------
-
-bao_env := "unset BAO_TOKEN"
-
-# Open interactive shell in openbao-0 pod
-bao-shell:
-  kubectl exec -it openbao-0 -n openbao -- sh -c '{{bao_env}}; exec sh'
-
-# Export OpenBao's CA and print its local address
-bao-ca:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  mkdir -p .local/openbao/certs
-  kubectl get secret openbao-server-cert -n openbao -o jsonpath='{.data.ca\.crt}' | base64 -d > .local/openbao/certs/openbao-internal-ca.crt
-  echo "OpenBao API: https://127.0.0.1:8210  UI: https://127.0.0.1:8210/ui/  (CA: .local/openbao/certs/openbao-internal-ca.crt)"
+# Trigger a manual base backup of postgis-cluster to SeaweedFS through the Barman Cloud plugin
+backup:
+  kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
 
 # --- Development -------------------------------------------------------
 
