@@ -10,7 +10,7 @@ data:
   # renovate: datasource=docker depName=quay.io/jetstack/charts/cert-manager
   CERT_MANAGER_VERSION: "1.21.2"
   # renovate: datasource=docker depName=quay.io/cilium/charts/cilium
-  CILIUM_VERSION: "1.20.2"
+  CILIUM_VERSION: "1.20.3"
   # renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts
   CNPG_VERSION: "0.29.1"
   # renovate: datasource=docker depName=ghcr.io/external-secrets/charts/external-secrets
