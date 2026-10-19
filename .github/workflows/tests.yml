@@ -9,7 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  release-only:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.files.outputs.skip }}
+    steps:
+      - id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/data_science/cluster/galaxy\.yml'
+        run: |
+          other_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" || true)
+          echo "skip=$([ -z "$other_files" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
   molecule-unit:
+    needs: release-only
+    if: ${{ !cancelled() && needs.release-only.outputs.skip != 'true' }}
     runs-on: ubuntu-26.04
     env:
       CONTAINER_HOST: unix:///run/podman/podman.sock
@@ -29,6 +47,8 @@ jobs:
       - run: uv run molecule test --all
         working-directory: ansible/ansible_collections/data_science/cluster
   pytest:
+    needs: release-only
+    if: ${{ !cancelled() && needs.release-only.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
