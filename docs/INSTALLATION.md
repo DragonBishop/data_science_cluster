@@ -169,7 +169,7 @@ CNPG_URL=https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${C
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
 chmod +x install-opentofu.sh
-sudo ./install-opentofu.sh --install-method standalone --opentofu-version 1.12.6
+sudo ./install-opentofu.sh --install-method standalone --opentofu-version 1.13.1
 rm install-opentofu.sh
 tofu version
 ```
