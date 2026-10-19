@@ -1,5 +1,5 @@
 ---
-- name: "Install Gateway API Custom Resource Definitions (CRDs) {{ gateway_api_version }}"
+- name: "Install Gateway API Custom Resource Definitions (CRDs)"
   kubernetes.core.k8s:
     state: present
     src: "{{ repo_root }}/infrastructure/gateway-api-crds/standard-install.yaml"

@@ -20,5 +20,4 @@ cilium_operator_replicas: "{{ cluster_config.CILIUM_OPERATOR_REPLICAS }}"
 
 # --- cluster-config/versions.yaml ---
 cilium_version: "{{ cluster_config.CILIUM_VERSION }}"
-gateway_api_version: "{{ cluster_config.GATEWAY_API_VERSION }}"
 k3s_version: "{{ cluster_config.K3S_VERSION }}"
