@@ -24,7 +24,7 @@ data:
   # renovate: datasource=docker depName=quay.io/openbao/openbao
   OPENBAO_IMAGE_TAG: "2.7.1"
   # renovate: datasource=docker depName=ghcr.io/openbao/charts/openbao
-  OPENBAO_VERSION: "0.30.3"
+  OPENBAO_VERSION: "0.30.4"
   POSTGIS_VERSION: "3.6.4"
   POSTGRES_VERSION: "18.6"
   # renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm
