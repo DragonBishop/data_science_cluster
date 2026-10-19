@@ -48,7 +48,7 @@ jobs:
           version: 2.9.6
       - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
-          tofu_version: 1.12.6
+          tofu_version: v1.13.1
           tofu_wrapper: false
       - run: uv sync --frozen
       - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
