@@ -37,3 +37,12 @@ jobs:
       - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
       - run: uv run ansible-lint
         working-directory: ansible
+  tofu-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: v1.13.1
+          tofu_wrapper: false
+      - run: tofu fmt -check -recursive -diff terraform/

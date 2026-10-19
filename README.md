@@ -69,7 +69,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | kubectl | `v1.37.1` (`KUBECTL_VERSION`, matching `K3S_VERSION`) | Kubernetes CLI for every cluster operation and recipe. The same version runs in-cluster as the `registry.k8s.io/kubectl` image in the Tekton Results init containers. |
 | kubectl cnpg plugin | `1.30.1` (the CNPG operator version) | CloudNativePG status, backups, `psql` and restarts (`kubectl cnpg ...`). |
 | OpenSSL | `openssl` | `just preflight` checks that it is installed. |
-| OpenTofu | `1.12.6` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
+| OpenTofu | `1.13.1` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
 | PostgreSQL Client (`psql`) | `postgresql-client` | Host CLI client for local database administration and connectivity testing. |
 | uv | `astral-sh/uv` | Builds `.venv` from `uv.lock`, Python included; `just bootstrap` and the dev recipes run through it. |
 
