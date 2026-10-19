@@ -14,7 +14,7 @@ data:
   # renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts
   CNPG_VERSION: "0.29.1"
   # renovate: datasource=docker depName=ghcr.io/external-secrets/charts/external-secrets
-  ESO_VERSION: "2.12.0"
+  ESO_VERSION: "2.13.0"
   # k3s bundles these CRDs too (gateway-api-crd chart); keep in step with its version
   GATEWAY_API_VERSION: "v1.6.1"
   # renovate: datasource=github-releases depName=k3s-io/k3s
