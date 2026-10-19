@@ -3,13 +3,6 @@ name: e2e
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - "ansible/**"
-      - "clusters/**"
-      - "infrastructure/**"
-      - "apps/**"
-      - "terraform/**"
-      - ".github/workflows/e2e.yml"
 permissions:
   contents: read
 
@@ -18,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release-only:
+  e2e-scope:
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
@@ -31,12 +24,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/data_science/cluster/galaxy\.yml'
+          E2E_PATHS: '^(ansible|clusters|infrastructure|apps|terraform|components|modules|scripts)/|^\.github/workflows/e2e\.yml$|^pyproject\.toml$|^uv\.lock$'
         run: |
-          other_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" || true)
-          echo "skip=$([ -z "$other_files" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          cluster_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" | grep -E "$E2E_PATHS" || true)
+          echo "skip=$([ -z "$cluster_files" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
   bootstrap:
-    needs: release-only
-    if: ${{ !cancelled() && needs.release-only.outputs.skip != 'true' }}
+    needs: e2e-scope
+    if: ${{ !cancelled() && needs.e2e-scope.outputs.skip != 'true' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     env:
@@ -44,15 +38,15 @@ jobs:
       GITHUB_APP_INSTALLATION_ID: ${{ secrets.FLUX_GITHUB_APP_INSTALLATION_ID }}
       FLUX_GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version-file: ".python-version"
-      - uses: fluxcd/flux2/action@main
+      - uses: fluxcd/flux2/action@b9c17924adb533d3617ec7de97a7b0f4acc07b39 # v2.9.6
         with:
           version: 2.9.6
-      - uses: opentofu/setup-opentofu@v2
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
           tofu_version: 1.12.6
           tofu_wrapper: false

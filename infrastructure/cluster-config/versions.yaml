@@ -5,18 +5,29 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
+  # renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts
   BARMAN_CLOUD_VERSION: "0.8.1"
+  # renovate: datasource=docker depName=quay.io/jetstack/charts/cert-manager
   CERT_MANAGER_VERSION: "1.21.2"
+  # renovate: datasource=docker depName=quay.io/cilium/charts/cilium
   CILIUM_VERSION: "1.20.2"
+  # renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts
   CNPG_VERSION: "0.29.1"
+  # renovate: datasource=docker depName=ghcr.io/external-secrets/charts/external-secrets
   ESO_VERSION: "2.12.0"
   # k3s bundles these CRDs too (gateway-api-crd chart); keep in step with its version
   GATEWAY_API_VERSION: "v1.6.1"
+  # renovate: datasource=github-releases depName=k3s-io/k3s
   K3S_VERSION: "v1.37.1+k3s1"
+  # renovate: datasource=docker depName=registry.k8s.io/kubectl
   KUBECTL_VERSION: "v1.37.1"
+  # renovate: datasource=docker depName=quay.io/openbao/openbao
   OPENBAO_IMAGE_TAG: "2.7.1"
+  # renovate: datasource=docker depName=ghcr.io/openbao/charts/openbao
   OPENBAO_VERSION: "0.30.3"
   POSTGIS_VERSION: "3.6.4"
   POSTGRES_VERSION: "18.6"
+  # renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm
   SEAWEEDFS_VERSION: "4.48.0"
+  # renovate: datasource=docker depName=ghcr.io/tektoncd/operator/charts/tekton-operator
   TEKTON_OPERATOR_VERSION: "0.81.2"
