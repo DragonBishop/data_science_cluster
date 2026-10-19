@@ -10,7 +10,6 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.14",
 ]
-version = "2.0.0"
 dependencies = [
   "pgiscluster>=0.2.0",
   "geopandas>=1.1.4",
@@ -20,6 +19,7 @@ dependencies = [
   "psycopg[binary]>=3.3.5",
   "sqlalchemy>=2.0.52",
 ]
+dynamic = ["version"]
 
 [dependency-groups]
 dev = [
@@ -35,6 +35,10 @@ lint = [
   "ruff>=0.16.5",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.coverage.report]
 exclude_also = [
   "def __repr__",
@@ -49,6 +53,18 @@ exclude_also = [
   '@(abc\.)?abstractmethod',
 ]
 
+[tool.hatch.version]
+path = "src/data_science_cluster/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/data_science_cluster"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  ".venv",
+  "uv.lock",
+]
+
 [tool.rumdl]
 disable = ["MD013"]
 exclude = ["docs/CHANGELOG.md"]
@@ -57,8 +73,10 @@ exclude = ["docs/CHANGELOG.md"]
 siblings-only = true
 
 [tool.uv]
+# wait a week before resolving new releases (supply-chain cooldown);
+# keep it first, Semgrep's uv-missing-dependency-cooldown rule only looks there
+exclude-newer = "7 days"
 default-groups = ["dev"]
-package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

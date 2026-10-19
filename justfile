@@ -147,6 +147,10 @@ setup: install git-setup
 install:
   {{ if path_exists("uv.lock") == "true" { "uv sync --all-groups --all-extras --locked --inexact" } else { "uv sync --all-groups --all-extras --inexact" } }}
 
+# run test coverage and create
+test-cov:
+  uv run pytest --cov=src/data_science_cluster --cov-report=lcov:lcov.info --cov-report=term-missing --cov-report html --cov-report xml
+
 # Update packages and lockfile
 update:
   uv sync -U --all-groups --all-extras --inexact
