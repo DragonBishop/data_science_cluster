@@ -17,6 +17,21 @@
       "matchDepNames": ["python"],
       "matchUpdateTypes": ["minor", "major"],
       "enabled": false
+    },
+    {
+      "description": "k3s and kubectl move together",
+      "matchDepNames": ["k3s-io/k3s", "registry.k8s.io/kubectl"],
+      "groupName": "kubernetes"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "cluster-config pins, each annotated with a # renovate: comment",
+      "managerFilePatterns": ["/^infrastructure/cluster-config/versions\\.yaml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))?\\s+[A-Z0-9_]+: \"(?<currentValue>[^\"]+)\""
+      ]
     }
   ]
 }
