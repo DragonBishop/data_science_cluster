@@ -1,9 +1,7 @@
 # Changes here will be overwritten by Copier
 _commit: v2.0.0
 _src_path: gh:DragonBishop/python-copier-template-ds
-module_name_source: project
 project_name: Data Science Cluster
-publish_to_pypi: false
 python_version: 3.14.7
 structure: []
 tooling:
@@ -11,3 +9,4 @@ tooling:
 - releases
 - rumdl
 - renovate
+- semgrep

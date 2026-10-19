@@ -73,8 +73,7 @@ exclude = ["docs/CHANGELOG.md"]
 siblings-only = true
 
 [tool.uv]
-# wait a week before resolving new releases (supply-chain cooldown);
-# keep it first, Semgrep's uv-missing-dependency-cooldown rule only looks there
+# 7-day supply-chain cooldown, first in tool.uv for Semgrep
 exclude-newer = "7 days"
 default-groups = ["dev"]
 

@@ -3,30 +3,48 @@ name: release
 on:
   push:
     branches: [main]
-  pull_request_target:
-    types: [opened, reopened, edited, synchronize]
+  pull_request:
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: release-${{ github.head_ref || github.ref }}
   cancel-in-progress: false
 
 jobs:
-  lint-pr-title:
-    if: ${{ github.event_name == 'pull_request_target' }}
+  lint-commits:
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check commit messages against Conventional Commits
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='^(feat|fix|docs|refactor|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'
+          status=0
+          while IFS= read -r line; do
+            sha=${line%% *}
+            subject=${line#* }
+            if ! grep -qE "$pattern" <<< "$subject"; then
+              echo "::error::${sha}: '${subject}' is not a Conventional Commit (type(scope)!: description)"
+              status=1
+            fi
+          done < <(git log --no-merges --format='%h %s' "$BASE..$HEAD")
+          exit "$status"
 
   release-please:
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: app-token
@@ -57,3 +75,16 @@ jobs:
           git add docs/CHANGELOG.md
           git commit -m "docs: regenerate changelog for ${{ steps.version.outputs.tag }}" || exit 0
           git push
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          fetch-depth: 0
+      - uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          args: --latest --strip all -o release-notes.md
+      - if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh release edit "$TAG" --notes-file release-notes.md
