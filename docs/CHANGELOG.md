@@ -1,3 +1,13 @@
+## [2.0.1] - 2026-10-19
+
+### 🐛 Bug Fixes
+
+- Set SeaweedFS resources and raise Cilium and OpenBao requests
+
+### ⚙️ Miscellaneous Tasks
+
+- Update copier template to v2.0.0
+- Sync copier template to rebuilt v2.0.0
 ## [2.0.0] - 2026-10-12
 
 ### 🚀 Features
