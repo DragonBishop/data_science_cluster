@@ -28,19 +28,43 @@ spec:
       data:
         type: "hostPath"
         hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
+      resources:
+        requests:
+          cpu: ${SEAWEEDFS_MASTER_CPU_REQUEST}
+          memory: ${SEAWEEDFS_MASTER_MEM_REQUEST}
+        limits:
+          memory: ${SEAWEEDFS_MASTER_MEM_LIMIT}
     filer:
       ipBind: "0.0.0.0"
       data:
         type: "hostPath"
         hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
+      resources:
+        requests:
+          cpu: ${SEAWEEDFS_FILER_CPU_REQUEST}
+          memory: ${SEAWEEDFS_FILER_MEM_REQUEST}
+        limits:
+          memory: ${SEAWEEDFS_FILER_MEM_LIMIT}
     volume:
       dataDirs:
         - name: data1
           type: "hostPath"
           hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
           maxVolumes: ${SEAWEEDFS_MAX_VOLUMES}
+      resources:
+        requests:
+          cpu: ${SEAWEEDFS_VOLUME_CPU_REQUEST}
+          memory: ${SEAWEEDFS_VOLUME_MEM_REQUEST}
+        limits:
+          memory: ${SEAWEEDFS_VOLUME_MEM_LIMIT}
     s3:
       enabled: true
+      resources:
+        requests:
+          cpu: ${SEAWEEDFS_S3_CPU_REQUEST}
+          memory: ${SEAWEEDFS_S3_MEM_REQUEST}
+        limits:
+          memory: ${SEAWEEDFS_S3_MEM_LIMIT}
       port: ${SEAWEEDFS_S3_PORT}
       createBuckets:
         - name: ${CNPG_BACKUP_BUCKET}
