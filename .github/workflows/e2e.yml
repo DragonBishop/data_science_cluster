@@ -3,13 +3,6 @@ name: e2e
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - "ansible/**"
-      - "clusters/**"
-      - "infrastructure/**"
-      - "apps/**"
-      - "terraform/**"
-      - ".github/workflows/e2e.yml"
 permissions:
   contents: read
 
@@ -18,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release-only:
+  e2e-scope:
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
@@ -31,12 +24,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/data_science/cluster/galaxy\.yml'
+          E2E_PATHS: '^(ansible|clusters|infrastructure|apps|terraform|components|modules|scripts)/|^\.github/workflows/e2e\.yml$|^pyproject\.toml$|^uv\.lock$'
         run: |
-          other_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" || true)
-          echo "skip=$([ -z "$other_files" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          cluster_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" | grep -E "$E2E_PATHS" || true)
+          echo "skip=$([ -z "$cluster_files" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
   bootstrap:
-    needs: release-only
-    if: ${{ !cancelled() && needs.release-only.outputs.skip != 'true' }}
+    needs: e2e-scope
+    if: ${{ !cancelled() && needs.e2e-scope.outputs.skip != 'true' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     env:
