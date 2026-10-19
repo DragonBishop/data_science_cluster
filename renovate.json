@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", "helpers:pinGitHubActionDigests"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "America/New_York",
+  "minimumReleaseAge": "7 days",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "pre-commit": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Python patch releases only; move to a new 3.x by hand once deps support it",
+      "matchDepNames": ["python"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    }
+  ]
+}

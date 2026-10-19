@@ -31,11 +31,11 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - name: "Set up Python"
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version-file: ".python-version"
       - uses: fluxcd/flux2/action@main
@@ -46,10 +46,10 @@ jobs:
       - name: unit tests
         run: |
           set -o pipefail && \
-          uv run pytest --junitxml=pytest.xml \
+          uv run pytest --cov=src/data_science_cluster --cov-report=term-missing:skip-covered --junitxml=pytest.xml \
           | tee pytest-coverage.txt
       - name: Pytest coverage comment
-        uses: MishaKav/pytest-coverage-comment@main
+        uses: MishaKav/pytest-coverage-comment@9ee59af31bd7bcada1cc496f086b407122602dbd # v1.12.3
         continue-on-error: true
         with:
           pytest-coverage-path: ./pytest-coverage.txt

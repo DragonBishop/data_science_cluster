@@ -28,6 +28,9 @@ skip = true
 message = "^chore\\(deps.*\\)"
 skip = true
 [[git.commit_parsers]]
+message = "^test"
+group = "🧪 Testing"
+[[git.commit_parsers]]
 message = "^chore|^ci|^build"
 group = "⚙️ Miscellaneous Tasks"
 [[git.commit_parsers]]
