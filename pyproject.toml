@@ -34,6 +34,9 @@ dev = [
 lint = [
   "ruff>=0.16.5",
 ]
+notebook = [
+  "ipykernel>=7.4.0",
+]
 
 [build-system]
 requires = ["hatchling"]
