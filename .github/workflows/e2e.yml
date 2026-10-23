@@ -23,7 +23,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/dragonbishop/cluster/galaxy\.yml'
+          RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/dragonbishop/cluster/(galaxy\.yml|CHANGELOG\.md)'
           E2E_PATHS: '^(ansible|clusters|infrastructure|apps|terraform|components|modules|scripts)/|^\.github/workflows/e2e\.yml$|^pyproject\.toml$|^uv\.lock$'
         run: |
           cluster_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" | grep -E "$E2E_PATHS" || true)
