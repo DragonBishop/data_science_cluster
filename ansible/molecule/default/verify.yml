@@ -3,7 +3,7 @@
   hosts: localhost
   gather_facts: false
   vars_files:
-    - ../../ansible_collections/data_science/cluster/roles/openbao/defaults/main.yml
+    - ../../ansible_collections/dragonbishop/cluster/roles/openbao/defaults/main.yml
   tasks:
     - name: Check the unseal keyfile
       ansible.builtin.stat:

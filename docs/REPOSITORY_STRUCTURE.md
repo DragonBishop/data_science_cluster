@@ -29,11 +29,11 @@ The directory tree of this repository, then what each directory and file does.
 │       ├── lint.yml                     # ruff check/format + ansible-lint
 │       ├── tests.yml                    # pytest + coverage, Molecule unit scenarios
 │       └── release.yml                  # PR-title lint + release-please + git-cliff changelog
-├── ansible/                             # Bootstrap playbook, inventory and the data_science.cluster collection
+├── ansible/                             # Bootstrap playbook, inventory and the dragonbishop.cluster collection
 │   ├── .ansible-lint
 │   ├── ansible.cfg
 │   ├── ansible_collections/
-│   │   └── data_science/cluster/        # The roles and their Molecule unit scenarios
+│   │   └── dragonbishop/cluster/        # The roles and their Molecule unit scenarios
 │   │       ├── extensions/molecule/
 │   │       ├── galaxy.yml
 │   │       ├── meta/runtime.yml
@@ -241,8 +241,8 @@ The directory tree of this repository, then what each directory and file does.
   * **`workflows/lint.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `ruff check`/`ruff format --check` and `ansible-lint` from `ansible/`.
   * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest` (with the `flux` CLI) and every Molecule unit scenario against root's podman.
   * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`); on push to `main`, `release-please` opens/updates a release PR, and `git-cliff` commits `docs/CHANGELOG.md` onto that PR's branch.
-* **`ansible/`** - The bootstrap playbook, its inventory, and the `data_science.cluster` collection that holds the roles.
-  * **`ansible_collections/data_science/cluster/`**: The collection. `roles/` holds the five roles; each role's `tasks/main.yml` imports named task files. `extensions/molecule/` holds the unit scenarios, which share one podman container: `molecule test --all` from this directory runs them.
+* **`ansible/`** - The bootstrap playbook, its inventory, and the `dragonbishop.cluster` collection that holds the roles.
+  * **`ansible_collections/dragonbishop/cluster/`**: The collection. `roles/` holds the five roles; each role's `tasks/main.yml` imports named task files. `extensions/molecule/` holds the unit scenarios, which share one podman container: `molecule test --all` from this directory runs them.
   * **`data_cluster.yml`**: Main playbook executing roles in order: `k3s` → `cilium` → `flux` → `openbao` → `opentofu`.
   * **`molecule/default/`**: The integration scenario: the whole playbook on a GitHub runner, run by `e2e.yml`.
   * **`inventory/`**: Inventory definition (`hosts.ini`) and `group_vars/all/`. `cluster_config.yml` lists every cluster-config key Ansible uses, lowercased, under headings named for its `infrastructure/cluster-config/` fragment. `ansible.yml` holds Ansible-only values and merges the fragments.

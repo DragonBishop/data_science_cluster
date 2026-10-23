@@ -15,12 +15,12 @@
 
         - name: Prepare gpg-agent for the unseal keyfile
           ansible.builtin.import_role:
-            name: data_science.cluster.openbao
+            name: dragonbishop.cluster.openbao
             tasks_from: gpg_agent
 
         - name: Write and read the unseal keyfile
           ansible.builtin.import_role:
-            name: data_science.cluster.openbao
+            name: dragonbishop.cluster.openbao
             tasks_from: keyfile
 
         - name: Fail if gpg_agent.yml did not refuse

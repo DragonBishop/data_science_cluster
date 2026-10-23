@@ -5,5 +5,5 @@
   tasks:
     - name: Run the k3s role's config tasks
       ansible.builtin.import_role:
-        name: data_science.cluster.k3s
+        name: dragonbishop.cluster.k3s
         tasks_from: config

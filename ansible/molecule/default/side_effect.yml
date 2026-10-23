@@ -50,7 +50,7 @@
 
     - name: Unseal OpenBao with the openbao role
       ansible.builtin.include_role:
-        name: data_science.cluster.openbao
+        name: dragonbishop.cluster.openbao
 
     - name: Read OpenBao's status after the role
       kubernetes.core.k8s_exec:
