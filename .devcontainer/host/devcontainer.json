@@ -1,4 +1,4 @@
-// Host devcontainer for this repo.
+// Cluster management devcontainer.
 {
   "name": "datasci-k8s-host",
   "build": { "dockerfile": "Dockerfile" },
@@ -9,22 +9,25 @@
   "workspaceFolder": "/home/vscode/data_science_cluster",
   "workspaceMount": "source=datasci-k8s-host-workspace,target=/home/vscode/data_science_cluster,type=volume",
 
+  // Clones origin into the empty volume once; the .venv (with ipykernel) rebuilds per container.
+  "postCreateCommand": "test -d .git || git clone --branch \"$REPO_REF\" \"https://github.com/$REPOSITORY.git\" . && uv sync --frozen --group notebook && uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster",
+
   "containerEnv": {
-    "ANSIBLE_CONFIG": "${containerWorkspaceFolder}/ansible.cfg"
+    "ANSIBLE_CONFIG": "${containerWorkspaceFolder}/ansible.cfg",
+    "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
   },
 
-  // Reaches the local k3s cluster and host-local services directly.
+  // Reaches k3s and the host's loopback services.
   "runArgs": [
     "--network=host"
   ],
 
-  // Read-only injection of host Kubernetes and Helm contexts.
+  // The cluster's admin credential, the one host file it reads.
   "mounts": [
-    "source=${localEnv:HOME}/.config/helm,target=/home/vscode/.config/helm,type=bind,consistency=cached,readonly",
     "source=${localEnv:HOME}/.kube/config,target=/home/vscode/.kube/config,type=bind,consistency=cached,readonly"
   ],
 
-  // Suppresses the auto-forward notification for local Jupyter processes.
+  // No auto-forward prompts for Jupyter processes.
   "portsAttributes": {
     ".*(jupyter|ipykernel_launcher).*": {
       "label": "Jupyter (host network)",
@@ -34,6 +37,18 @@
 
   "customizations": {
     "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python",
+        // ansible and ansible-lint from the .venv, with the repo's ansible.cfg.
+        "ansible.python.interpreterPath": "/home/vscode/.venv/bin/python",
+        "ansible.config.path": "${workspaceFolder}/ansible.cfg",
+        // Ansible files auto-detection misses; other .yml stays YAML.
+        "files.associations": {
+          "**/roles/*/{tasks,handlers,defaults,vars,meta}/**/*.yml": "ansible",
+          "**/molecule/*/{tasks,vars}/**/*.yml": "ansible",
+          "**/group_vars/**/*.yml": "ansible"
+        }
+      },
       "extensions": [
         // Python
         "charliermarsh.ruff",

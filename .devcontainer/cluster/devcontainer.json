@@ -1,4 +1,4 @@
-// Devcontainer spec for the in-cluster ETL/pipeline runtime image.
+// In-cluster runtime devcontainer.
 {
   "name": "datasci-k8s-cluster",
   "build": { "dockerfile": "Dockerfile" },
@@ -12,6 +12,9 @@
 
   "customizations": {
     "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python"
+      },
       "extensions": [
         // Python
         "charliermarsh.ruff",

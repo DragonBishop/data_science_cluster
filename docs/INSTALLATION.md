@@ -1,6 +1,6 @@
-# First-Time Setup Instructions
+# Installation
 
-This guide provides e for provisioning, configuring, and verifying a local single-node Kubernetes cluster tailored for data science workloads.
+This guide installs and configures a local single-node Kubernetes cluster tailored for data science workloads. [Verification](VERIFICATION.md) checks the result once Flux has reconciled it.
 
 The process uses Ansible to provision k3s, Cilium eBPF networking, Flux GitOps controllers, in-cluster OpenBao secrets management, and OpenTofu infrastructure configurations. Once Ansible finishes, Flux takes over GitOps management of the cluster.
 
@@ -8,28 +8,25 @@ Once host-side prerequisites are met, running `just bootstrap` orchestrates the 
 
 ## Table of Contents
 
-* [Provisioning](#provisioning)
-  * [Requirements](#requirements)
-  * [Cluster Bootstrap](#cluster-bootstrap)
-  * [Flux Dependency Graph](#flux-dependency-graph)
-* [Verification](#verification)
-  * [Verify Database Deployment](#verify-database-deployment)
-  * [Test Database Connectivity](#test-database-connectivity)
-  * [Verify Dynamic Credentials](#verify-dynamic-credentials)
-  * [Verify Gateway Routing](#verify-gateway-routing)
-  * [Hubble Observability Access](#hubble-observability-access)
-  * [Verify Cluster Health](#verify-cluster-health)
-  * [Verify Database Backups](#verify-database-backups)
+* [Requirements](#requirements)
+  * [Host Tooling](#host-tooling)
+  * [GitHub Authentication](#github-authentication)
+  * [Host Firewall Configuration](#host-firewall-configuration)
+  * [Clean Host State (if reinstalling)](#clean-host-state-if-reinstalling)
+  * [Data Migration (if restoring an existing database)](#data-migration-if-restoring-an-existing-database)
+* [Cluster Bootstrap](#cluster-bootstrap)
+  * [Step 1: Clone Repository](#step-1-clone-repository)
+  * [Step 2: Execute Ansible Bootstrap](#step-2-execute-ansible-bootstrap)
+  * [Step 3: Secure OpenBao Credentials & Unseal Keys](#step-3-secure-openbao-credentials--unseal-keys)
+* [Flux Dependency Graph](#flux-dependency-graph)
 
 ---
 
-## Provisioning
+## Requirements
 
-### Requirements
+### Host Tooling
 
-#### Host Tooling
-
-##### Flux CLI
+#### Flux CLI
 
 Install the version the committed `clusters/local/flux-system/gotk-components.yaml` pins:
 
@@ -38,7 +35,7 @@ curl -s https://fluxcd.io/install.sh | sudo FLUX_VERSION=2.9.6 bash
 flux version --client
 ```
 
-##### fzf
+#### fzf
 
 Used by `just fuzzypods`.
 
@@ -54,7 +51,7 @@ Used by `just fuzzypods`.
   sudo dnf install -y fzf
   ```
 
-##### GitHub CLI (`gh`)
+#### GitHub CLI (`gh`)
 
 * **Ubuntu / Debian**:
 
@@ -72,7 +69,7 @@ Used by `just fuzzypods`.
   sudo dnf install -y gh
   ```
 
-##### GnuPG and OpenSSL
+#### GnuPG and OpenSSL
 
 `gpg` encrypts the OpenBao unseal keyfile during `just bootstrap` and decrypts it on every `just start`. `just preflight` checks that both are installed.
 
@@ -88,7 +85,7 @@ Used by `just fuzzypods`.
   sudo dnf install -y gnupg2 openssl
   ```
 
-##### Helm
+#### Helm
 
 ```bash
 curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
@@ -98,7 +95,7 @@ rm get_helm.sh
 helm version
 ```
 
-##### Hubble CLI
+#### Hubble CLI
 
 ```bash
 HUBBLE_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/hubble/main/stable.txt)
@@ -111,7 +108,7 @@ rm hubble-linux-${HUBBLE_ARCH}.tar.gz{,.sha256sum}
 hubble version
 ```
 
-##### Just
+#### Just
 
 * **Ubuntu / Debian**:
 
@@ -125,7 +122,7 @@ hubble version
   sudo dnf install -y just
   ```
 
-##### kubectl
+#### kubectl
 
 Install the release `KUBECTL_VERSION` pins in `infrastructure/cluster-config/versions.yaml`, which matches `K3S_VERSION` without the `+k3s` suffix:
 
@@ -139,7 +136,7 @@ rm kubectl
 kubectl version --client
 ```
 
-##### kubectl cnpg Plugin
+#### kubectl cnpg Plugin
 
 Install the release matching the CNPG operator, which is the `appVersion` of the chart pinned by `CNPG_VERSION` (`helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts --version <CNPG_VERSION>`). `preflight.sh` checks the match.
 
@@ -164,7 +161,7 @@ CNPG_URL=https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${C
   sudo dnf install -y "${CNPG_URL}.rpm"
   ```
 
-##### OpenTofu
+#### OpenTofu
 
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
@@ -174,21 +171,7 @@ rm install-opentofu.sh
 tofu version
 ```
 
-##### PostgreSQL Client (`psql`)
-
-* **Ubuntu / Debian**:
-
-  ```bash
-  sudo apt update && sudo apt install -y postgresql-client-common postgresql-client
-  ```
-
-* **Fedora / RHEL / Red Hat**:
-
-  ```bash
-  sudo dnf install -y postgresql
-  ```
-
-##### uv
+#### uv
 
 `just bootstrap` runs Ansible through `uv run`, which builds `.venv` from `uv.lock` on first use, Python included.
 
@@ -197,7 +180,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv --version
 ```
 
-#### GitHub Authentication
+### GitHub Authentication
 
 The cluster requires read-only access to this repository to synchronize manifests. You can authenticate using either a **GitHub App** (Recommended) or your personal **GitHub CLI** token.
 
@@ -229,7 +212,7 @@ If you do not have a GitHub App configured, the bootstrap process will fall back
    gh auth status
    ```
 
-#### Host Firewall Configuration
+### Host Firewall Configuration
 
 * [ ] **Host firewall configured for Cilium** — you can configure your host firewall automatically using the `just setup-firewall` recipe, or apply the manual commands below for your distribution:
 
@@ -310,7 +293,7 @@ If you do not have a GitHub App configured, the bootstrap process will fall back
   ping -c 2 -W 1 192.0.2.242
   ```
 
-#### Clean Host State (if reinstalling)
+### Clean Host State (if reinstalling)
 
 If reinstalling over an existing k3s instance, tear it down first, then reboot before bootstrapping. Cilium's BPF programs stay attached in the kernel after `k3s-uninstall.sh`, and the `k3s` role refuses to install while that state is present:
 
@@ -319,9 +302,9 @@ just uninstall
 sudo reboot
 ```
 
-#### Data Migration (if restoring an existing database)
+### Data Migration (if restoring an existing database)
 
-Have your `.dump` file prepared to restore once the CNPG cluster exists (see [Verify Database Deployment](#verify-database-deployment)):
+Have your `.dump` file prepared to restore once the CNPG cluster exists (see [Verify Database Deployment](VERIFICATION.md#verify-database-deployment)):
 
 ```bash
 kubectl exec -i postgis-cluster-1 -n databases -- pg_restore -U postgres -d data_science --no-owner --no-privileges \
@@ -330,16 +313,16 @@ kubectl exec -i postgis-cluster-1 -n databases -- pg_restore -U postgres -d data
 
 The `--no-owner --no-privileges` flags ensure restored objects inherit ownership under `app_readwrite`.
 
-### Cluster Bootstrap
+## Cluster Bootstrap
 
-#### Step 1: Clone Repository
+### Step 1: Clone Repository
 
 ```bash
 git clone https://github.com/DragonBishop/data_science_cluster.git
 cd data_science_cluster
 ```
 
-#### Step 2: Execute Ansible Bootstrap
+### Step 2: Execute Ansible Bootstrap
 
 Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on, then runs the full setup via the collection's playbook (`dragonbishop.cluster.data_cluster`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. On a fresh clone, `uv run` first builds `.venv` from `uv.lock`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
@@ -358,7 +341,7 @@ Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on
 > uv run ansible-playbook dragonbishop.cluster.data_cluster --ask-become-pass
 > ```
 
-#### Step 3: Secure OpenBao Credentials & Unseal Keys
+### Step 3: Secure OpenBao Credentials & Unseal Keys
 
 The bootstrap script prompts for a GPG passphrase and an OpenTofu state-encryption passphrase, then prints the in-cluster OpenBao unseal keys and root token.
 
@@ -367,7 +350,7 @@ The bootstrap script prompts for a GPG passphrase and an OpenTofu state-encrypti
 
 Future cluster starts (`just start` / `start-cluster.sh`) unseal OpenBao using the GPG-encrypted keyfile written during bootstrap to `.local/openbao/unseal-keys.gpg`, inside this repo and gitignored. `git clean -fdx` and `just uninstall` delete it, so keep a backup elsewhere. Note that the cache-TTL setting in `~/.gnupg/gpg-agent.conf` only governs `gpg-agent`'s in-memory cache; on desktop environments with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be stored in the OS keyring. Add `no-allow-external-cache` to `~/.gnupg/gpg-agent.conf` to disable OS keyring caching.
 
-### Flux Dependency Graph
+## Flux Dependency Graph
 
 ```mermaid
 flowchart TD
@@ -408,7 +391,7 @@ flowchart TD
     trsecrets --> tekton
 ```
 
-* `cilium` requires `gateway-api-crds` and `namespaces`.
+* `cilium` requires `gateway-api-crds`, `namespaces` and `cluster-config`.
 * `coredns-custom`, `flux-system-policies`, and `cert-manager` depend on `cilium`.
 * `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap).
 * `external-secrets` and `gateway` depend on `openbao` (for secrets sync and PKI).
@@ -421,283 +404,4 @@ flowchart TD
 * `tekton-results-secrets` depends on `openbao`, `external-secrets`, and `databases`, whose `tekton_readwrite` role every Tekton Results login joins.
 * `tekton` depends on `tekton-operator` and `tekton-results-secrets`, since the operator holds Tekton Results back until its database Secret exists.
 
----
-
-## Verification
-
-`just bootstrap` deploys the cluster. The checks below verify what Flux already reconciled.
-
-### Verify Database Deployment
-
-#### Cluster Status & WAL Archiving
-
-> [!TIP]
-> **Just Recipe (bundled into the full health check):**
->
-> ```bash
-> just status
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> kubectl cnpg status postgis-cluster -n databases
-> ```
-
-Verify output shows `Status: Healthy`, `1/1 ready`, and `WAL archiving: OK`.
-
-#### CNPG Database Resource
-
-> [!TIP]
-> **Just Recipe (bundled into the full health check):**
->
-> ```bash
-> just status
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> kubectl get database -n databases
-> ```
-
-Verify output shows `postgis-cluster/data-science` with `status.applied: true`.
-
-#### PostGIS Extensions
-
-```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d data_science -c '\dx'
-```
-
-Verify installed extensions: `postgis`, `postgis_topology`, `postgis_tiger_geocoder`, and `fuzzystrmatch`.
-
-#### Database Ownership
-
-```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c \
-  "SELECT datname, pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname='data_science';"
-```
-
-Verify database owner is `app_readwrite`.
-
-#### Gateway TCPRoute Binding
-
-> [!TIP]
-> **Just Recipe (bundled into the full health check):**
->
-> ```bash
-> just status
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> kubectl get tcproute -n databases postgis-external -o jsonpath='{.status.parents[*].conditions[*].message}'
-> ```
-
-Verify condition returns `Service reference is valid`.
-
-#### Restored Schemas (if migrating data)
-
-```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d data_science -c '\dn'
-```
-
-Verify all application schemas are present.
-
-### Test Database Connectivity
-
-#### LAN Connectivity
-
-Test database connectivity from your LAN workstation through the Gateway IP:
-
-> [!TIP]
-> **Just Recipe:**
->
-> ```bash
-> just db-connect
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
-> LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
-> ROOT_CERT_PATH="${PGSSLROOTCERT:-$HOME/.config/postgresql/root.crt}"
-> mkdir -p "$(dirname "$ROOT_CERT_PATH")"
-> [ -f "$ROOT_CERT_PATH" ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > "$ROOT_CERT_PATH"
-> PGPASSWORD="$LEASE_PASS" psql "host=192.0.2.240 port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full sslrootcert=$ROOT_CERT_PATH"
-> ```
-
-#### Localhost Node Connectivity
-
-On the k3s node itself, `CiliumLocalRedirectPolicy` redirects `127.0.0.1:5432` to the CNPG primary pod:
-
-> [!TIP]
-> **Just Recipe:**
->
-> ```bash
-> just db-connect localhost
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
-> LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
-> ROOT_CERT_PATH="${PGSSLROOTCERT:-$HOME/.config/postgresql/root.crt}"
-> mkdir -p "$(dirname "$ROOT_CERT_PATH")"
-> [ -f "$ROOT_CERT_PATH" ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > "$ROOT_CERT_PATH"
-> PGPASSWORD="$LEASE_PASS" psql "host=localhost port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full sslrootcert=$ROOT_CERT_PATH"
-> ```
-
----
-
-### Verify Dynamic Credentials
-
-Once the CNPG cluster is healthy, ESO's `VaultDynamicSecret` generator requests credentials from OpenBao and writes them to the `postgis-app-dynamic-credentials` Secret. Every 2h (`ESO_DYNAMIC_REFRESH_INTERVAL`) it generates a new role; each old role expires at its 3h TTL.
-
-#### Check Dynamic Secret & Role Membership
-
-```bash
-kubectl get externalsecret postgis-app-dynamic-credentials -n databases
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c '\du'
-```
-
-Verify the generated role is a member of `app_readwrite`.
-
-#### Test Leased Database Access
-
-> [!TIP]
-> **Just Recipe:**
->
-> ```bash
-> just db-connect
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
-> LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
-> ROOT_CERT_PATH="${PGSSLROOTCERT:-$HOME/.config/postgresql/root.crt}"
-> mkdir -p "$(dirname "$ROOT_CERT_PATH")"
-> [ -f "$ROOT_CERT_PATH" ] || kubectl get secret postgis-server-cert -n databases -o jsonpath='{.data.ca\.crt}' | base64 -d > "$ROOT_CERT_PATH"
-> PGPASSWORD="$LEASE_PASS" psql "host=192.0.2.240 port=5432 dbname=data_science user=$LEASE_USER sslmode=verify-full sslrootcert=$ROOT_CERT_PATH"
-> ```
-
----
-
-### Verify Gateway Routing
-
-Test Gateway listener routing and edge certificate termination:
-
-> [!TIP]
-> **Just Recipe:**
->
-> ```bash
-> just gateway-check <name>.internal
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> curl -v --resolve <name>.internal:443:192.0.2.240 \
->   --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
->   https://<name>.internal/
-> ```
-
-Run it for any hostname with an HTTPRoute on the Gateway. Verify that the page responds and the certificate chains to `openbao-pki-issuer`'s CA (`internal-edge-cert`).
-
----
-
-### Hubble Observability Access
-
-Verify network visibility with the Hubble CLI:
-
-* **CLI Flow Streaming**: `just hubble status` and `just hubble observe --follow` stream flows from Hubble Relay over mTLS (port 4245).
-
----
-
-### Verify Cluster Health
-
-Check the overall operational status and reconciliation health of all cluster components:
-
-> [!TIP]
-> **Just Recipe:**
->
-> ```bash
-> just status
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> flux get kustomizations
-> ```
-
----
-
-### Verify Database Backups
-
-Verify automated backup schedules and trigger an on-demand backup to SeaweedFS S3:
-
-#### Verify Scheduled Backups
-
-> [!TIP]
-> **Just Recipe (bundled into the full health check):**
->
-> ```bash
-> just status
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> kubectl get scheduledbackup -n databases
-> ```
-
-Verify `suspend: false` and scheduled backup intervals.
-
-#### Trigger Manual Test Backup
-
-> [!TIP]
-> **Just Recipe:**
->
-> ```bash
-> just backup
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
-> ```
-
-#### Confirm Backup Status
-
-> [!TIP]
-> **Just Recipe (bundled into the full health check):**
->
-> ```bash
-> just status
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> kubectl cnpg status postgis-cluster -n databases
-> ```
-
-Verify `Last Successful Backup` timestamp updates to the current time.
+Once Flux reports every Kustomization Ready, continue with [Verification](VERIFICATION.md).
