@@ -1,37 +1,49 @@
-# Baseline for every pod; see "Network policy" in README.md
+# Cluster baseline; numbers match "The Baseline" in docs/NETWORKPOLICY.md
 apiVersion: cilium.io/v2
 kind: CiliumClusterwideNetworkPolicy
 metadata:
   name: cluster-default
-spec:
-  endpointSelector: {}
-  ingress:
-    # Kubelet probes and apiserver webhooks share the host identity on k3s
-    - fromEntities:
-        - host
-        - ingress
-  egress:
-    - toEndpoints:
-        - matchExpressions:
-            - key: k8s:io.kubernetes.pod.namespace
-              operator: Exists
-    # K3S_API_PORT only; the apiserver shares the host identity on k3s
-    - toEntities:
-        - kube-apiserver
-      toPorts:
-        - ports:
-            - port: "6443"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: kube-system
-            k8s-app: kube-dns
-      toPorts:
-        - ports:
-            - port: "53"
-              protocol: UDP
-            - port: "53"
-              protocol: TCP
-          rules:
-            dns:
-              - matchPattern: "*"
+specs:
+  # 1. Every pod starts closed
+  - endpointSelector: {}
+    ingress:
+      # 2. Node and Gateway in
+      - fromEntities:
+          - host
+          - ingress
+    egress:
+      # 3. Any pod out; the receiver decides
+      - toEndpoints:
+          - matchExpressions:
+              - key: k8s:io.kubernetes.pod.namespace
+                operator: Exists
+      # 4. Kubernetes API out
+      - toEntities:
+          - kube-apiserver
+        toPorts:
+          - ports:
+              - port: "${K3S_API_PORT}"
+                protocol: TCP
+      # 5. CoreDNS out, through the DNS proxy
+      - toEndpoints:
+          - matchLabels:
+              k8s:io.kubernetes.pod.namespace: kube-system
+              k8s-app: kube-dns
+        toPorts:
+          - ports:
+              - port: "53"
+                protocol: UDP
+              - port: "53"
+                protocol: TCP
+            rules:
+              dns:
+                - matchPattern: "*"
+  # 6. LAN and node into the Gateway
+  - endpointSelector:
+      matchExpressions:
+        - key: reserved:ingress
+          operator: Exists
+    ingress:
+      - fromCIDR:
+          - "${LAN_CIDR}"
+          - 127.0.0.1/32

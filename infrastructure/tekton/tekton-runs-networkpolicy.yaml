@@ -1,8 +1,8 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: run-egress
-  namespace: tekton-pipelines
+  name: taskrun
+  namespace: tekton-runs
 spec:
   # TaskRun pods
   endpointSelector:

@@ -23,6 +23,20 @@ spec:
         kind: HelmRepository
         name: seaweedfs
   values:
+    # One policy per component, admitting the release's own pods on that component's ports
+    networkPolicy:
+      enabled: true
+      components:
+        s3:
+          extraIngress:
+            # Barman Cloud WAL archiving and base backups
+            - from:
+                - podSelector:
+                    matchLabels:
+                      cnpg.io/cluster: postgis-cluster
+              ports:
+                - protocol: TCP
+                  port: ${SEAWEEDFS_S3_PORT}
     master:
       ipBind: "0.0.0.0"
       data:
