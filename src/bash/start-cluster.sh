@@ -73,17 +73,18 @@ wait_for_node_ready() {
     echo ""
 }
 
-wait_for_openbao_pod() {
-    echo "⏳ Waiting for openbao-0 pod to be running..."
+# Waits until bao answers inside openbao-0; the pod phase is stale right after boot
+wait_for_openbao_process() {
+    echo "⏳ Waiting for OpenBao to respond in openbao-0..."
     local retries=0
-    until [ "$(kubectl get pod openbao-0 -n openbao -o jsonpath='{.status.phase}' 2>/dev/null)" = "Running" ]; do
+    until [ "$(incluster_seal_state)" != unreachable ]; do
         sleep 5
         retries=$((retries+1))
-        if [ $retries -ge 12 ]; then
-            echo "⚠️  openbao-0 pod not in Running phase after 60s."
+        if [ $retries -ge 36 ]; then
+            echo "⚠️  OpenBao did not respond within 3 minutes."
             return 1
         fi
-        echo "   ...still waiting for openbao-0... ($((retries * 5))s elapsed)"
+        echo "   ...still waiting for OpenBao... ($((retries * 5))s elapsed)"
     done
     return 0
 }
@@ -113,7 +114,9 @@ decrypt_and_unseal() {
     return "${PIPESTATUS[0]}"
 }
 
-attempt_unseal_openbao() {
+unseal_openbao() {
+    wait_for_openbao_process || true
+
     local seal_state
     seal_state=$(incluster_seal_state)
 
@@ -158,25 +161,6 @@ attempt_unseal_openbao() {
             return 1
             ;;
     esac
-}
-
-unseal_openbao() {
-    echo "⏳ Checking cluster OpenBao seal status..."
-    wait_for_openbao_pod || true
-
-    # Retry transient unreachable state while openbao process initializes
-    local seal_state retries=0
-    while [ $retries -lt 6 ]; do
-        seal_state=$(incluster_seal_state)
-        [ "$seal_state" != "unreachable" ] && break
-        sleep 5
-        retries=$((retries+1))
-    done
-
-    attempt_unseal_openbao
-    local exit_code=$?
-    echo ""
-    return "$exit_code"
 }
 
 resume_postgis() {
@@ -238,6 +222,7 @@ main() {
     wait_for_node_ready
 
     unseal_openbao || had_warnings=true
+    echo ""
 
     resume_postgis || had_warnings=true
     resume_scheduled_backups
