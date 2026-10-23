@@ -15,7 +15,7 @@
 #
 # test: baseline rules that reach the host or the API server name their ports   (Baseline 4)
 #   for each outgoing rule in the baseline file whose "who" includes host or kube-apiserver:
-#     expect it to list ports (${K3S_API_PORT} for the API)
+#     expect it to list ports (6443 for the API)
 #
 # test: no rule opens the whole cluster at once                          (Baseline 3)
 #   for each rule:

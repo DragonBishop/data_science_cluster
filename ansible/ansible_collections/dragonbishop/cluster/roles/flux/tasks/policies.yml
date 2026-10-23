@@ -15,7 +15,6 @@
     state: present
     definition: >-
       {{ lookup('file', repo_root + '/infrastructure/cilium/clusterwide-networkpolicy.yaml')
-      | regex_replace('\$\{K3S_API_PORT\}', k3s_api_port)
       | regex_replace('\$\{LAN_CIDR\}', lan_cidr) }}
 
 - name: Apply CoreDNS network policy

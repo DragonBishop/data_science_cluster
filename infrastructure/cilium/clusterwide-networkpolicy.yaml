@@ -22,7 +22,7 @@ specs:
           - kube-apiserver
         toPorts:
           - ports:
-              - port: "${K3S_API_PORT}"
+              - port: "6443"
                 protocol: TCP
       # 5. CoreDNS out, through the DNS proxy
       - toEndpoints:

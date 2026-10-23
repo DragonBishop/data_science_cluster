@@ -40,7 +40,7 @@ Each numbered comment in `clusterwide-networkpolicy.yaml` marks the rule below w
 
 **3. Any pod reaches any other pod; the receiver decides.** The receiving pod's policy decides whether the call lands. Ownership stays in one place: the pod that listens on a port declares who may use it.
 
-**4. Any pod reaches the Kubernetes API.** Controllers and operators talk to the API on `K3S_API_PORT`. RBAC decides what they can do once connected.
+**4. Any pod reaches the Kubernetes API.** Controllers and operators talk to the API on 6443. RBAC decides what they can do once connected.
 
 **5. Any pod reaches CoreDNS.** Name lookups go to CoreDNS on 53. The `dns` rule sends them through Cilium's DNS proxy. The proxy is how Cilium learns which IP belongs to which domain, and `toFQDNs` rules depend on it.
 
