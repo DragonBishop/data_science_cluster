@@ -16,11 +16,11 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 ## Ansible Provisioning
 
 * **Ansible playbook fails with missing collection errors**
-  * **What's happening:** The Galaxy collection `cloud.terraform` is missing. It isn't part of the `ansible` package, so it installs separately from `ansible/requirements.yml`.
-  * **How to fix it:** Install Galaxy dependencies declared in the repository:
+  * **What's happening:** The Galaxy collection `cloud.terraform` is missing. It isn't part of the `ansible` package, so it installs separately as a dependency in the `dragonbishop.cluster` `galaxy.yml`.
+  * **How to fix it:** Install the collection's Galaxy dependencies:
 
     ```bash
-    ansible-galaxy collection install -r ansible/requirements.yml
+    uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
     ```
 
 * **Playbook fails during k3s installation or times out waiting for `/etc/rancher/k3s/k3s.yaml`**

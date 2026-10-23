@@ -7,7 +7,7 @@
   "workspaceMount": "source=datasci-k8s-cluster-workspace,target=/home/vscode/data_science_cluster,type=volume",
 
   "containerEnv": {
-    "ANSIBLE_CONFIG": "${containerWorkspaceFolder}/ansible/ansible.cfg"
+    "ANSIBLE_CONFIG": "${containerWorkspaceFolder}/ansible.cfg"
   },
 
   "customizations": {

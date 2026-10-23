@@ -43,8 +43,8 @@ jobs:
           sudo chmod 0711 /run/podman
           sudo chown "$USER" /run/podman/podman.sock
       - run: uv sync --frozen
-      - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
-      - run: uv run molecule test --all
+      - run: uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
+      - run: uv run molecule test --all --exclude full-playbook
         working-directory: ansible/ansible_collections/dragonbishop/cluster
   pytest:
     needs: release-only

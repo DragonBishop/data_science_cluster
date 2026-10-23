@@ -7,7 +7,6 @@ ansible:
     args:
       ansible_playbook:
         - --inventory=${MOLECULE_SCENARIO_DIRECTORY}/../inventory/
-        - --inventory=${MOLECULE_PROJECT_DIRECTORY}/../../../inventory/
 
 scenario:
   test_sequence:

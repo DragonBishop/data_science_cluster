@@ -341,7 +341,7 @@ cd data_science_cluster
 
 #### Step 2: Execute Ansible Bootstrap
 
-Installs the Ansible collections in `ansible/requirements.yml`, then runs the full setup via Ansible (`ansible/data_cluster.yml`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. On a fresh clone, `uv run` first builds `.venv` from `uv.lock`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
+Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on, then runs the full setup via the collection's playbook (`dragonbishop.cluster.data_cluster`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. On a fresh clone, `uv run` first builds `.venv` from `uv.lock`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
 > [!TIP]
 > **Just Recipe (automatically prompts for sudo):**
@@ -354,8 +354,8 @@ Installs the Ansible collections in `ansible/requirements.yml`, then runs the fu
 > **Manual Shell Command:**
 >
 > ```bash
-> uv run ansible-galaxy collection install -r ansible/requirements.yml
-> uv run ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass
+> uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
+> uv run ansible-playbook dragonbishop.cluster.data_cluster --ask-become-pass
 > ```
 
 #### Step 3: Secure OpenBao Credentials & Unseal Keys

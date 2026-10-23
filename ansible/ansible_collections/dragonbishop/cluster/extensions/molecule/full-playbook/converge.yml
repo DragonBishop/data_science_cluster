@@ -1,6 +1,6 @@
 ---
 - name: Converge
-  ansible.builtin.import_playbook: ../../data_cluster.yml
+  ansible.builtin.import_playbook: dragonbishop.cluster.data_cluster
 
 - name: Hand the OpenBao root token to later runs
   hosts: localhost

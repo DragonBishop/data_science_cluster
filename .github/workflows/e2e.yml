@@ -51,7 +51,7 @@ jobs:
           tofu_version: v1.13.1
           tofu_wrapper: false
       - run: uv sync --frozen
-      - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
+      - run: uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
 
       - name: Generate the test secrets
         run: |
@@ -71,9 +71,9 @@ jobs:
           chmod 600 "$key_path"
           echo "GITHUB_APP_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
 
-      - name: Bootstrap the cluster with the integration scenario
-        run: uv run molecule test
-        working-directory: ansible
+      - name: Bootstrap the cluster with the full-playbook scenario
+        run: uv run molecule test --scenario-name full-playbook
+        working-directory: ansible/ansible_collections/dragonbishop/cluster
 
       - name: Wait for every Kustomization to be Ready
         run: |
