@@ -4,12 +4,22 @@ version: 2.0.0
 readme: README.md
 authors:
   - DragonBishop
-description: Roles and playbooks that bootstrap the data science cluster.
+description: The playbook and roles that bootstrap a single-node k3s cluster with Cilium, Flux and OpenBao.
 license:
   - MIT
 tags:
+  - cilium
+  - flux
+  - gitops
   - infrastructure
+  - k3s
+  - kubernetes
+  - openbao
+  - opentofu
 repository: https://github.com/DragonBishop/data_science_cluster
+documentation: https://github.com/DragonBishop/data_science_cluster/tree/main/ansible/ansible_collections/dragonbishop/cluster
+homepage: https://github.com/DragonBishop/data_science_cluster
+issues: https://github.com/DragonBishop/data_science_cluster/issues
 dependencies:
   kubernetes.core: '>=6.5.0'
   cloud.terraform: '>=4.0.0'
