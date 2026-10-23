@@ -39,12 +39,6 @@ clear_openbao_cache() {
     rm -rf "$REPO_ROOT/.local/openbao"
 }
 
-clear_postgres_cache() {
-    local root_cert_path="${PGSSLROOTCERT:-$HOME/.config/postgresql/root.crt}"
-    echo "🧹 Clearing local PostgreSQL root certificate ($root_cert_path)..."
-    rm -f "$root_cert_path"
-}
-
 clear_hubble_cache() {
     echo "🧹 Clearing local Hubble cache (~/.hubble)..."
     rm -rf "$HOME/.hubble"
@@ -67,7 +61,6 @@ main() {
     clear_cilium_host_files
 
     clear_openbao_cache
-    clear_postgres_cache
     clear_hubble_cache
     clear_terraform_state
 

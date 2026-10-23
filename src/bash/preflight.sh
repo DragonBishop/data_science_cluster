@@ -277,7 +277,6 @@ main() {
     local had_warnings=false
 
     check_host_tooling || had_errors=true
-    check_optional_tool psql "just db-connect" || had_warnings=true
     check_optional_tool hubble "just hubble" || had_warnings=true
     echo ""
     if check_kubectl_tooling; then
