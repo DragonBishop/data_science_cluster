@@ -1,6 +1,23 @@
 [changelog]
+body = """
+{%- set base = "https://github.com/" ~ remote.github.owner ~ "/" ~ remote.github.repo -%}
+{% if version -%}
+    ## [{{ version | trim_start_matches(pat="v") }}]({{ base }}/{% if previous.version %}compare/{{ previous.version }}...{% else %}releases/tag/{% endif %}{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+    ## [unreleased]
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim }}
+    {% for commit in commits %}
+        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}{% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}]({{ base }}/commit/{{ commit.id }}))\
+    {% endfor %}
+{% endfor %}\n
+"""
 trim = true
 render_always = true
+
+[remote]
+offline = true
 
 [git]
 conventional_commits = true
@@ -8,19 +25,19 @@ filter_unconventional = true
 
 [[git.commit_parsers]]
 message = "^feat"
-group = "🚀 Features"
+group = "<!-- 0 -->🚀 Features"
 [[git.commit_parsers]]
 message = "^fix"
-group = "🐛 Bug Fixes"
+group = "<!-- 1 -->🐛 Bug Fixes"
 [[git.commit_parsers]]
 message = "^docs: regenerate changelog for"
 skip = true
 [[git.commit_parsers]]
 message = "^doc"
-group = "📚 Documentation"
+group = "<!-- 2 -->📚 Documentation"
 [[git.commit_parsers]]
 message = "^refactor"
-group = "♻️ Refactor"
+group = "<!-- 3 -->♻️ Refactor"
 [[git.commit_parsers]]
 message = "^chore\\([^)]*\\): release "
 skip = true
@@ -29,10 +46,10 @@ message = "^chore\\(deps.*\\)"
 skip = true
 [[git.commit_parsers]]
 message = "^test"
-group = "🧪 Testing"
+group = "<!-- 4 -->🧪 Testing"
 [[git.commit_parsers]]
 message = "^chore|^ci|^build"
-group = "⚙️ Miscellaneous Tasks"
+group = "<!-- 5 -->⚙️ Miscellaneous Tasks"
 [[git.commit_parsers]]
 message = "^revert"
-group = "◀️ Revert"
+group = "<!-- 6 -->◀️ Revert"
