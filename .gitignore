@@ -77,5 +77,5 @@ data_science_cluster.code-workspace
 
 # Ansible Galaxy collections and runtime state
 ansible/ansible_collections/*
-!ansible/ansible_collections/data_science/
-ansible/.ansible/
+!ansible/ansible_collections/dragonbishop/
+.ansible/

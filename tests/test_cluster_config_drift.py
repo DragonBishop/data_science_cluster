@@ -11,7 +11,10 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLUSTER_CONFIG_DIR = REPO_ROOT / "infrastructure/cluster-config"
 FLUX_KUSTOMIZATIONS_DIR = REPO_ROOT / "clusters/local"
-ANSIBLE_ROUTES_PATH = REPO_ROOT / "ansible/inventory/group_vars/all/cluster_config.yml"
+ANSIBLE_PLAYBOOKS_DIR = (
+    REPO_ROOT / "ansible/ansible_collections/dragonbishop/cluster/playbooks"
+)
+ANSIBLE_ROUTES_PATH = ANSIBLE_PLAYBOOKS_DIR / "group_vars/all/cluster_config.yml"
 ANSIBLE_JSON_OUTPUT = {
     "ANSIBLE_STDOUT_CALLBACK": "ansible.posix.json",
     "ANSIBLE_LOAD_CALLBACK_PLUGINS": "1",
@@ -103,15 +106,17 @@ def build_flux_kustomization(
 
 def parse_ansible_task_result(ansible_output: str) -> dict:
     """Return the first task's localhost result from Ansible JSON callback output."""
-    return json.loads(ansible_output)["plays"][0]["tasks"][0]["hosts"]["127.0.0.1"]
+    return json.loads(ansible_output)["plays"][0]["tasks"][0]["hosts"]["localhost"]
 
 
 def evaluate_ansible_variables(variable_names: list[str]) -> dict:
-    """Return the named variables as Ansible evaluates them from the repo root."""
+    """Return the named variables as Ansible evaluates them for the bootstrap playbook."""
     output = run_command(
         [
             "ansible",
             "localhost",
+            "--playbook-dir",
+            str(ANSIBLE_PLAYBOOKS_DIR),
             "-m",
             "ansible.builtin.debug",
             "-a",
@@ -129,6 +134,7 @@ def run_role_tasks(role: str, tasks_from: str, work_dir: Path) -> dict:
 
     The playbook sits outside the repo, so repo_root is passed as an extra var.
     """
+    (work_dir / "group_vars").symlink_to(ANSIBLE_PLAYBOOKS_DIR / "group_vars")
     playbook_file = work_dir / "playbook.yml"
     playbook_file.write_text(
         yaml.safe_dump(
@@ -228,7 +234,7 @@ def test_ansible_cilium_values_match_flux(
 ):
     """Check that Ansible renders the same Cilium values as Flux's cilium-values ConfigMap."""
     ansible_values = yaml.safe_load(
-        run_role_tasks("data_science.cluster.cilium", "render_values", tmp_path)[
+        run_role_tasks("dragonbishop.cluster.cilium", "render_values", tmp_path)[
             "stdout"
         ]
     )

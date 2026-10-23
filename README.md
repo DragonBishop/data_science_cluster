@@ -58,7 +58,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
-| Ansible | `ansible` `14.5.0` (`ansible-core` `2.21.5`), from `uv.lock` | Idempotent cluster bootstrap playbook and host setup (`ansible/data_cluster.yml`). `just bootstrap` runs it through `uv run` and installs the collections in `ansible/requirements.yml` first. |
+| Ansible | `ansible` `14.5.0` (`ansible-core` `2.21.5`), from `uv.lock` | Idempotent cluster bootstrap playbook and host setup (`dragonbishop.cluster.data_cluster`). `just bootstrap` runs it through `uv run` and first installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on. |
 | Flux CLI | `v2.9.6` (`fluxcd.io`) | Creates Flux's Git credentials during bootstrap (`flux create secret`), and inspects and reconciles Flux afterwards. |
 | fzf | `fzf` | Interactive pod picker for `just fuzzypods`. |
 | GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |

@@ -10,7 +10,7 @@
   "workspaceMount": "source=datasci-k8s-host-workspace,target=/home/vscode/data_science_cluster,type=volume",
 
   "containerEnv": {
-    "ANSIBLE_CONFIG": "${containerWorkspaceFolder}/ansible/ansible.cfg"
+    "ANSIBLE_CONFIG": "${containerWorkspaceFolder}/ansible.cfg"
   },
 
   // Reaches the local k3s cluster and host-local services directly.

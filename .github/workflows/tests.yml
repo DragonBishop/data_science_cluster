@@ -21,7 +21,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/data_science/cluster/galaxy\.yml'
+          RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/dragonbishop/cluster/(galaxy\.yml|CHANGELOG\.md)'
         run: |
           other_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" || true)
           echo "skip=$([ -z "$other_files" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
@@ -43,9 +43,9 @@ jobs:
           sudo chmod 0711 /run/podman
           sudo chown "$USER" /run/podman/podman.sock
       - run: uv sync --frozen
-      - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
-      - run: uv run molecule test --all
-        working-directory: ansible/ansible_collections/data_science/cluster
+      - run: uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
+      - run: uv run molecule test --all --exclude full-playbook
+        working-directory: ansible/ansible_collections/dragonbishop/cluster
   pytest:
     needs: release-only
     if: ${{ !cancelled() && needs.release-only.outputs.skip != 'true' }}

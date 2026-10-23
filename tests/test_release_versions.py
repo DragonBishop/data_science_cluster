@@ -15,7 +15,7 @@ def test_collection_version_matches_the_cluster_release():
     )["."]
     galaxy = yaml.safe_load(
         (
-            REPO_ROOT / "ansible/ansible_collections/data_science/cluster/galaxy.yml"
+            REPO_ROOT / "ansible/ansible_collections/dragonbishop/cluster/galaxy.yml"
         ).read_text()
     )
     assert galaxy["version"] == cluster_version, (

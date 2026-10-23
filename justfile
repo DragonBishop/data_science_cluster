@@ -16,8 +16,8 @@ preflight:
 
 # Run full cluster bootstrap via Ansible (prompts for sudo; accepts flags like --tags, --check, -v)
 bootstrap *ARGS:
-  uv run ansible-galaxy collection install -r ansible/requirements.yml
-  uv run ansible-playbook -i ansible/inventory/hosts.ini ansible/data_cluster.yml --ask-become-pass {{ARGS}}
+  uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
+  uv run ansible-playbook dragonbishop.cluster.data_cluster --ask-become-pass {{ARGS}}
 
 # --- Cluster lifecycle -------------------------------------------------
 

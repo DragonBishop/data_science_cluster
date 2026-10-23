@@ -34,9 +34,8 @@ jobs:
         with:
           python-version-file: ".python-version"
       - run: uv sync --frozen
-      - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
-      - run: uv run ansible-lint
-        working-directory: ansible
+      - run: uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
+      - run: uv run ansible-lint --offline ansible/ansible_collections/dragonbishop/cluster
   tofu-fmt:
     runs-on: ubuntu-latest
     steps:

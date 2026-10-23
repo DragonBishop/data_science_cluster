@@ -5,7 +5,7 @@
   "skip-changelog": true,
   "extra-files": [
     "src/data_science_cluster/__init__.py",
-    { "type": "yaml", "path": "ansible/ansible_collections/data_science/cluster/galaxy.yml", "jsonpath": "$.version" }
+    { "type": "yaml", "path": "ansible/ansible_collections/dragonbishop/cluster/galaxy.yml", "jsonpath": "$.version" }
   ],
   "packages": {
     ".": {}
