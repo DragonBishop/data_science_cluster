@@ -1,7 +1,7 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: hubble-relay-egress
+  name: hubble-relay
   namespace: kube-system
 spec:
   endpointSelector:

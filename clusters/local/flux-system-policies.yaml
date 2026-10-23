@@ -11,7 +11,7 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./infrastructure/flux-system-policies
+  path: ./infrastructure/flux-system
   prune: true
   wait: true
   timeout: 3m

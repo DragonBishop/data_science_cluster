@@ -1,12 +1,12 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: flux-egress
+  name: flux
   namespace: flux-system
 spec:
   endpointSelector: {}
   ingress:
-    # Artifacts and events; Ansible applies this before Flux delivers allow-same-namespace
+    # Artifacts and events between the controllers
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: flux-system
