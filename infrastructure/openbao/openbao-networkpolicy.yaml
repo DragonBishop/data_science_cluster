@@ -1,7 +1,7 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: openbao-ingress
+  name: openbao
   namespace: openbao
 spec:
   endpointSelector:

@@ -23,9 +23,9 @@
     state: present
     src: "{{ repo_root }}/infrastructure/coredns-custom/coredns-networkpolicy.yaml"
 
-- name: Apply flux-egress network policy
+- name: Apply flux network policy
   kubernetes.core.k8s:
     state: present
     definition: >-
-      {{ lookup('file', repo_root + '/infrastructure/flux-system-policies/flux-networkpolicy.yaml')
+      {{ lookup('file', repo_root + '/infrastructure/flux-system/flux-networkpolicy.yaml')
       | regex_replace('\$\{GIT_FORGE_HOST\}', git_forge_host) }}
