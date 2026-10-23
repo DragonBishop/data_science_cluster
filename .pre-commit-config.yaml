@@ -26,7 +26,7 @@ repos:
     hooks:
     -   id: ansible-lint
         name: ansible-lint
-        entry: bash -c 'cd ansible/ansible_collections/dragonbishop/cluster && uv run ansible-lint'
+        entry: uv run ansible-lint --offline ansible/ansible_collections/dragonbishop/cluster
         language: system
         pass_filenames: false
         files: ^ansible/
