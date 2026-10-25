@@ -1,17 +1,17 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: postgis-cluster
+  name: postgres-cluster
   namespace: databases
 spec:
   endpointSelector:
     matchLabels:
-      cnpg.io/cluster: postgis-cluster
+      cnpg.io/cluster: postgres-cluster
   ingress:
     # Replication and join between instances
     - fromEndpoints:
         - matchLabels:
-            cnpg.io/cluster: postgis-cluster
+            cnpg.io/cluster: postgres-cluster
       toPorts:
         - ports:
             - port: "5432"

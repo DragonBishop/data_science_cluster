@@ -15,11 +15,11 @@ run "database_roles_allowed" {
   assert {
     condition = alltrue([
       for role in [
-        vault_database_secret_backend_role.postgis_app_role,
+        vault_database_secret_backend_role.postgres_app_role,
         vault_database_secret_backend_role.tekton_results_app_role,
-      ] : contains(vault_database_secret_backend_connection.postgis_cluster.allowed_roles, role.name)
+      ] : contains(vault_database_secret_backend_connection.postgres_cluster.allowed_roles, role.name)
     ])
-    error_message = "A database role is missing from postgis_cluster's allowed_roles."
+    error_message = "A database role is missing from postgres_cluster's allowed_roles."
   }
 }
 
@@ -42,7 +42,7 @@ run "auth_roles_bound_narrowly" {
   assert {
     condition = alltrue([
       for role in [
-        vault_kubernetes_auth_backend_role.postgis,
+        vault_kubernetes_auth_backend_role.databases,
         vault_kubernetes_auth_backend_role.tekton_results,
         vault_kubernetes_auth_backend_role.cert_manager,
       ] : length(role.bound_service_account_names) == 1 && length(role.bound_service_account_namespaces) == 1
@@ -57,7 +57,7 @@ run "policies_read_only" {
   assert {
     condition = alltrue([
       for policy in [
-        vault_policy.postgis,
+        vault_policy.databases,
         vault_policy.tekton_results,
       ] : length(regexall("capabilities\\s*=\\s*\\[\"read\"\\]", policy.policy)) == length(regexall("capabilities", policy.policy))
     ])

@@ -163,28 +163,28 @@ unseal_openbao() {
     esac
 }
 
-resume_postgis() {
-    kubectl get cluster postgis-cluster -n databases &> /dev/null || return 0
+resume_databases() {
+    kubectl get cluster postgres-cluster -n databases &> /dev/null || return 0
 
     local hibernation_annotation
-    hibernation_annotation=$(kubectl get cluster postgis-cluster -n databases \
+    hibernation_annotation=$(kubectl get cluster postgres-cluster -n databases \
         -o jsonpath='{.metadata.annotations.cnpg\.io/hibernation}' 2>/dev/null) || hibernation_annotation=""
     [ "$hibernation_annotation" = on ] || return 0
 
-    echo "⏳ Reactivating postgis-cluster from hibernation..."
+    echo "⏳ Reactivating postgres-cluster from hibernation..."
     local retries=0
-    until kubectl annotate cluster postgis-cluster -n databases --overwrite cnpg.io/hibernation=off 2>/dev/null; do
+    until kubectl annotate cluster postgres-cluster -n databases --overwrite cnpg.io/hibernation=off 2>/dev/null; do
         retries=$((retries+1))
         if [ $retries -ge 6 ]; then
             echo "⚠️  Webhook timed out. CNPG cluster inactive."
             echo "💡 TROUBLESHOOTING: Run manually:"
-            echo "   kubectl annotate cluster postgis-cluster -n databases --overwrite cnpg.io/hibernation=off"
+            echo "   kubectl annotate cluster postgres-cluster -n databases --overwrite cnpg.io/hibernation=off"
             return 1
         fi
         sleep 5
         echo "   ...still reactivating database... ($((retries * 5))s elapsed)"
     done
-    echo "✅ postgis-cluster reactivated successfully."
+    echo "✅ postgres-cluster reactivated successfully."
 }
 
 resume_scheduled_backups() {
@@ -205,7 +205,7 @@ report_summary() {
     local had_warnings="$1"
     if [ "$had_warnings" = true ]; then
         echo "⚠️  Cluster startup sequence complete, review warnings."
-        echo "   Check Headlamp, 'flux get kustomizations', 'kubectl cnpg status postgis-cluster -n databases'."
+        echo "   Check Headlamp, 'flux get kustomizations', 'kubectl cnpg status postgres-cluster -n databases'."
         exit 1
     else
         echo "✅ Cluster startup sequence complete."
@@ -224,7 +224,7 @@ main() {
     unseal_openbao || had_warnings=true
     echo ""
 
-    resume_postgis || had_warnings=true
+    resume_databases || had_warnings=true
     resume_scheduled_backups
 
     report_summary "$had_warnings"

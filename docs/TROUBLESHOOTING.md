@@ -80,11 +80,11 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Hibernation shows as "not confirmed" when stopping**
   * **What's happening:** The script could not verify that the database shut down cleanly.
-  * **How to check if it actually failed:** On the next start, run `kubectl logs -n databases postgis-cluster-1 -c postgres | grep -i "cluster state"`. `Database cluster state: shut down` with a timestamp means the shutdown was clean and the script did not wait long enough to observe it.
+  * **How to check if it actually failed:** On the next start, run `kubectl logs -n databases postgres-cluster-1 -c postgres | grep -i "cluster state"`. `Database cluster state: shut down` with a timestamp means the shutdown was clean and the script did not wait long enough to observe it.
   * **If it genuinely failed, it's usually one of three things:**
-    1. **Idle database connections:** `spec.smartShutdownTimeout` in `postgis-cluster.yaml` is set to 15 (the CNPG default is 180). Postgres waits that long for existing connections to close before escalating to a fast shutdown, which disconnects them. Check for active connections before stopping: `kubectl exec -n databases postgis-cluster-1 -c postgres -- psql -U postgres -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`
+    1. **Idle database connections:** `spec.smartShutdownTimeout` in `apps/databases/databases-cluster.yaml` is set to 15 (the CNPG default is 180). Postgres waits that long for existing connections to close before escalating to a fast shutdown, which disconnects them. Check for active connections before stopping: `kubectl exec -n databases postgres-cluster-1 -c postgres -- psql -U postgres -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`
     2. **CloudNativePG (CNPG) operator isn't available:** The shutdown command was sent, but the operator was not running to process it. The stop script usually catches this first and halts with a specific warning.
-    3. **The cluster isn't healthy:** A cluster will not hibernate from a broken state, such as a pod in CrashLoop or mid-boot. Check with `kubectl cnpg status postgis-cluster -n databases`.
+    3. **The cluster isn't healthy:** A cluster will not hibernate from a broken state, such as a pod in CrashLoop or mid-boot. Check with `kubectl cnpg status postgres-cluster -n databases`.
 
 * **Port 6443 is still bound/in-use after running `stop-cluster.sh`**
   * **What's happening:** The API server stopped, but containerd shims are still running.
@@ -200,9 +200,9 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > Never wipe and reinitialize OpenBao if it holds real secrets — it destroys everything stored in it.
 
 * **OpenBao throws a "permission denied" error**
-  * **How to fix it:** Check the policies and roles applied from `terraform/openbao/`. `kubectl exec -n openbao openbao-0 -- bao policy read postgis-policy` and `... bao policy read cert-manager-pki-policy` show the paths granted; `... bao read auth/kubernetes/role/postgis-role` and `... bao read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
+  * **How to fix it:** Check the policies and roles applied from `terraform/openbao/`. `kubectl exec -n openbao openbao-0 -- bao policy read databases-policy` and `... bao policy read cert-manager-pki-policy` show the paths granted; `... bao read auth/kubernetes/role/databases-role` and `... bao read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
 
-* **`bao kv get secret/postgis` or `secret/seaweedfs` returns "No value found at secret/data/..."**
+* **`bao kv get secret/postgres` or `secret/seaweedfs` returns "No value found at secret/data/..."**
   * **What's happening:** The `vault_kv_secret_v2` resources in `terraform/openbao/kv.tf` that write this data have never been applied for this OpenBao instance.
   * **How to fix it:** Re-run `just bootstrap` (or `tofu -chdir=terraform/openbao apply` directly with the usual `TF_VAR_*` exported). If the resources exist in config but values still don't appear after that, see the next entry.
 
@@ -221,7 +221,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **How to fix it:** Check `kubectl describe certificaterequest -n <namespace>`. If OpenBao rejects the CSR, confirm the requested DNS name or IP SAN is explicitly listed in `permitted_dns_domains` and `allowed_domains` in `terraform/openbao/pki.tf`, and re-apply `tofu -chdir=terraform/openbao apply`. Confirm `openbao-pki-issuer` ClusterIssuer reports `Ready` (`kubectl describe clusterissuer openbao-pki-issuer`).
 
 * **Dynamic credentials never reach a "Ready" state**
-  * **How to fix it:** `kubectl describe externalsecret postgis-app-dynamic-credentials -n databases` reports OpenBao's error.
+  * **How to fix it:** `kubectl describe externalsecret postgres-app-dynamic-credentials -n databases` reports OpenBao's error.
 
 ---
 
@@ -231,7 +231,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **How to fix it:** Run `kubectl describe pod <pod_name> -n databases` and read the Events stream at the bottom. It reports scheduling failures, insufficient resources, and image pull failures.
 
 * **Password authentication fails even though the password is correct**
-  * **How to fix it:** Confirm both `enableSuperuserAccess: true` and `superuserSecret` are set in `postgis-cluster.yaml`. With the first missing, CNPG nulls the password on every reconciliation. Confirm the `username` field in `secret/postgis` is exactly `postgres`; CNPG rejects any other value before applying the password.
+  * **How to fix it:** Confirm both `enableSuperuserAccess: true` and `superuserSecret` are set in `apps/databases/databases-cluster.yaml`. With the first missing, CNPG nulls the password on every reconciliation. Confirm the `username` field in `secret/postgres` is exactly `postgres`; CNPG rejects any other value before applying the password.
 
 > [!IMPORTANT]
 > Both failure modes are silent — CNPG neither errors nor logs when it nulls the password or rejects a bad `username`, so check them even when the Secret otherwise looks correct.
@@ -245,25 +245,25 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Tables created by a lease are unreadable by the next one**
   * **What's happening:** The lease was issued before `ALTER ROLE ... SET role = app_readwrite` was added to `creation_statements`, so it owns its objects.
-  * **How to fix it:** Update the role definition in `terraform/openbao/database.tf`, then `bao lease revoke -prefix database/creds/postgis-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
+  * **How to fix it:** Update the role definition in `terraform/openbao/database.tf`, then `bao lease revoke -prefix database/creds/postgres-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
 
 > [!IMPORTANT]
 > `DROP ROLE` at lease expiry fails with `cannot be dropped because some objects depend on it` until ownership is reassigned — OpenBao will keep leaving the stale role behind on every expiry until you fix this.
 
 * **Application credentials stop working after a password rotation**
-  * **What's happening:** App-role rotations (static or dynamic) reload automatically, as `postgis-app-credentials` and `postgis-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label (in `apps/databases-secrets/postgis-credentials.yaml` and `apps/databases/postgis-dynamic-credentials.yaml`), so CNPG picks up the new Secret on its own.
-  * **How to fix it:** For the superuser password, update `database/config/postgis-cluster` in OpenBao (via `terraform/openbao/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgis-app-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
+  * **What's happening:** Superuser credential refreshes and dynamic app-role rotations reload automatically, as `postgres-superuser-credentials` and `postgres-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label (in `apps/databases-secrets/databases-credentials.yaml` and `apps/databases/databases-dynamic-credentials.yaml`), so CNPG picks up the new Secret on its own.
+  * **How to fix it:** For the superuser password, update `database/config/postgres-cluster` in OpenBao (via `terraform/openbao/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgres-superuser-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
-  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/postgis-tls.yaml`. `postgis-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgis.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `openbao-pki-issuer`.
+  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/databases-tls.yaml`. `postgres-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgres.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `openbao-pki-issuer`.
 
 > [!NOTE]
-> Any new name added to `postgis-tls.yaml` must also be permitted in `terraform/openbao/pki.tf` (`permitted_dns_domains` and `allowed_domains`), or OpenBao PKI rejects the CSR before cert-manager can reissue.
+> Any new name added to `databases-tls.yaml` must also be permitted in `terraform/openbao/pki.tf` (`permitted_dns_domains` and `allowed_domains`), or OpenBao PKI rejects the CSR before cert-manager can reissue.
 
 * **Barman Cloud Plugin backups start failing**
   * **What's happening:** The database cannot reach or authenticate to the object store, or S3 TLS handshake fails.
-  * **How to fix it:** Run `kubectl cnpg status postgis-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.databases.svc:9000`) with a valid certificate from `openbao-pki-issuer`. Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `seaweedfs-credentials` Secret match the credentials inside its `config` field. Confirm the bucket exists:
+  * **How to fix it:** Run `kubectl cnpg status postgres-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.databases.svc:9000`) with a valid certificate from `openbao-pki-issuer`. Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `seaweedfs-credentials` Secret match the credentials inside its `config` field. Confirm the bucket exists:
 
     ```bash
     kubectl exec -n databases seaweedfs-master-0 -- sh -c 'echo "fs.ls /buckets" | weed shell -master=localhost:9333'
@@ -284,8 +284,8 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **How to fix it:** `kubectl logs <pod> -c delete-db-credentials -n tekton-pipelines` shows RBAC errors from `credential-renewal-rbac.yaml`. If the init container succeeded, `kubectl describe externalsecret tekton-results-postgres -n tekton-pipelines` reports why ESO could not re-create the Secret.
 
 * **The Results API crash-loops on its database connection**
-  * **What's happening:** The API connects to `postgis-cluster-rw` with `sslmode=verify-full`, trusting `/etc/tls/ca.crt` from `tekton-results-tls`, as a login that must still be within its 32d TTL.
-  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton-pipelines` names the failure. For a certificate error, confirm `tekton-results-tls` was issued by `openbao-pki-issuer` (`kubectl describe certificate tekton-results-tls -n tekton-pipelines`). For a timeout, check that the `postgis-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton-pipelines` restarts it with a new login.
+  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/tls/ca.crt` from `tekton-results-tls`, as a login that must still be within its 32d TTL.
+  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton-pipelines` names the failure. For a certificate error, confirm `tekton-results-tls` was issued by `openbao-pki-issuer` (`kubectl describe certificate tekton-results-tls -n tekton-pipelines`). For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton-pipelines` restarts it with a new login.
 
 * **PipelineRuns finish but no records appear**
   * **What's happening:** The API serves the certificate it loaded at startup, so an API pod running past `tekton-results-tls` expiry fails the watcher's TLS handshake.

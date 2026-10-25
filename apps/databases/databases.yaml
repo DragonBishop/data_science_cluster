@@ -7,7 +7,7 @@ spec:
   name: ${DATA_SCIENCE_DB_NAME}
   owner: app_readwrite
   cluster:
-    name: postgis-cluster
+    name: postgres-cluster
   schemas:
     - name: topology
     - name: tiger
@@ -20,3 +20,14 @@ spec:
       schema: topology
     - name: postgis_tiger_geocoder
       schema: tiger
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: tekton-results
+  namespace: databases
+spec:
+  name: ${TEKTON_RESULTS_DB_NAME}
+  owner: tekton_readwrite
+  cluster:
+    name: postgres-cluster

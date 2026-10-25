@@ -60,20 +60,19 @@ The directory tree of this repository, then what each directory and file does.
 │               ├── openbao/
 │               └── opentofu/
 ├── apps/
-│   ├── databases/                       # PostGIS cluster, one Flux Kustomization
+│   ├── databases/                       # PostgreSQL clusters and databases, one Flux Kustomization
 │   │   ├── kustomization.yaml
-│   │   ├── postgis-cluster.yaml
-│   │   ├── postgis-database.yaml
-│   │   ├── postgis-dynamic-credentials.yaml
-│   │   ├── postgis-localhost.yaml
-│   │   ├── postgis-networkpolicy.yaml
-│   │   ├── postgis-tcproute.yaml
-│   │   ├── postgis-tls.yaml
-│   │   └── tekton-results-database.yaml
+│   │   ├── databases-cluster.yaml
+│   │   ├── databases-dynamic-credentials.yaml
+│   │   ├── databases-localhost.yaml
+│   │   ├── databases-networkpolicy.yaml
+│   │   ├── databases-tcproute.yaml
+│   │   ├── databases-tls.yaml
+│   │   └── databases.yaml
 │   ├── databases-secrets/               # ESO SecretStore + ExternalSecrets, applied before databases
 │   │   ├── eso-setup.yaml
 │   │   ├── kustomization.yaml
-│   │   ├── postgis-credentials.yaml
+│   │   ├── databases-credentials.yaml
 │   │   └── seaweedfs-credentials.yaml
 │   ├── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases
 │   │   ├── kustomization.yaml
@@ -186,25 +185,20 @@ The directory tree of this repository, then what each directory and file does.
 │   │   └── openbao-values.yaml
 │   ├── tekton/                          # TektonConfig into tekton-pipelines; runs go in tekton-runs
 │   │   ├── kustomization.yaml
-│   │   ├── tekton-pipelines-networkpolicy.yaml
-│   │   ├── tekton-runs-networkpolicy.yaml
-│   │   └── tektonconfig.yaml
+│   │   ├── tekton-networkpolicy.yaml
+│   │   ├── tektonconfig.yaml
+│   │   ├── pipelines/                   # Pipeline definitions and their run configuration
+│   │   │   └── README.md
+│   │   └── tasks/                       # reusable Task definitions
+│   │       ├── fetch-source.yaml
+│   │       ├── flux-ready.yaml
+│   │       ├── gateway-tls.yaml
+│   │       ├── hubble-drops.yaml
+│   │       ├── service-tls.yaml
+│   │       └── workloads.yaml
 │   ├── tekton-operator/
 │   │   ├── kustomization.yaml
 │   │   └── tekton-operator-release.yaml
-│   └── tekton-tasks/                    # core-test and its shared Tasks; every file empty until Phase 3.2
-│       ├── core-test-pipeline.yaml
-│       ├── core-test-rbac.yaml
-│       ├── core-test-run.yaml
-│       └── tasks/
-│           ├── fetch-source.yaml
-│           ├── flux-reader-clusterrole.yaml
-│           ├── flux-ready.yaml
-│           ├── gateway-tls.yaml
-│           ├── hubble-drops.yaml
-│           ├── kustomization.yaml
-│           ├── tekton-hubble-client.yaml
-│           └── workloads-ready.yaml
 ├── src/
 │   ├── bash/
 │   │   ├── preflight.sh                 # Read-only host readiness checks
@@ -272,19 +266,18 @@ The directory tree of this repository, then what each directory and file does.
   * **`playbooks/group_vars/all/`**: Variables Ansible loads beside the playbook. `cluster_config.yml` lists every cluster-config key Ansible uses, lowercased, under headings named for its `infrastructure/cluster-config/` fragment. `ansible.yml` holds Ansible-only values and merges the fragments.
   * **`roles/`**: The five roles; each role's `tasks/main.yml` imports named task files.
   * **`extensions/molecule/`**: The Molecule scenarios. `config.yml` holds what every scenario inherits: the collections path, the shared inventory and the unit test sequence. `default/` creates and destroys the one podman container the `unit-*` scenarios share. `inventory/hosts.yml` describes that container, and `inventory/group_vars` links to `playbooks/group_vars`. `molecule test --all --exclude full-playbook` from the collection's directory runs the unit scenarios. `full-playbook/` runs the whole playbook on a GitHub runner, from `e2e.yml`.
-* **`apps/databases/`** - The PostGIS cluster and its networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`).
+* **`apps/databases/`** - The PostgreSQL clusters and their databases, credentials, networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`). Filenames describe the database group so additional PostgreSQL clusters can share the directory.
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
-  * **`postgis-cluster.yaml`**: The CNPG `Cluster` (with `tekton_readwrite` as a managed role), the `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup` used for backups.
-  * **`postgis-database.yaml`**: CNPG `Database` CRD declares `data_science`, its owner, schemas, and PostGIS extensions.
-  * **`postgis-dynamic-credentials.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `postgis-app-dynamic-credentials`, a login OpenBao creates in Postgres, so it deploys with `postgis-cluster`.
-  * **`postgis-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
-  * **`postgis-networkpolicy.yaml`**: Accepts replication between instances, the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
-  * **`postgis-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
-  * **`postgis-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgis.internal`, and the shared Gateway's static LAN IP.
-  * **`tekton-results-database.yaml`**: CNPG `Database` declaring `tekton_results`, owned by `tekton_readwrite`.
-* **`apps/databases-secrets/`** - The ESO SecretStore and the static ExternalSecrets for `databases`, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after those Secrets exist. The dynamic `postgis-app-dynamic-credentials` lives in `apps/databases/postgis-dynamic-credentials.yaml`, because OpenBao needs `postgis-cluster-rw` to issue it.
-  * **`eso-setup.yaml`**: The `postgis-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
-  * **`postgis-credentials.yaml`**: `ExternalSecret` syncing the static PostGIS credentials from `secret/postgis`.
+  * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster` (with `tekton_readwrite` as a managed role), its `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup`.
+  * **`databases.yaml`**: CNPG `Database` resources for `data_science` (with its schemas and PostGIS extensions) and `tekton_results`.
+  * **`databases-dynamic-credentials.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `postgres-app-dynamic-credentials`, a login OpenBao creates in Postgres, so it deploys with the PostgreSQL cluster.
+  * **`databases-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
+  * **`databases-networkpolicy.yaml`**: Accepts replication between instances, the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
+  * **`databases-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
+  * **`databases-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgres.internal`, and the shared Gateway's static LAN IP.
+* **`apps/databases-secrets/`** - The ESO SecretStore and the static ExternalSecrets for `databases`, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after those Secrets exist. The dynamic `postgres-app-dynamic-credentials` lives in `apps/databases/databases-dynamic-credentials.yaml`, because OpenBao needs `postgres-cluster-rw` to issue it.
+  * **`eso-setup.yaml`**: The `databases-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
+  * **`databases-credentials.yaml`**: `ExternalSecret` syncing the PostgreSQL superuser credentials from the existing `secret/postgres` OpenBao entry into `postgres-superuser-credentials`.
   * **`seaweedfs-credentials.yaml`**: `ExternalSecret` syncing S3 credentials from `secret/seaweedfs`.
 * **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`) so `databases` is applied only after the `cnpg-backups` bucket exists.
   * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, `cnpg-backups` bucket created by the chart's post-install hook, and the chart's own network policies, which also admit Postgres backups to S3.
@@ -294,7 +287,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`eso-setup.yaml`**: The `tekton-results-openbao-auth` `ServiceAccount` ESO presents to OpenBao.
   * **`tekton-results-credentials.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `tekton-results-postgres`, refreshed only when the Secret is missing.
   * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`; its `ca.crt` also verifies Postgres.
-* **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/` and `apps/` below, apart from `tekton-tasks/`, which gets one in Phase 3.2.
+* **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/` and `apps/` below.
   * **`barman-cloud.yaml`**: Kustomization → `infrastructure/barman-cloud/`
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
   * **`cilium.yaml`**: Kustomization → `infrastructure/cilium/`
@@ -338,9 +331,8 @@ The directory tree of this repository, then what each directory and file does.
   * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-localhost.yaml`, `hubble-networkpolicy.yaml`, `kustomization.yaml`
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
   * **`openbao/`**: `kustomization.yaml`, `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
-  * **`tekton/`**: One Kustomization for all of Tekton. The `TektonConfig` installs every component into `tekton-pipelines`, and PipelineRuns and TaskRuns go in `tekton-runs`, apart from the controllers' Secrets. Files: `kustomization.yaml`, `tektonconfig.yaml` (Pipelines, Triggers, pruner, run defaults, component resources, and Results on the external PostGIS database), `tekton-pipelines-networkpolicy.yaml` (`remote-resolvers` reach the Git forge and Artifact Hub, and `results-api` accepts the Results watcher), `tekton-runs-networkpolicy.yaml` (`taskrun` lets TaskRun pods reach the Git forge and PyPI)
+  * **`tekton/`**: One Kustomization for all of Tekton. The `TektonConfig` installs every component into `tekton-pipelines`, and PipelineRuns and TaskRuns go in `tekton-runs`, apart from the controllers' Secrets. It holds `tektonconfig.yaml`, `tekton-networkpolicy.yaml` (three separate Cilium policies in one file), reusable Task definitions in `tasks/`, and Pipeline definitions and their run configuration in `pipelines/`.
   * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`. The Tekton Operator in the `tekton-operator` namespace. It is its own Kustomization so the `TektonConfig` CRD exists before `tekton` applies one.
-  * **`tekton-tasks/`**: `core-test` and the shared Tasks its runs use: `core-test-pipeline.yaml`, `core-test-rbac.yaml`, `core-test-run.yaml` and `tasks/`. Every file is empty until Phase 3.2 of the 3.0 rollout writes it.
 * **`src/`**
   * **`src/bash/`**:
     * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).
@@ -350,7 +342,7 @@ The directory tree of this repository, then what each directory and file does.
     * **`uninstall-cluster.sh`**: Tears down k3s and clears stale local cluster state: Cilium's persistent host files, `.local/openbao`, the Hubble cache and `terraform/openbao` state. Asks for a reboot before reinstalling.
   * **`src/data_science_cluster/__init__.py`**: The project package and its `__version__`, which release-please bumps.
 * **`terraform/`** - OpenTofu module configuring OpenBao's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
-  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: KV mounts/secrets (`secret/postgis`, `secret/seaweedfs`), Kubernetes auth backend and roles (`postgis-role`, `tekton-results-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic roles (`postgis-cluster`, `postgis-app-role`, `tekton-results-app-role`).
+  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: KV mounts/secrets (`secret/postgres`, `secret/seaweedfs`), Kubernetes auth backend and roles (`databases-role`, `tekton-results-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic roles (`postgres-cluster`, `postgres-app-role`, `tekton-results-app-role`).
     * **`tests/openbao.tftest.hcl`**: Mocked-provider plan tests of the roles, policies and TTLs, run by `tofu test` in the `opentofu-unit` job.
 * **`tests/`**
   * **`conftest.py`**: Stops the session before collection if `kubectl`, `flux`, `ansible` or `ansible-playbook` is missing.

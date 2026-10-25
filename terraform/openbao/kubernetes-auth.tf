@@ -7,25 +7,25 @@ resource "vault_kubernetes_auth_backend_config" "config" {
   kubernetes_host = "https://kubernetes.default.svc"
 }
 
-resource "vault_policy" "postgis" {
-  name = "postgis-policy"
+resource "vault_policy" "databases" {
+  name = "databases-policy"
 
   policy = <<EOT
-path "secret/data/postgis" { capabilities = ["read"] }
+path "secret/data/postgres" { capabilities = ["read"] }
 path "secret/data/seaweedfs" { capabilities = ["read"] }
-path "secret/metadata/postgis" { capabilities = ["read"] }
+path "secret/metadata/postgres" { capabilities = ["read"] }
 path "secret/metadata/seaweedfs" { capabilities = ["read"] }
-path "database/creds/postgis-app-role" { capabilities = ["read"] }
+path "database/creds/postgres-app-role" { capabilities = ["read"] }
 EOT
 }
 
-resource "vault_kubernetes_auth_backend_role" "postgis" {
+resource "vault_kubernetes_auth_backend_role" "databases" {
   backend                          = vault_auth_backend.kubernetes.path
-  role_name                        = "postgis-role"
-  bound_service_account_names      = ["postgis-openbao-auth"]
+  role_name                        = "databases-role"
+  bound_service_account_names      = ["databases-openbao-auth"]
   bound_service_account_namespaces = ["databases"]
   audience                         = "openbao"
-  token_policies                   = [vault_policy.postgis.name]
+  token_policies                   = [vault_policy.databases.name]
   token_ttl                        = 86400 # 24h
 }
 

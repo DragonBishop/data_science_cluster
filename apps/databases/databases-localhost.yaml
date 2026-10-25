@@ -1,11 +1,11 @@
-# CiliumLocalRedirectPolicy exposing the postgis-cluster primary on the node's loopback interface at 5432
+# CiliumLocalRedirectPolicy exposing the postgres-cluster primary on the node's loopback interface at 5432
 apiVersion: cilium.io/v2
 kind: CiliumLocalRedirectPolicy
 metadata:
-  name: postgis-localhost
+  name: postgres-localhost
   namespace: databases
   labels:
-    app.kubernetes.io/name: postgis-cluster
+    app.kubernetes.io/name: postgres-cluster
 spec:
   redirectFrontend:
     addressMatcher:
@@ -16,7 +16,7 @@ spec:
   redirectBackend:
     localEndpointSelector:
       matchLabels:
-        cnpg.io/cluster: postgis-cluster
+        cnpg.io/cluster: postgres-cluster
         cnpg.io/instanceRole: primary
     toPorts:
       - port: "5432"

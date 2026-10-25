@@ -33,7 +33,7 @@ spec:
             - from:
                 - podSelector:
                     matchLabels:
-                      cnpg.io/cluster: postgis-cluster
+                      cnpg.io/cluster: postgres-cluster
               ports:
                 - protocol: TCP
                   port: ${SEAWEEDFS_S3_PORT}

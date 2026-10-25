@@ -19,7 +19,7 @@
     label: "{{ item.key }}"
   vars:
     opentofu_verify_checks:
-      postgis secret: bao kv metadata get -mount=secret postgis
+      postgres secret: bao kv metadata get -mount=secret postgres
       seaweedfs secret: bao kv metadata get -mount=secret seaweedfs
       internal-server PKI role: bao read pki_int/roles/internal-server
       cert-manager auth role: bao read auth/kubernetes/role/cert-manager-pki-role

@@ -307,7 +307,7 @@ sudo reboot
 Have your `.dump` file prepared to restore once the CNPG cluster exists (see [Verify Database Deployment](VERIFICATION.md#verify-database-deployment)):
 
 ```bash
-kubectl exec -i postgis-cluster-1 -n databases -- pg_restore -U postgres -d data_science --no-owner --no-privileges \
+kubectl exec -i postgres-cluster-1 -n databases -- pg_restore -U postgres -d data_science --no-owner --no-privileges \
   < /mnt/your/mount/path/data_science_backup_*.dump
 ```
 

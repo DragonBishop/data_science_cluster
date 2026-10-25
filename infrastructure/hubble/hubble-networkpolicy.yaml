@@ -15,3 +15,11 @@ spec:
         - ports:
             - port: "4244"
               protocol: TCP
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-runs
+    - toPorts:
+      - ports:
+        - port: "4245"
+          protocol: TCP

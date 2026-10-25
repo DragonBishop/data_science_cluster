@@ -132,7 +132,7 @@ spec:
   result:
     disabled: false
     is_external_db: true
-    db_host: postgis-cluster-rw.databases.svc.cluster.local
+    db_host: postgres-cluster-rw.databases.svc.cluster.local
     db_port: 5432
     db_name: ${TEKTON_RESULTS_DB_NAME}
     db_sslmode: verify-full

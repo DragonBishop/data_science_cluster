@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: postgis-openbao-auth
+  name: databases-openbao-auth
   namespace: databases
 ---
 # Connection and Kubernetes auth to in-cluster OpenBao (KV v2 at secret/)
@@ -26,8 +26,8 @@ spec:
       auth:
         kubernetes:
           mountPath: kubernetes
-          role: postgis-role
+          role: databases-role
           serviceAccountRef:
-            name: postgis-openbao-auth
+            name: databases-openbao-auth
             audiences:
               - openbao

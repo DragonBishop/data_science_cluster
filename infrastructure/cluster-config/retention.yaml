@@ -5,6 +5,6 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
-  POSTGIS_BACKUP_RETENTION: "4d"
+  POSTGRES_BACKUP_RETENTION: "4d"
   TEKTON_PRUNER_KEEP: "100"
   TEKTON_RESULTS_RETENTION: "7d"

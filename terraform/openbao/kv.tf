@@ -5,9 +5,9 @@ resource "vault_mount" "kv" {
   description = "Static application and superuser credentials"
 }
 
-resource "vault_kv_secret_v2" "postgis" {
+resource "vault_kv_secret_v2" "postgres" {
   mount = vault_mount.kv.path
-  name  = "postgis"
+  name  = "postgres"
   data_json_wo = jsonencode({
     username = "postgres"
     password = var.postgres_superuser_password

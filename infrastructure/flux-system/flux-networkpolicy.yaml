@@ -10,6 +10,8 @@ spec:
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: flux-system
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-runs
       toPorts:
         - ports:
             - port: "9090"
@@ -20,7 +22,6 @@ spec:
         # Git forge: clone, API, codeload
         - matchName: "${GIT_FORGE_HOST}"
         - matchPattern: "*.${GIT_FORGE_HOST}"
-        # GitHub: container registry, blob and release CDN
         - matchName: "ghcr.io"
         - matchPattern: "*.githubusercontent.com"
         # GitHub Pages Helm repos

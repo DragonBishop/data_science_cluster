@@ -2,7 +2,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: TCPRoute
 metadata:
-  name: postgis-external
+  name: postgres-external
   namespace: databases
 spec:
   parentRefs:
@@ -11,5 +11,5 @@ spec:
       sectionName: postgres
   rules:
     - backendRefs:
-        - name: postgis-cluster-rw
+        - name: postgres-cluster-rw
           port: 5432

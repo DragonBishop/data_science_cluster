@@ -7,23 +7,25 @@ metadata:
 spec:
   selfSigned: {}
 ---
-# Dedicated local CA for OpenBao
+# ClusterIssuer backed by OpenBao's Intermediate PKI secrets engine.
+# Signs leaf certificates for PostgreSQL (databases-tls) and SeaweedFS S3.
 apiVersion: cert-manager.io/v1
-kind: Certificate
+kind: ClusterIssuer
 metadata:
-  name: openbao-local-ca
-  namespace: cert-manager
+  name: openbao-pki-issuer
 spec:
-  isCA: true
-  commonName: openbao-local-ca
-  secretName: openbao-local-ca-secret
-  duration: ${LOCAL_CA_ROOT_DURATION}
-  privateKey:
-    algorithm: ${CERT_KEY_ALGORITHM}
-    size: ${CERT_KEY_SIZE}
-  issuerRef:
-    name: openbao-selfsigned-bootstrap
-    kind: ClusterIssuer
+  vault:
+    server: https://openbao.openbao.svc.cluster.local:8200
+    path: pki_int/sign/internal-server
+    caBundleSecretRef:
+      name: openbao-local-ca-secret
+      key: tls.crt
+    auth:
+      kubernetes:
+        role: cert-manager-pki-role
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: cert-manager
 ---
 # ClusterIssuer backed by the OpenBao local CA
 apiVersion: cert-manager.io/v1
@@ -33,6 +35,29 @@ metadata:
 spec:
   ca:
     secretName: openbao-local-ca-secret
+---
+# RBAC allowing cert-manager to request tokens for OpenBao Kubernetes authentication.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cert-manager-tokenrequest
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cert-manager-tokenrequest
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cert-manager-tokenrequest
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
 ---
 # Server certificate for OpenBao
 apiVersion: cert-manager.io/v1
@@ -60,6 +85,24 @@ spec:
     - 127.0.0.1
   issuerRef:
     name: openbao-ca-issuer
+    kind: ClusterIssuer
+---
+# Dedicated local CA for OpenBao
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openbao-local-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: openbao-local-ca
+  secretName: openbao-local-ca-secret
+  duration: ${LOCAL_CA_ROOT_DURATION}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  issuerRef:
+    name: openbao-selfsigned-bootstrap
     kind: ClusterIssuer
 ---
 # OpenBao CA bundle for the databases namespace
@@ -102,45 +145,22 @@ spec:
     name: openbao-ca-issuer
     kind: ClusterIssuer
 ---
-# ClusterIssuer backed by OpenBao's Intermediate PKI secrets engine.
-# Signs leaf certificates for Postgres (postgis-tls) and SeaweedFS S3.
+# OpenBao CA bundle for the tekton-runs namespace
 apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+kind: Certificate
 metadata:
-  name: openbao-pki-issuer
+  name: openbao-ca-tekton-runs
+  namespace: tekton-runs
 spec:
-  vault:
-    server: https://openbao.openbao.svc.cluster.local:8200
-    path: pki_int/sign/internal-server
-    caBundleSecretRef:
-      name: openbao-local-ca-secret
-      key: tls.crt
-    auth:
-      kubernetes:
-        role: cert-manager-pki-role
-        mountPath: /v1/auth/kubernetes
-        serviceAccountRef:
-          name: cert-manager
----
-# RBAC allowing cert-manager to request tokens for OpenBao Kubernetes authentication.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: cert-manager-tokenrequest
-rules:
-  - apiGroups: [""]
-    resources: ["serviceaccounts/token"]
-    verbs: ["create"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: cert-manager-tokenrequest
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cert-manager-tokenrequest
-subjects:
-  - kind: ServiceAccount
-    name: cert-manager
-    namespace: cert-manager
+  commonName: openbao-ca-bundle
+  secretName: openbao-ca-bundle
+  duration: ${LOCAL_CA_CERT_DURATION}
+  renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  dnsNames:
+    - openbao-ca-bundle.unused.invalid
+  issuerRef:
+    name: openbao-ca-issuer
+    kind: ClusterIssuer
