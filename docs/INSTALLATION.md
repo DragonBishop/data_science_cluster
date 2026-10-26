@@ -360,8 +360,6 @@ flowchart TD
     cc["cluster-config"] --> cilium
 
     %% Core Services & PKI
-    cilium --> coredns["coredns-custom"]
-    cilium --> fluxpolicies["flux-system-policies"]
     cilium --> certmgr["cert-manager"]
     certmgr --> openbao["openbao"]
 
@@ -384,15 +382,15 @@ flowchart TD
 
     %% CI
     certmgr --> tektonop["tekton-operator"]
-    openbao --> trsecrets["tekton-results-secrets"]
-    eso --> trsecrets
-    db --> trsecrets
     tektonop --> tekton["tekton"]
-    trsecrets --> tekton
+    openbao --> tekton
+    eso --> tekton
+    db --> tekton
+    tekton --> tektonpipelines["tekton-pipelines"]
 ```
 
 * `cilium` requires `gateway-api-crds`, `namespaces` and `cluster-config`.
-* `coredns-custom`, `flux-system-policies`, and `cert-manager` depend on `cilium`.
+* `cert-manager` depends on `cilium`.
 * `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap).
 * `external-secrets` and `gateway` depend on `openbao` (for secrets sync and PKI).
 * `cnpg-operator` depends on `external-secrets`, and `barman-cloud` depends on `cnpg-operator`.
@@ -401,7 +399,7 @@ flowchart TD
 * `seaweedfs` depends on `databases-secrets` (for `seaweedfs-credentials`) and is Ready only after its install hook creates the `cnpg-backups` bucket.
 * `databases` depends on `barman-cloud`, `seaweedfs`, `gateway`, and `databases-secrets`, so the PostGIS cluster starts with its backup bucket already in place.
 * `tekton-operator` depends on `cert-manager`.
-* `tekton-results-secrets` depends on `openbao`, `external-secrets`, and `databases`, whose `tekton_readwrite` role every Tekton Results login joins.
-* `tekton` depends on `tekton-operator` and `tekton-results-secrets`, since the operator holds Tekton Results back until its database Secret exists.
+* `tekton` depends on `tekton-operator`, `openbao`, `external-secrets`, and `databases`. It holds Results' database login, whose ESO objects need OpenBao and ESO, and every Results login joins the `tekton_readwrite` role, which `databases` creates. The operator holds Results back until the login's Secret exists.
+* `tekton-pipelines` depends on `tekton`, which installs the Task and Pipeline CRDs.
 
 Once Flux reports every Kustomization Ready, continue with [Verification](VERIFICATION.md).

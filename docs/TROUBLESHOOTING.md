@@ -146,7 +146,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **How to fix it:** Check the dependency state with `flux get kustomizations -A` and trace the unready upstream Kustomization with `flux describe kustomization <name> -n flux-system`.
 
 * **A `HelmChart`/`GitRepository` reconcile hangs on `dial tcp ...: i/o timeout` fetching from an external host**
-  * **What's happening:** `flux` (`infrastructure/flux-system/flux-networkpolicy.yaml`) lets Flux's controllers reach an explicit FQDN allowlist on 443. A new external Helm/OCI chart source — or even an existing one, if its CDN backend changes — means source-controller is reaching a host that isn't on that list, and Cilium silently drops the connection instead of returning an error. The FQDN that actually needs allowing is often not the chart repo's own domain: `oci://quay.io/...` charts can redirect blob downloads through `cdnNN.quay.io`, and GitHub Pages chart indexes (`*.github.io`) serve release assets from `release-assets.githubusercontent.com`.
+  * **What's happening:** `flux` (`clusters/local/flux-system/flux-networkpolicy.yaml`) lets Flux's controllers reach an explicit FQDN allowlist on 443. A new external Helm/OCI chart source — or even an existing one, if its CDN backend changes — means source-controller is reaching a host that isn't on that list, and Cilium silently drops the connection instead of returning an error. The FQDN that actually needs allowing is often not the chart repo's own domain: `oci://quay.io/...` charts can redirect blob downloads through `cdnNN.quay.io`, and GitHub Pages chart indexes (`*.github.io`) serve release assets from `release-assets.githubusercontent.com`.
   * **How to fix it:** Confirm it's this with `kubectl exec -n kube-system ds/cilium -- cilium-dbg monitor --type drop -v` while forcing a reconcile (`flux reconcile source chart <name> -n <namespace>`) — a `Policy denied` line naming `identity ...->world` confirms it. Add the missing FQDN (`matchName`) or a wildcard (`matchPattern: "*.example.com"`) to `flux`, commit and push it (see the next entry), then reconcile.
 
 * **A `kubectl apply`/patch to a Flux-managed resource works, then silently reverts a few minutes later**
@@ -251,7 +251,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > `DROP ROLE` at lease expiry fails with `cannot be dropped because some objects depend on it` until ownership is reassigned — OpenBao will keep leaving the stale role behind on every expiry until you fix this.
 
 * **Application credentials stop working after a password rotation**
-  * **What's happening:** Superuser credential refreshes and dynamic app-role rotations reload automatically, as `postgres-superuser-credentials` and `postgres-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label (in `apps/databases-secrets/databases-credentials.yaml` and `apps/databases/databases-dynamic-credentials.yaml`), so CNPG picks up the new Secret on its own.
+  * **What's happening:** Superuser credential refreshes and dynamic app-role rotations reload automatically, as `postgres-superuser-credentials` and `postgres-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label (in `apps/databases/secrets/databases-secrets.yaml` and `apps/databases/databases-dynamic-secrets.yaml`), so CNPG picks up the new Secret on its own.
   * **How to fix it:** For the superuser password, update `database/config/postgres-cluster` in OpenBao (via `terraform/openbao/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgres-superuser-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
@@ -276,20 +276,20 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > A mismatch between the Secret's `ACCESS_KEY_ID`/`ACCESS_SECRET_KEY` fields and its `config` field produces no error until an archive is actually attempted — a "healthy" cluster can still be silently failing every backup.
 
 * **`TektonResult` never becomes Ready and no Results pods exist**
-  * **What's happening:** The operator holds Results back until `tekton-results-postgres` exists in `tekton-pipelines`.
-  * **How to fix it:** `flux get kustomization tekton-results-secrets` and `kubectl describe externalsecret tekton-results-postgres -n tekton-pipelines` report what is missing, usually OpenBao auth or the `tekton-results-app-role` role not yet applied by `just bootstrap --tags opentofu`.
+  * **What's happening:** The operator holds Results back until `tekton-results-postgres` exists in `tekton`.
+  * **How to fix it:** `flux get kustomization tekton` and `kubectl describe externalsecret tekton-results-postgres -n tekton` report what is missing, usually OpenBao auth or the `tekton-results-app-role` role not yet applied by `just bootstrap --tags opentofu`.
 
 * **A Results pod is stuck in `Init` or `CreateContainerConfigError`**
   * **What's happening:** The `delete-db-credentials` init container deletes `tekton-results-postgres` so ESO mints a new login, and the kubelet starts the main container once the Secret is back.
-  * **How to fix it:** `kubectl logs <pod> -c delete-db-credentials -n tekton-pipelines` shows RBAC errors from `credential-renewal-rbac.yaml`. If the init container succeeded, `kubectl describe externalsecret tekton-results-postgres -n tekton-pipelines` reports why ESO could not re-create the Secret.
+  * **How to fix it:** `kubectl logs <pod> -c delete-db-credentials -n tekton` shows RBAC errors from `infrastructure/tekton/tekton-results-rbac.yaml`. If the init container succeeded, `kubectl describe externalsecret tekton-results-postgres -n tekton` reports why ESO could not re-create the Secret.
 
 * **The Results API crash-loops on its database connection**
   * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/tls/ca.crt` from `tekton-results-tls`, as a login that must still be within its 32d TTL.
-  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton-pipelines` names the failure. For a certificate error, confirm `tekton-results-tls` was issued by `openbao-pki-issuer` (`kubectl describe certificate tekton-results-tls -n tekton-pipelines`). For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton-pipelines` restarts it with a new login.
+  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `tekton-results-tls` was issued by `openbao-pki-issuer` (`kubectl describe certificate tekton-results-tls -n tekton`). For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it with a new login.
 
 * **PipelineRuns finish but no records appear**
   * **What's happening:** The API serves the certificate it loaded at startup, so an API pod running past `tekton-results-tls` expiry fails the watcher's TLS handshake.
-  * **How to fix it:** `kubectl logs deploy/tekton-results-watcher -n tekton-pipelines` shows the TLS error. `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton-pipelines` loads the renewed certificate; a nightly shutdown already does this.
+  * **How to fix it:** `kubectl logs deploy/tekton-results-watcher -n tekton` shows the TLS error. `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` loads the renewed certificate; a nightly shutdown already does this.
 
 > [!NOTE]
 > Delete Results pods rather than running `kubectl rollout restart`: the operator reverts the restart's template change within a second, so the old pod keeps running.

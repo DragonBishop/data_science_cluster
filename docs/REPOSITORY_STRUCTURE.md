@@ -4,8 +4,37 @@ The directory tree of this repository, then what each directory and file does.
 
 ## Table of Contents
 
+* [Naming Conventions](#naming-conventions)
 * [Directory Tree](#directory-tree)
 * [File Descriptions](#file-descriptions)
+
+## Naming Conventions
+
+* `apps/` holds the Postgres server and its backups: Postgres, SeaweedFS and Barman Cloud. Everything else in the cluster is `infrastructure/`.
+* Each Flux Kustomization is `clusters/local/<name>.yaml` and points at one directory. A namespace with more than one Kustomization keeps one directory, with a subdirectory per extra Kustomization, as `apps/databases/secrets/` does.
+* A manifest file is named `<component>-<role>.yaml`, with the role from this list:
+
+| Role | Holds |
+| --- | --- |
+| `-release` | a HelmRelease and its HelmRepository or OCIRepository |
+| `-values` | a Helm values file for a `configMapGenerator` |
+| `-config` | an operator's own configuration resource, such as the TektonConfig |
+| `-cluster` | a CNPG Cluster, its ObjectStore and ScheduledBackup |
+| `-issuers` | ClusterIssuers, their RBAC and the CA Certificates they sign with |
+| `-tls` | Certificates and Bundles |
+| `-secrets` | an ESO ServiceAccount, SecretStore, ExternalSecrets and generators |
+| `-rbac` | Roles, bindings and ServiceAccounts outside ESO |
+| `-route` | HTTPRoutes and TCPRoutes |
+| `-localhost` | a LocalRedirectPolicy |
+| `-networkpolicy` | a namespace's one policy file ([Network Policy](NETWORKPOLICY.md#conventions)) |
+
+* Some files take another name, for one of five reasons:
+  * **A tool fixes the name.** `kustomization.yaml` is kustomize's, and `standard-install.yaml` keeps its upstream release name.
+  * **The file holds one kind of object, named for that kind.** `namespaces.yaml` holds the Namespaces, `gateway.yaml` the shared Gateway, and `databases.yaml` the CNPG Databases.
+  * **The file holds one object, named for that object.** `coredns-custom.yaml` holds the ConfigMap of that name, which k3s's CoreDNS reads. Each Task file is named after its Task.
+  * **The file is a cluster-config fragment.** Each fragment in `infrastructure/cluster-config/` is named for the kind of value it holds, such as `versions.yaml` or `cpu-memory.yaml`, and `cluster-config.yaml` is the empty base they patch.
+  * **The file holds how the LAN reaches the cluster.** `cilium-lan.yaml` holds the LAN LoadBalancer IP pool and its L2 announcement policy, and `coredns-lan-service.yaml` holds CoreDNS's LAN Service.
+* cluster-config keys are `UPPER_SNAKE_CASE`, and manifests read them as `${KEY}`. Ansible reads a key as the same name in lower case, routed in `playbooks/group_vars/all/cluster_config.yml`.
 
 ## Directory Tree
 
@@ -60,46 +89,41 @@ The directory tree of this repository, then what each directory and file does.
 │               ├── openbao/
 │               └── opentofu/
 ├── apps/
+│   ├── barman-cloud/                    # Barman Cloud CNPG plugin
+│   │   ├── barman-cloud-release.yaml
+│   │   ├── cnpg-system-networkpolicy.yaml
+│   │   └── kustomization.yaml
 │   ├── databases/                       # PostgreSQL clusters and databases, one Flux Kustomization
 │   │   ├── kustomization.yaml
 │   │   ├── databases-cluster.yaml
-│   │   ├── databases-dynamic-credentials.yaml
+│   │   ├── databases-dynamic-secrets.yaml
 │   │   ├── databases-localhost.yaml
 │   │   ├── databases-networkpolicy.yaml
-│   │   ├── databases-tcproute.yaml
+│   │   ├── databases-route.yaml
 │   │   ├── databases-tls.yaml
-│   │   └── databases.yaml
-│   ├── databases-secrets/               # ESO SecretStore + ExternalSecrets, applied before databases
-│   │   ├── eso-setup.yaml
-│   │   ├── kustomization.yaml
-│   │   ├── databases-credentials.yaml
-│   │   └── seaweedfs-credentials.yaml
-│   ├── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases
-│   │   ├── kustomization.yaml
-│   │   ├── seaweedfs-release.yaml
-│   │   └── seaweedfs-tls.yaml
-│   └── tekton-results-secrets/          # Tekton Results credentials, RBAC and API certificate, applied before tekton
-│       ├── credential-renewal-rbac.yaml
-│       ├── eso-setup.yaml
+│   │   ├── databases.yaml
+│   │   └── secrets/                     # ESO SecretStore + ExternalSecrets, applied before databases
+│   │       ├── databases-secrets.yaml
+│   │       └── kustomization.yaml
+│   └── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases
 │       ├── kustomization.yaml
-│       ├── tekton-results-credentials.yaml
-│       └── tekton-results-tls.yaml
+│       ├── seaweedfs-release.yaml
+│       └── seaweedfs-tls.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
-│       ├── barman-cloud.yaml            # Kustomization → infrastructure/barman-cloud/
+│       ├── barman-cloud.yaml            # Kustomization → apps/barman-cloud/
 │       ├── cert-manager.yaml            # Kustomization → infrastructure/cert-manager/
 │       ├── cilium.yaml                  # Kustomization → infrastructure/cilium/
 │       ├── cluster-config.yaml          # Kustomization → infrastructure/cluster-config/
 │       ├── cnpg-operator.yaml           # Kustomization → infrastructure/cnpg-operator/
-│       ├── coredns-custom.yaml          # Kustomization → infrastructure/coredns-custom/
-│       ├── databases-secrets.yaml       # Kustomization → apps/databases-secrets/
+│       ├── databases-secrets.yaml       # Kustomization → apps/databases/secrets/
 │       ├── databases.yaml               # Kustomization → apps/databases/
 │       ├── external-secrets.yaml        # Kustomization → infrastructure/external-secrets/
-│       ├── flux-system/                 # **DO NOT EDIT** Written by `flux bootstrap`
-│       │   ├── gotk-components.yaml
-│       │   ├── gotk-sync.yaml
+│       ├── flux-system/                 # Flux's controllers, source and network policy
+│       │   ├── flux-networkpolicy.yaml
+│       │   ├── gotk-components.yaml     # **DO NOT EDIT** Written by `flux bootstrap`
+│       │   ├── gotk-sync.yaml           # **DO NOT EDIT** Written by `flux bootstrap`
 │       │   └── kustomization.yaml
-│       ├── flux-system-policies.yaml    # Kustomization → infrastructure/flux-system/
 │       ├── gateway-api-crds.yaml        # Kustomization → infrastructure/gateway-api-crds/
 │       ├── gateway.yaml                 # Kustomization → infrastructure/gateway/
 │       ├── hubble.yaml                  # Kustomization → infrastructure/hubble/
@@ -107,7 +131,7 @@ The directory tree of this repository, then what each directory and file does.
 │       ├── openbao.yaml                 # Kustomization → infrastructure/openbao/
 │       ├── seaweedfs.yaml               # Kustomization → apps/seaweedfs/
 │       ├── tekton-operator.yaml         # Kustomization → infrastructure/tekton-operator/
-│       ├── tekton-results-secrets.yaml  # Kustomization → apps/tekton-results-secrets/
+│       ├── tekton-pipelines.yaml        # Kustomization → infrastructure/tekton-pipelines/
 │       └── tekton.yaml                  # Kustomization → infrastructure/tekton/
 ├── docs/                                # Project documentation; README.md stays at the root
 │   ├── BACKUPS_RESTORE.md               # Restoring the database from SeaweedFS
@@ -119,21 +143,18 @@ The directory tree of this repository, then what each directory and file does.
 │   ├── TROUBLESHOOTING.md               # Symptom → cause → fix, by subsystem
 │   └── VERIFICATION.md                  # Checks after the bootstrap, once Flux has reconciled
 ├── infrastructure/                      # Cluster-wide platform components
-│   ├── barman-cloud/
-│   │   ├── barman-cloud-networkpolicy.yaml
-│   │   ├── barman-cloud-release.yaml
-│   │   └── kustomization.yaml
 │   ├── cert-manager/
 │   │   ├── cert-manager-release.yaml
 │   │   └── kustomization.yaml
 │   ├── cilium/
 │   │   ├── cilium-release.yaml
 │   │   ├── cilium-values.yaml
-│   │   ├── clusterwide-networkpolicy.yaml
-│   │   ├── k3s-components-networkpolicy.yaml
-│   │   ├── kustomization.yaml
-│   │   ├── lan-l2-policy.yaml
-│   │   └── lan-lb-pool.yaml
+│   │   ├── cilium-lan.yaml
+│   │   ├── cilium-clusterwide-networkpolicy.yaml
+│   │   ├── coredns-custom.yaml          # internal zone on k3s's own CoreDNS
+│   │   ├── coredns-lan-service.yaml
+│   │   ├── kube-system-networkpolicy.yaml
+│   │   └── kustomization.yaml
 │   ├── cluster-config/                  # Centralized cluster topology and configuration ConfigMap
 │   │   ├── certificates.yaml
 │   │   ├── cluster-config.yaml          # empty base; each fragment is a patch
@@ -148,18 +169,10 @@ The directory tree of this repository, then what each directory and file does.
 │   │   ├── timeouts.yaml
 │   │   └── versions.yaml
 │   ├── cnpg-operator/
-│   │   ├── cnpg-release.yaml
-│   │   └── kustomization.yaml
-│   ├── coredns-custom/                  # internal zone on k3s's own CoreDNS
-│   │   ├── coredns-custom.yaml
-│   │   ├── coredns-lan-service.yaml
-│   │   ├── coredns-networkpolicy.yaml
+│   │   ├── cnpg-operator-release.yaml
 │   │   └── kustomization.yaml
 │   ├── external-secrets/
 │   │   ├── external-secrets-release.yaml
-│   │   └── kustomization.yaml
-│   ├── flux-system/                     # Flux's own network policy
-│   │   ├── flux-networkpolicy.yaml
 │   │   └── kustomization.yaml
 │   ├── gateway/
 │   │   ├── gateway-tls.yaml
@@ -169,33 +182,34 @@ The directory tree of this repository, then what each directory and file does.
 │   │   ├── kustomization.yaml
 │   │   └── standard-install.yaml        # Vendored Gateway API CRDs
 │   ├── hubble/
-│   │   ├── cilium-values-hubble.yaml
 │   │   ├── hubble-localhost.yaml
-│   │   ├── hubble-networkpolicy.yaml
+│   │   ├── hubble-values.yaml
 │   │   └── kustomization.yaml
 │   ├── namespaces/
 │   │   ├── kustomization.yaml
 │   │   └── namespaces.yaml
 │   ├── openbao/
 │   │   ├── kustomization.yaml
+│   │   ├── openbao-issuers.yaml
 │   │   ├── openbao-localhost.yaml
 │   │   ├── openbao-networkpolicy.yaml
 │   │   ├── openbao-release.yaml
 │   │   ├── openbao-tls.yaml
 │   │   └── openbao-values.yaml
-│   ├── tekton/                          # TektonConfig into tekton-pipelines; runs go in tekton-runs
+│   ├── tekton/                          # TektonConfig into tekton, and Results' database login
 │   │   ├── kustomization.yaml
+│   │   ├── tekton-config.yaml
 │   │   ├── tekton-networkpolicy.yaml
-│   │   ├── tektonconfig.yaml
-│   │   ├── pipelines/                   # Pipeline definitions and their run configuration
-│   │   │   └── README.md
+│   │   ├── tekton-results-rbac.yaml
+│   │   ├── tekton-results-secrets.yaml
+│   │   └── tekton-results-tls.yaml
+│   ├── tekton-pipelines/                # Pipelines and Tasks, and the runs they start
+│   │   ├── kustomization.yaml
+│   │   ├── tekton-pipelines-networkpolicy.yaml
+│   │   ├── pipelines/                   # one folder per Pipeline, with its ServiceAccount and RBAC
 │   │   └── tasks/                       # reusable Task definitions
 │   │       ├── fetch-source.yaml
-│   │       ├── flux-ready.yaml
-│   │       ├── gateway-tls.yaml
-│   │       ├── hubble-drops.yaml
-│   │       ├── service-tls.yaml
-│   │       └── workloads.yaml
+│   │       └── kustomization.yaml
 │   ├── tekton-operator/
 │   │   ├── kustomization.yaml
 │   │   └── tekton-operator-release.yaml
@@ -270,35 +284,29 @@ The directory tree of this repository, then what each directory and file does.
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
   * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster` (with `tekton_readwrite` as a managed role), its `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup`.
   * **`databases.yaml`**: CNPG `Database` resources for `data_science` (with its schemas and PostGIS extensions) and `tekton_results`.
-  * **`databases-dynamic-credentials.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `postgres-app-dynamic-credentials`, a login OpenBao creates in Postgres, so it deploys with the PostgreSQL cluster.
+  * **`databases-dynamic-secrets.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `postgres-app-dynamic-credentials`, a login OpenBao creates in Postgres, so it deploys with the PostgreSQL cluster.
   * **`databases-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
   * **`databases-networkpolicy.yaml`**: Accepts replication between instances, the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
-  * **`databases-tcproute.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
+  * **`databases-route.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
   * **`databases-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgres.internal`, and the shared Gateway's static LAN IP.
-* **`apps/databases-secrets/`** - The ESO SecretStore and the static ExternalSecrets for `databases`, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after those Secrets exist. The dynamic `postgres-app-dynamic-credentials` lives in `apps/databases/databases-dynamic-credentials.yaml`, because OpenBao needs `postgres-cluster-rw` to issue it.
-  * **`eso-setup.yaml`**: The `databases-openbao-auth` `ServiceAccount` and the `openbao` `SecretStore` (Kubernetes auth to OpenBao).
-  * **`databases-credentials.yaml`**: `ExternalSecret` syncing the PostgreSQL superuser credentials from the existing `secret/postgres` OpenBao entry into `postgres-superuser-credentials`.
-  * **`seaweedfs-credentials.yaml`**: `ExternalSecret` syncing S3 credentials from `secret/seaweedfs`.
+* **`apps/databases/secrets/`** - The ESO SecretStore and the static ExternalSecrets for `databases`, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after those Secrets exist. The dynamic `postgres-app-dynamic-credentials` lives in `apps/databases/databases-dynamic-secrets.yaml`, because OpenBao needs `postgres-cluster-rw` to issue it.
+  * **`databases-secrets.yaml`**: The `databases-openbao-auth` `ServiceAccount`, the `openbao` `SecretStore` (Kubernetes auth to OpenBao), and the `ExternalSecret`s `postgres-superuser-credentials` (from `secret/postgres`) and `seaweedfs-credentials` (from `secret/seaweedfs`).
+* **`apps/barman-cloud/`** - The Barman Cloud CNPG plugin, in its own Flux `Kustomization` (`clusters/local/barman-cloud.yaml`).
+  * **`barman-cloud-release.yaml`**: `HelmRelease` for the plugin in `cnpg-system`.
+  * **`cnpg-system-networkpolicy.yaml`**: `cnpg-system`'s policy file; the CNPG operator reaches the plugin.
 * **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`) so `databases` is applied only after the `cnpg-backups` bucket exists.
   * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, `cnpg-backups` bucket created by the chart's post-install hook, and the chart's own network policies, which also admit Postgres backups to S3.
   * **`seaweedfs-tls.yaml`**: cert-manager `Certificate` requesting the SeaweedFS S3 server certificate from `openbao-pki-issuer`.
-* **`apps/tekton-results-secrets/`** - Everything Tekton Results needs before it starts, in its own Flux `Kustomization` (`clusters/local/tekton-results-secrets.yaml`) so `tekton` is applied only after the database Secret exists.
-  * **`credential-renewal-rbac.yaml`**: `Role` and `RoleBinding` letting the Results API and retention-policy agent delete `tekton-results-postgres` at startup, so each pod start gets a new OpenBao login.
-  * **`eso-setup.yaml`**: The `tekton-results-openbao-auth` `ServiceAccount` ESO presents to OpenBao.
-  * **`tekton-results-credentials.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `tekton-results-postgres`, refreshed only when the Secret is missing.
-  * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`; its `ca.crt` also verifies Postgres.
 * **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/` and `apps/` below.
-  * **`barman-cloud.yaml`**: Kustomization → `infrastructure/barman-cloud/`
+  * **`barman-cloud.yaml`**: Kustomization → `apps/barman-cloud/`
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
   * **`cilium.yaml`**: Kustomization → `infrastructure/cilium/`
   * **`cluster-config.yaml`**: Kustomization → `infrastructure/cluster-config/`
   * **`cnpg-operator.yaml`**: Kustomization → `infrastructure/cnpg-operator/`
-  * **`coredns-custom.yaml`**: Kustomization → `infrastructure/coredns-custom/`
-  * **`databases-secrets.yaml`**: Kustomization → `apps/databases-secrets/`
+  * **`databases-secrets.yaml`**: Kustomization → `apps/databases/secrets/`
   * **`databases.yaml`**: Kustomization → `apps/databases/`
   * **`external-secrets.yaml`**: Kustomization → `infrastructure/external-secrets/`
-  * **`flux-system/`**: (`gotk-components.yaml`, `gotk-sync.yaml`, `kustomization.yaml`): Flux's own controllers and `GitRepository` source, written by `flux bootstrap` (do not edit directly).
-  * **`flux-system-policies.yaml`**: Kustomization → `infrastructure/flux-system/`
+  * **`flux-system/`**: (`flux-networkpolicy.yaml`, `gotk-components.yaml`, `gotk-sync.yaml`, `kustomization.yaml`): Flux's own controllers, its `GitRepository` source and the `flux` network policy, applied together by the root `flux-system` Kustomization. `flux bootstrap` writes the `gotk-*` files (do not edit them directly).
   * **`gateway-api-crds.yaml`**: Kustomization → `infrastructure/gateway-api-crds/`
   * **`gateway.yaml`**: Kustomization → `infrastructure/gateway/`
   * **`hubble.yaml`**: Kustomization → `infrastructure/hubble/`
@@ -306,7 +314,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`openbao.yaml`**: Kustomization → `infrastructure/openbao/`
   * **`seaweedfs.yaml`**: Kustomization → `apps/seaweedfs/`
   * **`tekton-operator.yaml`**: Kustomization → `infrastructure/tekton-operator/`
-  * **`tekton-results-secrets.yaml`**: Kustomization → `apps/tekton-results-secrets/`
+  * **`tekton-pipelines.yaml`**: Kustomization → `infrastructure/tekton-pipelines/`
   * **`tekton.yaml`**: Kustomization → `infrastructure/tekton/`
 * **`docs/`** - Project documentation, linked from the README's "Documentation" section.
   * **`BACKUPS_RESTORE.md`**: How backups reach SeaweedFS, and how to restore the database from them into a new cluster.
@@ -318,20 +326,23 @@ The directory tree of this repository, then what each directory and file does.
   * **`TROUBLESHOOTING.md`**: Symptom, cause and fix, by subsystem.
   * **`VERIFICATION.md`**: The checks to run once Flux has reconciled the bootstrap: the database, dynamic credentials, Gateway routing, Hubble, cluster health and backups.
 * **`infrastructure/`** - Cluster-wide platform components, listed alphabetically below:
-  * **`barman-cloud/`**: `barman-cloud-networkpolicy.yaml` (the CNPG operator reaches the plugin), `barman-cloud-release.yaml`, `kustomization.yaml`
   * **`cert-manager/`**: `cert-manager-release.yaml`, `kustomization.yaml`
-  * **`cilium/`**: `cilium-release.yaml`, `cilium-values.yaml`, `clusterwide-networkpolicy.yaml`, `k3s-components-networkpolicy.yaml`, `kustomization.yaml`, `lan-l2-policy.yaml`, `lan-lb-pool.yaml`
+  * **`cilium/`**: `cilium-lan.yaml` (LAN LoadBalancer IP pool and L2 announcements), `cilium-release.yaml`, `cilium-values.yaml`, `cilium-clusterwide-networkpolicy.yaml` (the cluster's one policy file), `coredns-custom.yaml` and `coredns-lan-service.yaml` (internal zone on CoreDNS), `kube-system-networkpolicy.yaml` (`kube-system`'s policy file), `kustomization.yaml`
   * **`cluster-config/`**: `cluster-config.yaml` (empty base), `kustomization.yaml`, and one fragment per kind of value: `certificates.yaml`, `cpu-memory.yaml`, `databases.yaml`, `networking.yaml`, `replicas.yaml`, `retention.yaml`, `schedules.yaml`, `storage.yaml`, `timeouts.yaml`, `versions.yaml` (centralized configuration ConfigMap)
-  * **`cnpg-operator/`**: `cnpg-release.yaml`, `kustomization.yaml`
-  * **`coredns-custom/`**: `coredns-custom.yaml`, `coredns-lan-service.yaml`, `coredns-networkpolicy.yaml`, `kustomization.yaml` (internal zone on CoreDNS)
+  * **`cnpg-operator/`**: `cnpg-operator-release.yaml`, `kustomization.yaml`
   * **`external-secrets/`**: `external-secrets-release.yaml`, `kustomization.yaml`
-  * **`flux-system/`**: `flux-networkpolicy.yaml` (the `flux` policy in `flux-system`), `kustomization.yaml`
   * **`gateway/`**: `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
   * **`gateway-api-crds/`**: `kustomization.yaml`, `standard-install.yaml` (vendored Gateway API CRDs)
-  * **`hubble/`**: `cilium-values-hubble.yaml`, `hubble-localhost.yaml`, `hubble-networkpolicy.yaml`, `kustomization.yaml`
+  * **`hubble/`**: `hubble-localhost.yaml`, `hubble-values.yaml`, `kustomization.yaml`
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
-  * **`openbao/`**: `kustomization.yaml`, `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
-  * **`tekton/`**: One Kustomization for all of Tekton. The `TektonConfig` installs every component into `tekton-pipelines`, and PipelineRuns and TaskRuns go in `tekton-runs`, apart from the controllers' Secrets. It holds `tektonconfig.yaml`, `tekton-networkpolicy.yaml` (three separate Cilium policies in one file), reusable Task definitions in `tasks/`, and Pipeline definitions and their run configuration in `pipelines/`.
+  * **`openbao/`**: `kustomization.yaml`, `openbao-issuers.yaml` (the OpenBao ClusterIssuers, their token RBAC and the local CA), `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`
+  * **`tekton/`**: The `TektonConfig` installs every Tekton component, Results included, into `tekton`. Tasks, Pipelines and their runs go in `tekton-pipelines`, apart from the controllers and Results' Secrets.
+    * **`tekton-config.yaml`**: The `TektonConfig`.
+    * **`tekton-networkpolicy.yaml`**: `tekton`'s policy file: the remote resolvers reach their source hosts, and the Results watcher reaches the Results API.
+    * **`tekton-results-rbac.yaml`**: `Role` and `RoleBinding` letting the Results API and retention-policy agent delete `tekton-results-postgres` at startup, so each pod start gets a new OpenBao login.
+    * **`tekton-results-secrets.yaml`**: The `tekton-results-openbao-auth` `ServiceAccount` ESO presents to OpenBao, and the `VaultDynamicSecret` generator and `ExternalSecret` writing `tekton-results-postgres`, refreshed only when the Secret is missing.
+    * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`; its `ca.crt` also verifies Postgres.
+  * **`tekton-pipelines/`**: `kustomization.yaml` and `tekton-pipelines-networkpolicy.yaml` (`tekton-pipelines`' policy file: TaskRun pods reach their source hosts), applied by the `tekton-pipelines` Kustomization. Pipeline folders in `pipelines/`, one per Pipeline with its ServiceAccount and RBAC, and reusable Task definitions in `tasks/` (`fetch-source.yaml`, `kustomization.yaml`), which no Kustomization applies yet.
   * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`. The Tekton Operator in the `tekton-operator` namespace. It is its own Kustomization so the `TektonConfig` CRD exists before `tekton` applies one.
 * **`src/`**
   * **`src/bash/`**:
