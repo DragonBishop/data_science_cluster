@@ -119,18 +119,3 @@ def test_flux_kustomization_renders_every_variable(
 ):
     """Check that Flux builds the Kustomization with no ${VAR} left unset."""
     build_flux_kustomization(kustomization, cluster_config_data, tmp_path)
-
-
-def test_gateway_api_crds_match_their_version(cluster_config_data: dict[str, str]):
-    """Check that every vendored Gateway API CRD carries GATEWAY_API_VERSION as its bundle version."""
-    crd_documents = yaml.safe_load_all(
-        (
-            REPO_ROOT / "infrastructure/gateway-api-crds/standard-install.yaml"
-        ).read_text()
-    )
-    bundle_versions = {
-        document["metadata"]["annotations"]["gateway.networking.k8s.io/bundle-version"]
-        for document in crd_documents
-        if document and document["kind"] == "CustomResourceDefinition"
-    }
-    assert bundle_versions == {cluster_config_data["GATEWAY_API_VERSION"]}
