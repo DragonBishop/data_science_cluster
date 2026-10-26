@@ -14,17 +14,15 @@
   kubernetes.core.k8s:
     state: present
     definition: >-
-      {{ lookup('file', repo_root + '/infrastructure/cilium/clusterwide-networkpolicy.yaml')
+      {{ lookup('file', repo_root + '/infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml')
       | regex_replace('\$\{LAN_CIDR\}', lan_cidr) }}
 
-- name: Apply CoreDNS network policy
+- name: Apply kube-system network policy
   kubernetes.core.k8s:
     state: present
-    src: "{{ repo_root }}/infrastructure/coredns-custom/coredns-networkpolicy.yaml"
+    src: "{{ repo_root }}/infrastructure/cilium/kube-system-networkpolicy.yaml"
 
 - name: Apply flux network policy
   kubernetes.core.k8s:
     state: present
-    definition: >-
-      {{ lookup('file', repo_root + '/infrastructure/flux-system/flux-networkpolicy.yaml')
-      | regex_replace('\$\{GIT_FORGE_HOST\}', git_forge_host) }}
+    src: "{{ repo_root }}/clusters/local/flux-system/flux-networkpolicy.yaml"
