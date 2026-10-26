@@ -1,0 +1,40 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: fetch-source
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: repository
+      description: A GitRepository name in flux-system
+      type: string
+  workspaces:
+    - name: source
+  results:
+    - name: commit
+      type: string    # name, type; a step writes $(results.<name>.path)
+    - name: started_at
+      type: string
+  steps:
+    - name: record_time
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        started_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+        printf '%s' "$started_at" > "$(results.started_at.path)"
+
+    - name: fetch
+      image: alpine/k8s
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: REPOSITORY
+          value: $(params.repository)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        kubectl -n flux-system get gitrepository "$REPOSITORY" -o jsonpath=' \
+        {.status.artifact.url}{\n} \
+        {.status.artifact.revision}{\n} \
+        {.status.conditions[?(@.type=="Ready")].message}{"\n"}'

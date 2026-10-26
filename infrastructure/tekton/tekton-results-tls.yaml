@@ -3,7 +3,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: tekton-results-tls
-  namespace: tekton-pipelines
+  namespace: tekton
 spec:
   secretName: tekton-results-tls
   duration: ${OPENBAO_PKI_CERT_DURATION}
@@ -12,7 +12,7 @@ spec:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
   dnsNames:
-    - tekton-results-api-service.tekton-pipelines.svc.cluster.local
+    - tekton-results-api-service.tekton.svc.cluster.local
   issuerRef:
     name: openbao-pki-issuer
     kind: ClusterIssuer

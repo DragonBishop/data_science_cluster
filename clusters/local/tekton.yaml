@@ -7,8 +7,10 @@ spec:
   interval: 1h
   dependsOn:
     - name: tekton-operator
-    # The operator holds Results back until its database Secret exists
-    - name: tekton-results-secrets
+    - name: openbao
+    - name: external-secrets
+    # Dynamic logins join tekton_readwrite, which the databases Kustomization creates
+    - name: databases
     - name: cluster-config
   sourceRef:
     kind: GitRepository

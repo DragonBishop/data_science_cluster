@@ -29,14 +29,13 @@ spec:
     name: openbao-pki-issuer
     kind: ClusterIssuer
 ---
----
 # CA trust material for Tekton TaskRuns connecting to PostGIS.
 # The OpenBao PKI issuer supplies the CA chain used to populate ca.crt.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: postgres-ca-bundle
-  namespace: tekton-runs
+  namespace: tekton-pipelines
 spec:
   commonName: postgres-ca-bundle.internal
   secretName: postgres-ca-bundle

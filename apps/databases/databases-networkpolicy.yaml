@@ -35,7 +35,7 @@ spec:
     # Tekton Results stores PipelineRun and TaskRun records
     - fromEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+            k8s:io.kubernetes.pod.namespace: tekton
           matchExpressions:
             - key: app.kubernetes.io/name
               operator: In

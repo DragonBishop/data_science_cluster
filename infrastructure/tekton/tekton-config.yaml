@@ -3,7 +3,7 @@ kind: TektonConfig
 metadata:
   name: config
 spec:
-  targetNamespace: tekton-pipelines
+  targetNamespace: tekton
   profile: basic
   pipeline:
     default-timeout-minutes: ${TEKTON_DEFAULT_TIMEOUT_MINUTES}

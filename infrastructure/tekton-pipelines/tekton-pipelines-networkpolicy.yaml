@@ -1,0 +1,24 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: taskrun
+  namespace: tekton-pipelines
+spec:
+  # TaskRun pods
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: tekton-pipelines
+  egress:
+    - toFQDNs:
+        # Git forge: clone, API, codeload
+        - matchName: "github.com"
+        - matchPattern: "*.github.com"
+        # GitHub: raw files and release downloads
+        - matchPattern: "*.githubusercontent.com"
+        # PyPI: index and package files
+        - matchName: "pypi.org"
+        - matchName: "files.pythonhosted.org"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

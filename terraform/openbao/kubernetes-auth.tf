@@ -41,7 +41,7 @@ resource "vault_kubernetes_auth_backend_role" "tekton_results" {
   backend                          = vault_auth_backend.kubernetes.path
   role_name                        = "tekton-results-role"
   bound_service_account_names      = ["tekton-results-openbao-auth"]
-  bound_service_account_namespaces = ["tekton-pipelines"]
+  bound_service_account_namespaces = ["tekton"]
   audience                         = "openbao"
   token_policies                   = [vault_policy.tekton_results.name]
   token_ttl                        = 86400 # 24h

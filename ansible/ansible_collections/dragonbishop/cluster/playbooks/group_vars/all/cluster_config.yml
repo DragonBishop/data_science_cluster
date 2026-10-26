@@ -10,7 +10,6 @@ cilium_operator_mem_limit: "{{ cluster_config.CILIUM_OPERATOR_MEM_LIMIT }}"
 cilium_operator_mem_request: "{{ cluster_config.CILIUM_OPERATOR_MEM_REQUEST }}"
 
 # --- cluster-config/networking.yaml ---
-git_forge_host: "{{ cluster_config.GIT_FORGE_HOST }}"
 k3s_api_host: "{{ cluster_config.K3S_API_HOST }}"
 k3s_api_port: "{{ cluster_config.K3S_API_PORT }}"
 lan_cidr: "{{ cluster_config.LAN_CIDR }}"
