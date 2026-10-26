@@ -84,3 +84,60 @@
         that:
           - "'vault_mount.db' in opentofu_state_list.stdout_lines"
         fail_msg: the terraform/openbao state has no vault_mount.db
+
+- name: Values the bootstrap shares with Flux
+  hosts: localhost
+  gather_facts: false
+  vars:
+    routed_variable_names: >-
+      {{ lookup('ansible.builtin.file', playbook_dir ~ '/../../../playbooks/group_vars/all/cluster_config.yml')
+      | from_yaml | list }}
+  tasks:
+    - name: Wait for Flux to apply cluster-config and Cilium's values
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: "{{ item }}"
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+      loop:
+        - cluster-config
+        - cilium
+
+    - name: Read the live cluster-config ConfigMap
+      kubernetes.core.k8s_info:
+        kind: ConfigMap
+        name: cluster-config
+        namespace: flux-system
+      register: live_cluster_config
+
+    - name: It should route every Ansible variable to its live cluster-config value
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.vars', item) == live_cluster_config.resources[0].data.get(item | upper)
+        fail_msg: >-
+          {{ item }} is {{ lookup('ansible.builtin.vars', item) }},
+          but cluster-config holds {{ live_cluster_config.resources[0].data.get(item | upper, 'no ' ~ item | upper) }}
+      loop: "{{ routed_variable_names }}"
+
+    - name: Render the Cilium values the cilium role installs
+      ansible.builtin.import_role:
+        name: dragonbishop.cluster.cilium
+        tasks_from: render_values
+
+    - name: Read the cilium-values ConfigMap Flux applies
+      kubernetes.core.k8s_info:
+        kind: ConfigMap
+        name: cilium-values
+        namespace: kube-system
+      register: live_cilium_values
+
+    - name: It should install Cilium with the values Flux reconciles to
+      ansible.builtin.assert:
+        that:
+          - (cilium_values_substituted.stdout | from_yaml) == (live_cilium_values.resources[0].data['values.yaml'] | from_yaml)
+        fail_msg: the cilium role's values differ from the cilium-values ConfigMap, so Flux reconciles Cilium away from them

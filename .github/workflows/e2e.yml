@@ -97,4 +97,5 @@ jobs:
             kubectl -n flux-system logs deploy/$controller --tail=200 || true
           done
           kubectl get pods -A || true
+          kubectl get clustersecretstores,secretstores,externalsecrets -A || true
           kubectl get events -A --sort-by=.lastTimestamp | tail -n 100 || true
