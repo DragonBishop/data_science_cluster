@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # stop-cluster.sh: Hibernates CloudNativePG cluster and stops k3s.
 #

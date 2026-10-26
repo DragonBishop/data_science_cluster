@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # uninstall-cluster.sh: Tears down k3s and clears stale local cluster state.
 #

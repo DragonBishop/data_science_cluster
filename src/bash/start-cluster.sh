@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # start-cluster.sh: Starts k3s, unseals the in-cluster OpenBao, and resumes CNPG cluster.
 #
