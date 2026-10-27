@@ -304,14 +304,14 @@ sudo reboot
 
 ### Data Migration (if restoring an existing database)
 
-Have your `.dump` file prepared to restore once the CNPG cluster exists (see [Verify Database Deployment](VERIFICATION.md#verify-database-deployment)):
+Have a plain-SQL dump ready to restore once the CNPG cluster exists (see [Verify Database Deployment](VERIFICATION.md#verify-database-deployment)). Make it with `pg_dump --no-owner --no-privileges`, which leaves ownership and grants out of the file:
 
 ```bash
-kubectl exec -i postgres-cluster-1 -n databases -- pg_restore -U postgres -d data_science --no-owner --no-privileges \
-  < /mnt/your/mount/path/data_science_backup_*.dump
+kubectl cnpg psql postgres-cluster -n databases --tty=false -- \
+  -d data_science -c 'SET ROLE app_readwrite' -f - < /mnt/your/mount/path/data_science_backup.sql
 ```
 
-The `--no-owner --no-privileges` flags ensure restored objects inherit ownership under `app_readwrite`.
+`kubectl cnpg psql` runs `psql` in the primary and passes it the file on stdin. `SET ROLE app_readwrite` runs first in the same session, so every restored object belongs to `app_readwrite`.
 
 ## Cluster Bootstrap
 

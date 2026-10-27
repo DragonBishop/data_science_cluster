@@ -4,5 +4,4 @@ resources:
   - tekton-config.yaml
   - tekton-results-secrets.yaml
   - tekton-results-tls.yaml
-  - tekton-results-rbac.yaml
   - tekton-networkpolicy.yaml

@@ -82,7 +82,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **What's happening:** The script could not verify that the database shut down cleanly.
   * **How to check if it actually failed:** On the next start, run `kubectl logs -n databases postgres-cluster-1 -c postgres | grep -i "cluster state"`. `Database cluster state: shut down` with a timestamp means the shutdown was clean and the script did not wait long enough to observe it.
   * **If it genuinely failed, it's usually one of three things:**
-    1. **Idle database connections:** `spec.smartShutdownTimeout` in `apps/databases/databases-cluster.yaml` is set to 15 (the CNPG default is 180). Postgres waits that long for existing connections to close before escalating to a fast shutdown, which disconnects them. Check for active connections before stopping: `kubectl exec -n databases postgres-cluster-1 -c postgres -- psql -U postgres -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`
+    1. **Idle database connections:** `spec.smartShutdownTimeout` in `apps/databases/databases-cluster.yaml` is set to 15 (the CNPG default is 180). Postgres waits that long for existing connections to close before escalating to a fast shutdown, which disconnects them. Check for active connections before stopping: `kubectl cnpg psql postgres-cluster -n databases -- -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`
     2. **CloudNativePG (CNPG) operator isn't available:** The shutdown command was sent, but the operator was not running to process it. The stop script usually catches this first and halts with a specific warning.
     3. **The cluster isn't healthy:** A cluster will not hibernate from a broken state, such as a pod in CrashLoop or mid-boot. Check with `kubectl cnpg status postgres-cluster -n databases`.
 
@@ -220,9 +220,6 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **What's happening:** OpenBao's intermediate CA enforces RFC 5280 Name Constraints (`permitted_dns_domains`) and role-level domain allowlists (`allowed_domains` in `terraform/openbao/pki.tf`).
   * **How to fix it:** Check `kubectl describe certificaterequest -n <namespace>`. If OpenBao rejects the CSR, confirm the requested DNS name or IP SAN is explicitly listed in `permitted_dns_domains` and `allowed_domains` in `terraform/openbao/pki.tf`, and re-apply `tofu -chdir=terraform/openbao apply`. Confirm `openbao-pki-issuer` ClusterIssuer reports `Ready` (`kubectl describe clusterissuer openbao-pki-issuer`).
 
-* **Dynamic credentials never reach a "Ready" state**
-  * **How to fix it:** `kubectl describe externalsecret postgres-app-dynamic-credentials -n databases` reports OpenBao's error.
-
 ---
 
 ## Database Storage
@@ -251,8 +248,8 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > `DROP ROLE` at lease expiry fails with `cannot be dropped because some objects depend on it` until ownership is reassigned — OpenBao will keep leaving the stale role behind on every expiry until you fix this.
 
 * **Application credentials stop working after a password rotation**
-  * **What's happening:** Superuser credential refreshes and dynamic app-role rotations reload automatically, as `postgres-superuser-credentials` and `postgres-app-dynamic-credentials` both carry a permanent `cnpg.io/reload=true` label (in `apps/databases/secrets/databases-secrets.yaml` and `apps/databases/databases-dynamic-secrets.yaml`), so CNPG picks up the new Secret on its own.
-  * **How to fix it:** For the superuser password, update `database/config/postgres-cluster` in OpenBao (via `terraform/openbao/database.tf`). For app-role credentials still not picking up a rotation, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgres-superuser-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
+  * **What's happening:** Superuser credential refreshes reload automatically, as `postgres-superuser-credentials` carries a permanent `cnpg.io/reload=true` label (in `apps/databases/secrets/databases-secrets.yaml`), so CNPG picks up the new Secret on its own.
+  * **How to fix it:** For the superuser password, update `database/config/postgres-cluster` in OpenBao (via `terraform/openbao/database.tf`). If a refresh still isn't picked up, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgres-superuser-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
@@ -279,12 +276,12 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **What's happening:** The operator holds Results back until `tekton-results-postgres` exists in `tekton`.
   * **How to fix it:** `flux get kustomization tekton` and `kubectl describe externalsecret tekton-results-postgres -n tekton` report what is missing, usually OpenBao auth or the `tekton-results-app-role` role not yet applied by `just bootstrap --tags opentofu`.
 
-* **A Results pod is stuck in `Init` or `CreateContainerConfigError`**
-  * **What's happening:** The `delete-db-credentials` init container deletes `tekton-results-postgres` so ESO mints a new login, and the kubelet starts the main container once the Secret is back.
-  * **How to fix it:** `kubectl logs <pod> -c delete-db-credentials -n tekton` shows RBAC errors from `infrastructure/tekton/tekton-results-rbac.yaml`. If the init container succeeded, `kubectl describe externalsecret tekton-results-postgres -n tekton` reports why ESO could not re-create the Secret.
+* **A Results pod is stuck in `CreateContainerConfigError`**
+  * **What's happening:** The pod reads its database login from Secret `tekton-results-postgres`, which ESO writes from OpenBao. The kubelet starts the container once the Secret exists.
+  * **How to fix it:** `kubectl describe externalsecret tekton-results-postgres -n tekton` reports why ESO could not write the Secret, usually OpenBao auth or the `tekton-results-app-role` role.
 
 * **The Results API crash-loops on its database connection**
-  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/postgres-ca/ca.crt` from ConfigMap `postgres-ca`, as a login that must still be within its 32d TTL.
+  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/postgres-ca/ca.crt` from ConfigMap `postgres-ca`, as a login that must still be within its 4-day lease. ESO writes a new login every day, and the pod reads it at its next start.
   * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `postgres-server-cert` was issued by `postgres-ca-issuer` (`kubectl describe certificate postgres-server-cert -n databases`) and that ConfigMap `postgres-ca` exists in `tekton`. For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it with a new login.
 
 * **PipelineRuns finish but no records appear**

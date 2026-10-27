@@ -110,11 +110,6 @@ data:
   TEKTON_RESULTS_WATCHER_MEM_LIMIT: "120Mi"
   TEKTON_RESULTS_WATCHER_MEM_REQUEST: "40Mi"
 
-  # --- Tekton Results credential init containers ---
-  TEKTON_RESULTS_INIT_CPU_REQUEST: "5m"
-  TEKTON_RESULTS_INIT_MEM_LIMIT: "96Mi"
-  TEKTON_RESULTS_INIT_MEM_REQUEST: "48Mi"
-
   # --- Tekton steps (defaults for steps that set none) ---
   TEKTON_STEP_CPU_REQUEST: "50m"
   TEKTON_STEP_MEM_LIMIT: "1Gi"

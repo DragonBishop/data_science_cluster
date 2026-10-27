@@ -167,26 +167,6 @@ spec:
                       - name: postgres-ca
                         mountPath: /etc/postgres-ca
                         readOnly: true
-                initContainers:
-                  # ESO re-creates the deleted Secret with a new OpenBao login; the kubelet retries the main container until it exists
-                  - name: delete-db-credentials
-                    image: registry.k8s.io/kubectl:${KUBECTL_VERSION}
-                    args: ["delete", "secret", "tekton-results-postgres", "--ignore-not-found"]
-                    resources:
-                      requests:
-                        cpu: ${TEKTON_RESULTS_INIT_CPU_REQUEST}
-                        memory: ${TEKTON_RESULTS_INIT_MEM_REQUEST}
-                      limits:
-                        memory: ${TEKTON_RESULTS_INIT_MEM_LIMIT}
-                    securityContext:
-                      runAsNonRoot: true
-                      runAsUser: 65532
-                      allowPrivilegeEscalation: false
-                      readOnlyRootFilesystem: true
-                      capabilities:
-                        drop: ["ALL"]
-                      seccompProfile:
-                        type: RuntimeDefault
                 volumes:
                   - name: postgres-ca
                     configMap:
@@ -207,25 +187,6 @@ spec:
                       - name: postgres-ca
                         mountPath: /etc/postgres-ca
                         readOnly: true
-                initContainers:
-                  - name: delete-db-credentials
-                    image: registry.k8s.io/kubectl:${KUBECTL_VERSION}
-                    args: ["delete", "secret", "tekton-results-postgres", "--ignore-not-found"]
-                    resources:
-                      requests:
-                        cpu: ${TEKTON_RESULTS_INIT_CPU_REQUEST}
-                        memory: ${TEKTON_RESULTS_INIT_MEM_REQUEST}
-                      limits:
-                        memory: ${TEKTON_RESULTS_INIT_MEM_LIMIT}
-                    securityContext:
-                      runAsNonRoot: true
-                      runAsUser: 65532
-                      allowPrivilegeEscalation: false
-                      readOnlyRootFilesystem: true
-                      capabilities:
-                        drop: ["ALL"]
-                      seccompProfile:
-                        type: RuntimeDefault
                 volumes:
                   - name: postgres-ca
                     configMap:

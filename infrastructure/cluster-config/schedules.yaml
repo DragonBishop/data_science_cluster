@@ -5,7 +5,7 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
-  ESO_DYNAMIC_REFRESH_INTERVAL: "2h"
+  DB_LOGIN_REFRESH_INTERVAL: "24h"
   ESO_REFRESH_INTERVAL: "1h"
   POSTGRES_BACKUP_SCHEDULE: "0 0 0 * * *"
   TEKTON_PRUNER_SCHEDULE: "0 8 * * *"

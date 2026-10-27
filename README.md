@@ -77,7 +77,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | Headlamp | `0.45.0` (desktop app) | Cluster GUI on the host, reading `~/.kube/config`. Its plugins assist with cluster management. |
 | Hubble CLI | `hubble` (`cilium/hubble` release) | Streams flows and policy verdicts from Hubble Relay (`just hubble`). |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
-| kubectl | `v1.37.1` (`KUBECTL_VERSION`, matching `K3S_VERSION`) | Kubernetes CLI for every cluster operation and recipe. The same version runs in-cluster as the `registry.k8s.io/kubectl` image in the Tekton Results init containers. |
+| kubectl | `v1.37.1` (`KUBECTL_VERSION`, matching `K3S_VERSION`) | Kubernetes CLI for every cluster operation and recipe. |
 | kubectl cnpg plugin | `1.30.1` (the CNPG operator version) | CloudNativePG status, backups, restarts, and `psql` sessions inside the primary pod (`kubectl cnpg ...`), so the host needs no PostgreSQL client. |
 
 **pgiscluster** reaches the database from the host:
@@ -113,7 +113,7 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | Component | Version | Description |
 | --- | --- | --- |
 | cert-manager | `1.21.2` | Manages local edge CA, provisions OpenBao TLS, and mints leaf certificates via `openbao-pki-issuer`. |
-| External Secrets Operator (ESO) | `2.12.0` | Syncs OpenBao values into Kubernetes `Secret`s; refreshes static secrets hourly and generates new dynamic database credentials every 2h. |
+| External Secrets Operator (ESO) | `2.12.0` | Syncs OpenBao values into Kubernetes `Secret`s; refreshes static secrets hourly and writes Tekton Results' database login from OpenBao every day. |
 | OpenBao (in-cluster) | `2.7.1` (chart `0.30.3`) | Secrets backend on PebbleDB storage; `just start` unseals it from the GPG-encrypted keyfile in `.local/openbao/`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
 | OpenBao Database & PKI Engines | Same as OpenBao | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
 
@@ -133,7 +133,7 @@ The **Tekton Operator** installs **Tekton Pipelines**, **Tekton Triggers** and *
 | `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, the workstation's paths through the local redirects and the Gateway, backups and Hubble drops. |
 | Tekton Operator | `v0.81.2` | Installs Pipelines, Triggers, Results and the pruner from one `TektonConfig`. |
 | Tekton Pipelines | `v1.15.3` (via Tekton Operator `v0.81.2`) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. |
-| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2`) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. Each pod start gets its own OpenBao database login. |
+| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2`) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. ESO writes its OpenBao database login every `DB_LOGIN_REFRESH_INTERVAL`, and each pod reads the current one at start. |
 | Tekton Triggers | `v0.37.1` (via Tekton Operator `v0.81.2`) | The `flux-events` EventListener (planned for 3.0) turns events from Flux's notification-controller into PipelineRuns, so a merge to `main` starts `core-test`. |
 | Zot | `v2.1.22` (chart `0.1.128`; planned for 3.0) | In-cluster OCI registry and pull-through cache for every public registry the node pulls from, storing images in the `zot` SeaweedFS bucket. The Tekton module builds images into it, and containerd pulls through it. |
 

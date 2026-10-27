@@ -36,7 +36,7 @@ resource "vault_database_secret_backend_role" "tekton_results_app_role" {
   creation_statements = [
     "CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}' IN ROLE tekton_readwrite; ALTER ROLE \"{{name}}\" SET role = tekton_readwrite;"
   ]
-  # Each Results pod start mints a login that must outlive the pod
-  default_ttl = 2764800 # 32d
-  max_ttl     = 2764800 # 32d
+  # ESO refreshes the login daily, and the nightly restart picks it up
+  default_ttl = 345600 # 4d
+  max_ttl     = 345600 # 4d
 }

@@ -30,9 +30,9 @@ run "pod_start_ttls" {
     condition = alltrue([
       for role in [
         vault_database_secret_backend_role.tekton_results_app_role,
-      ] : role.default_ttl == 2764800 && role.max_ttl == 2764800
+      ] : role.default_ttl == 345600 && role.max_ttl == 345600
     ])
-    error_message = "A pod-start database role's TTL is not 32 days."
+    error_message = "A pod-start database role's TTL is not 4 days."
   }
 }
 

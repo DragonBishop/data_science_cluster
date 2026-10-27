@@ -48,7 +48,6 @@ Restoring from a backup is in [Backups and Restore](BACKUPS_RESTORE.md).
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just db-connect` | Connect via psql (app role, in-cluster) | Application-level database access with OpenBao-issued dynamic credentials, in the CNPG primary pod |
 | `kubectl cnpg psql postgres-cluster -n databases` | Connect via psql (superuser, in-cluster) | Ad hoc direct administrative query access as `postgres` superuser |
 | `just backup` | Trigger a manual DB backup | Before schema changes or risky migrations; writes backup to SeaweedFS S3 |
 | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Check scheduled backup status | Confirming automated nightly backups are active (`suspend: false`) |

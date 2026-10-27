@@ -118,19 +118,6 @@ bao-shell:
 
 # --- Database ------------------------------------------------------------
 
-# Open psql in the postgres-cluster primary as the current OpenBao-issued login
-db-connect:
-  #!/usr/bin/env bash
-  set -uo pipefail
-  LEASE_USER=$(kubectl get secret -n databases postgres-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
-  LEASE_PASS=$(kubectl get secret -n databases postgres-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
-  DATABASE_NAME=$(kubectl get configmap cluster-config -n flux-system -o jsonpath='{.data.DATA_SCIENCE_DB_NAME}')
-  if [ -z "$DATABASE_NAME" ]; then
-    echo "Error: DATA_SCIENCE_DB_NAME not found in the live cluster-config ConfigMap." >&2
-    exit 1
-  fi
-  kubectl cnpg psql postgres-cluster -n databases -- "host=localhost dbname=$DATABASE_NAME user=$LEASE_USER password=$LEASE_PASS"
-
 # Trigger a manual base backup of postgres-cluster to SeaweedFS through the Barman Cloud plugin
 backup:
   kubectl cnpg backup postgres-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
