@@ -14,24 +14,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: jetstack
-  values:
-    crds:
-      enabled: true
-    defaultPackage:
-      enabled: false
-    secretTargets:
-      enabled: true
-      authorizedSecrets:
-        - openbao-root-ca
-    app:
-      trust:
-        namespace: cert-manager
-      metrics:
-        service:
-          enabled: false
-    resources:
-      requests:
-        cpu: ${TRUST_MANAGER_CPU_REQUEST}
-        memory: ${TRUST_MANAGER_MEM_REQUEST}
-      limits:
-        memory: ${TRUST_MANAGER_MEM_LIMIT}
+  valuesFrom:
+    - kind: ConfigMap
+      name: trust-manager-values
+      valuesKey: values.yaml

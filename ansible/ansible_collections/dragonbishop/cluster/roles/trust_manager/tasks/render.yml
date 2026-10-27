@@ -1,0 +1,11 @@
+---
+- name: Substitute cluster-config values into trust-manager Helm values
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/trust-manager/trust-manager-values.yaml') }}"
+  environment:
+    TRUST_MANAGER_CPU_REQUEST: "{{ trust_manager_cpu_request }}"
+    TRUST_MANAGER_MEM_LIMIT: "{{ trust_manager_mem_limit }}"
+    TRUST_MANAGER_MEM_REQUEST: "{{ trust_manager_mem_request }}"
+  register: trust_manager_values_substituted
+  changed_when: false

@@ -10,6 +10,3 @@
 
 - name: Apply the network policies Flux needs
   ansible.builtin.import_tasks: policies.yml
-
-- name: Reconcile OpenBao through Flux
-  ansible.builtin.import_tasks: reconcile_openbao.yml

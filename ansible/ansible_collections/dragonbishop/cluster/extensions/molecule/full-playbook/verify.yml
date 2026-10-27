@@ -1,5 +1,5 @@
 ---
-- name: Host state the bootstrap playbook leaves on the runner
+- name: The runner after bootstrap
   hosts: localhost
   gather_facts: false
   vars_files:
@@ -85,13 +85,20 @@
           - "'vault_mount.db' in opentofu_state_list.stdout_lines"
         fail_msg: the terraform/openbao state has no vault_mount.db
 
-- name: Values the bootstrap shares with Flux
+- name: The cluster after bootstrap
   hosts: localhost
   gather_facts: false
   vars:
+    group_vars_dir: "{{ playbook_dir + '/../../../playbooks/group_vars/all' }}"
     routed_variable_names: >-
-      {{ lookup('ansible.builtin.file', playbook_dir ~ '/../../../playbooks/group_vars/all/cluster_config.yml')
-      | from_yaml | list }}
+      {{ query('ansible.builtin.file',
+               group_vars_dir + '/certificates.yml',
+               group_vars_dir + '/cpu_memory.yml',
+               group_vars_dir + '/networking.yml',
+               group_vars_dir + '/replicas.yml',
+               group_vars_dir + '/storage.yml',
+               group_vars_dir + '/versions.yml')
+         | map('from_yaml') | map('list') | flatten }}
   tasks:
     - name: Wait for Flux to apply cluster-config and Cilium's values
       kubernetes.core.k8s_info:

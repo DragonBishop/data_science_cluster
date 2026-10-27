@@ -1,0 +1,13 @@
+---
+- name: Substitute cluster-config values into OpenBao Helm values
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/openbao/openbao-values.yaml') }}"
+  environment:
+    OPENBAO_CPU_REQUEST: "{{ openbao_cpu_request }}"
+    OPENBAO_DATA_STORAGE_SIZE: "{{ openbao_data_storage_size }}"
+    OPENBAO_IMAGE_TAG: "{{ openbao_image_tag }}"
+    OPENBAO_MEM_LIMIT: "{{ openbao_mem_limit }}"
+    OPENBAO_MEM_REQUEST: "{{ openbao_mem_request }}"
+  register: openbao_values_substituted
+  changed_when: false

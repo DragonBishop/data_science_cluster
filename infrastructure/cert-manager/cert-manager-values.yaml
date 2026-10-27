@@ -1,0 +1,31 @@
+# Helm values for cert-manager
+
+resources:
+  requests:
+    cpu: ${CERT_MANAGER_CPU_REQUEST}
+    memory: ${CERT_MANAGER_MEM_REQUEST}
+  limits:
+    memory: ${CERT_MANAGER_MEM_LIMIT}
+webhook:
+  resources:
+    requests:
+      cpu: ${CERT_MANAGER_WEBHOOK_CPU_REQUEST}
+      memory: ${CERT_MANAGER_WEBHOOK_MEM_REQUEST}
+    limits:
+      memory: ${CERT_MANAGER_WEBHOOK_MEM_LIMIT}
+cainjector:
+  resources:
+    requests:
+      cpu: ${CERT_MANAGER_CAINJECTOR_CPU_REQUEST}
+      memory: ${CERT_MANAGER_CAINJECTOR_MEM_REQUEST}
+    limits:
+      memory: ${CERT_MANAGER_CAINJECTOR_MEM_LIMIT}
+startupapicheck:
+  resources:
+    requests:
+      cpu: ${CERT_MANAGER_STARTUPAPICHECK_CPU_REQUEST}
+      memory: ${CERT_MANAGER_STARTUPAPICHECK_MEM_REQUEST}
+    limits:
+      memory: ${CERT_MANAGER_STARTUPAPICHECK_MEM_LIMIT}
+crds:
+  enabled: true

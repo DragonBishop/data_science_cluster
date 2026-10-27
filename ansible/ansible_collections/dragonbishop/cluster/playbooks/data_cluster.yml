@@ -53,9 +53,11 @@
   roles:
     - { role: dragonbishop.cluster.k3s, tags: [k3s] }
     - { role: dragonbishop.cluster.cilium, tags: [cilium] }
-    - { role: dragonbishop.cluster.flux, tags: [flux] }
+    - { role: dragonbishop.cluster.cert_manager, tags: [cert_manager] }
+    - { role: dragonbishop.cluster.trust_manager, tags: [trust_manager] }
     - { role: dragonbishop.cluster.openbao, tags: [openbao] }
     - { role: dragonbishop.cluster.opentofu, tags: [opentofu, openbao] }
+    - { role: dragonbishop.cluster.flux, tags: [flux] }
 
   tasks:
     - name: Print freshly-generated OpenBao root token and unseal keys

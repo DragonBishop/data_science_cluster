@@ -1,4 +1,10 @@
 ---
+- name: Read the Cilium release
+  kubernetes.core.helm_info:
+    name: cilium
+    release_namespace: kube-system
+  register: cilium_release
+
 - name: Install Cilium
   kubernetes.core.helm:
     name: cilium
@@ -6,3 +12,4 @@
     chart_version: "{{ cilium_version }}"
     release_namespace: kube-system
     values: "{{ cilium_values_substituted.stdout | from_yaml }}"
+  when: cilium_release.status is not defined

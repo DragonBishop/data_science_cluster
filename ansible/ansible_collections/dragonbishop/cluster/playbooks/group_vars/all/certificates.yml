@@ -1,0 +1,9 @@
+---
+# --- cluster-config/certificates.yaml ---
+cert_key_algorithm: "{{ cluster_config.CERT_KEY_ALGORITHM }}"
+cert_key_size: "{{ cluster_config.CERT_KEY_SIZE }}"
+local_ca_cert_duration: "{{ cluster_config.LOCAL_CA_CERT_DURATION }}"
+local_ca_cert_renew_before: "{{ cluster_config.LOCAL_CA_CERT_RENEW_BEFORE }}"
+local_ca_root_duration: "{{ cluster_config.LOCAL_CA_ROOT_DURATION }}"
+openbao_pki_cert_duration: "{{ cluster_config.OPENBAO_PKI_CERT_DURATION }}"
+openbao_pki_cert_renew_before: "{{ cluster_config.OPENBAO_PKI_CERT_RENEW_BEFORE }}"

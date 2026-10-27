@@ -1,0 +1,20 @@
+---
+- name: Substitute cluster-config values into cert-manager Helm values
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cert-manager/cert-manager-values.yaml') }}"
+  environment:
+    CERT_MANAGER_CAINJECTOR_CPU_REQUEST: "{{ cert_manager_cainjector_cpu_request }}"
+    CERT_MANAGER_CAINJECTOR_MEM_LIMIT: "{{ cert_manager_cainjector_mem_limit }}"
+    CERT_MANAGER_CAINJECTOR_MEM_REQUEST: "{{ cert_manager_cainjector_mem_request }}"
+    CERT_MANAGER_CPU_REQUEST: "{{ cert_manager_cpu_request }}"
+    CERT_MANAGER_MEM_LIMIT: "{{ cert_manager_mem_limit }}"
+    CERT_MANAGER_MEM_REQUEST: "{{ cert_manager_mem_request }}"
+    CERT_MANAGER_STARTUPAPICHECK_CPU_REQUEST: "{{ cert_manager_startupapicheck_cpu_request }}"
+    CERT_MANAGER_STARTUPAPICHECK_MEM_LIMIT: "{{ cert_manager_startupapicheck_mem_limit }}"
+    CERT_MANAGER_STARTUPAPICHECK_MEM_REQUEST: "{{ cert_manager_startupapicheck_mem_request }}"
+    CERT_MANAGER_WEBHOOK_CPU_REQUEST: "{{ cert_manager_webhook_cpu_request }}"
+    CERT_MANAGER_WEBHOOK_MEM_LIMIT: "{{ cert_manager_webhook_mem_limit }}"
+    CERT_MANAGER_WEBHOOK_MEM_REQUEST: "{{ cert_manager_webhook_mem_request }}"
+  register: cert_manager_values_substituted
+  changed_when: false

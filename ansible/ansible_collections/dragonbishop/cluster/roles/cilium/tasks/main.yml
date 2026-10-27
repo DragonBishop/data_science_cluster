@@ -1,4 +1,11 @@
 ---
+- name: Apply the cluster's Namespaces
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/infrastructure/namespaces/namespaces.yaml"
+    server_side_apply:
+      field_manager: ansible
+
 - name: Install the Gateway API CRDs
   ansible.builtin.import_tasks: gateway_crds.yml
 

@@ -5,6 +5,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: cilium
     - name: cluster-config

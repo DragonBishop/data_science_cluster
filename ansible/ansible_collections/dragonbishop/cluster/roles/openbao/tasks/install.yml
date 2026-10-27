@@ -1,0 +1,17 @@
+---
+- name: Read the OpenBao release
+  kubernetes.core.helm_info:
+    name: openbao
+    release_namespace: "{{ openbao_namespace }}"
+  register: openbao_release
+
+# A sealed OpenBao never turns Ready; Helm doesn't wait for it
+- name: Install OpenBao
+  kubernetes.core.helm:
+    name: openbao
+    chart_ref: oci://ghcr.io/openbao/charts/openbao
+    chart_version: "{{ openbao_version }}"
+    release_namespace: "{{ openbao_namespace }}"
+    values: "{{ openbao_values_substituted.stdout | from_yaml }}"
+    wait: false
+  when: openbao_release.status is not defined

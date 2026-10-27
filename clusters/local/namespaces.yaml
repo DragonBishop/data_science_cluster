@@ -5,6 +5,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   sourceRef:
     kind: GitRepository
     name: flux-system
