@@ -136,8 +136,8 @@ spec:
     db_port: 5432
     db_name: ${TEKTON_RESULTS_DB_NAME}
     db_sslmode: verify-full
-    # tekton-results-tls is mounted at /etc/tls and its ca.crt is the root that signs Postgres
-    db_sslrootcert: /etc/tls/ca.crt
+    # postgres-ca holds the Postgres CA, which signs Postgres
+    db_sslrootcert: /etc/postgres-ca/ca.crt
     db_enable_auto_migration: true
     db_secret_name: tekton-results-postgres
     db_secret_user_key: username
@@ -163,6 +163,10 @@ spec:
                         memory: ${TEKTON_RESULTS_API_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_RESULTS_API_MEM_LIMIT}
+                    volumeMounts:
+                      - name: postgres-ca
+                        mountPath: /etc/postgres-ca
+                        readOnly: true
                 initContainers:
                   # ESO re-creates the deleted Secret with a new OpenBao login; the kubelet retries the main container until it exists
                   - name: delete-db-credentials
@@ -183,6 +187,10 @@ spec:
                         drop: ["ALL"]
                       seccompProfile:
                         type: RuntimeDefault
+                volumes:
+                  - name: postgres-ca
+                    configMap:
+                      name: postgres-ca
         tekton-results-retention-policy-agent:
           spec:
             template:
@@ -195,6 +203,10 @@ spec:
                         memory: ${TEKTON_RESULTS_RETENTION_AGENT_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_RESULTS_RETENTION_AGENT_MEM_LIMIT}
+                    volumeMounts:
+                      - name: postgres-ca
+                        mountPath: /etc/postgres-ca
+                        readOnly: true
                 initContainers:
                   - name: delete-db-credentials
                     image: registry.k8s.io/kubectl:${KUBECTL_VERSION}
@@ -214,6 +226,10 @@ spec:
                         drop: ["ALL"]
                       seccompProfile:
                         type: RuntimeDefault
+                volumes:
+                  - name: postgres-ca
+                    configMap:
+                      name: postgres-ca
         tekton-results-watcher:
           spec:
             template:

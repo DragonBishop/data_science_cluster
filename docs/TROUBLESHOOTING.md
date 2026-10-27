@@ -284,8 +284,8 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **How to fix it:** `kubectl logs <pod> -c delete-db-credentials -n tekton` shows RBAC errors from `infrastructure/tekton/tekton-results-rbac.yaml`. If the init container succeeded, `kubectl describe externalsecret tekton-results-postgres -n tekton` reports why ESO could not re-create the Secret.
 
 * **The Results API crash-loops on its database connection**
-  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/tls/ca.crt` from `tekton-results-tls`, as a login that must still be within its 32d TTL.
-  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `tekton-results-tls` was issued by `openbao-pki-issuer` (`kubectl describe certificate tekton-results-tls -n tekton`). For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it with a new login.
+  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/postgres-ca/ca.crt` from ConfigMap `postgres-ca`, as a login that must still be within its 32d TTL.
+  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `postgres-server-cert` was issued by `postgres-ca-issuer` (`kubectl describe certificate postgres-server-cert -n databases`) and that ConfigMap `postgres-ca` exists in `tekton`. For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it with a new login.
 
 * **PipelineRuns finish but no records appear**
   * **What's happening:** The API serves the certificate it loaded at startup, so an API pod running past `tekton-results-tls` expiry fails the watcher's TLS handshake.

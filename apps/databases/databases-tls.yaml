@@ -1,4 +1,5 @@
-# PostgreSQL server TLS certificate issued via OpenBao PKI ClusterIssuer
+# Postgres's server certificate from the Postgres CA, and the Bundle that publishes the CA
+
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -6,6 +7,11 @@ metadata:
   namespace: databases
 spec:
   secretName: postgres-server-cert
+  secretTemplate:
+    labels:
+      cnpg.io/reload: ""
+  usages:
+    - server auth
   duration: ${OPENBAO_PKI_CERT_DURATION}
   renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
   privateKey:
@@ -26,26 +32,21 @@ spec:
     - 127.0.0.1
     - ${GATEWAY_IP}
   issuerRef:
-    name: openbao-pki-issuer
+    name: postgres-ca-issuer
     kind: ClusterIssuer
 ---
-# CA trust material for Tekton TaskRuns connecting to PostGIS.
-# The OpenBao PKI issuer supplies the CA chain used to populate ca.crt.
-apiVersion: cert-manager.io/v1
-kind: Certificate
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
 metadata:
-  name: postgres-ca-bundle
-  namespace: tekton-pipelines
+  name: postgres-ca                 # trust-manager names each target ConfigMap after the Bundle
 spec:
-  commonName: postgres-ca-bundle.internal
-  secretName: postgres-ca-bundle
-  duration: ${OPENBAO_PKI_CERT_DURATION}
-  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
-  privateKey:
-    algorithm: ${CERT_KEY_ALGORITHM}
-    size: ${CERT_KEY_SIZE}
-  dnsNames:
-    - postgres-ca-bundle.internal
-  issuerRef:
-    name: openbao-pki-issuer
-    kind: ClusterIssuer
+  sources:
+    - secret:
+        name: postgres-ca
+        key: tls.crt
+  target:
+    configMap:
+      key: ca.crt
+    namespaceSelector:
+      matchLabels:
+        data-cluster/ca-bundles: "true"

@@ -97,6 +97,7 @@ The directory tree of this repository, then what each directory and file does.
 │   │   ├── kustomization.yaml
 │   │   ├── databases-cluster.yaml
 │   │   ├── databases-dynamic-secrets.yaml
+│   │   ├── databases-issuers.yaml
 │   │   ├── databases-localhost.yaml
 │   │   ├── databases-networkpolicy.yaml
 │   │   ├── databases-route.yaml
@@ -292,7 +293,8 @@ The directory tree of this repository, then what each directory and file does.
   * **`databases-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
   * **`databases-networkpolicy.yaml`**: Accepts replication between instances, the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
   * **`databases-route.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
-  * **`databases-tls.yaml`**: cert-manager `Certificate` requesting the Postgres server certificate from `openbao-pki-issuer`. SANs cover `localhost`/`127.0.0.1`, `postgres.internal`, and the shared Gateway's static LAN IP.
+  * **`databases-issuers.yaml`**: Postgres's own CA, Certificate `postgres-ca` in `cert-manager`, self-signed through `openbao-selfsigned-bootstrap`, and ClusterIssuer `postgres-ca-issuer`, which signs with it.
+  * **`databases-tls.yaml`**: cert-manager `Certificate` `postgres-server-cert` from `postgres-ca-issuer`, labelled `cnpg.io/reload` so CNPG reloads renewals, and Bundle `postgres-ca`, which publishes the CA as ConfigMap `postgres-ca` in every labelled namespace. SANs cover the Cluster's Services, `localhost`/`127.0.0.1`, `databases.${INTERNAL_DOMAIN}`, and the shared Gateway's static LAN IP.
 * **`apps/databases/secrets/`** - The ESO SecretStore and the static ExternalSecrets for `databases`, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after those Secrets exist. The dynamic `postgres-app-dynamic-credentials` lives in `apps/databases/databases-dynamic-secrets.yaml`, because OpenBao needs `postgres-cluster-rw` to issue it.
   * **`databases-secrets.yaml`**: The `databases-openbao-auth` `ServiceAccount`, the `openbao` `SecretStore` (Kubernetes auth to OpenBao), and the `ExternalSecret`s `postgres-superuser-credentials` (from `secret/postgres`) and `seaweedfs-credentials` (from `secret/seaweedfs`).
 * **`apps/barman-cloud/`** - The Barman Cloud CNPG plugin, in its own Flux `Kustomization` (`clusters/local/barman-cloud.yaml`).
@@ -346,7 +348,7 @@ The directory tree of this repository, then what each directory and file does.
     * **`tekton-networkpolicy.yaml`**: `tekton`'s policy file: the remote resolvers reach their source hosts, and the Results watcher reaches the Results API.
     * **`tekton-results-rbac.yaml`**: `Role` and `RoleBinding` letting the Results API and retention-policy agent delete `tekton-results-postgres` at startup, so each pod start gets a new OpenBao login.
     * **`tekton-results-secrets.yaml`**: The `tekton-results-openbao-auth` `ServiceAccount` ESO presents to OpenBao, and the `VaultDynamicSecret` generator and `ExternalSecret` writing `tekton-results-postgres`, refreshed only when the Secret is missing.
-    * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`; its `ca.crt` also verifies Postgres.
+    * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`. Results verifies Postgres against ConfigMap `postgres-ca`.
   * **`tekton-pipelines/`**: `kustomization.yaml` and `tekton-pipelines-networkpolicy.yaml` (`tekton-pipelines`' policy file: TaskRun pods reach their source hosts), applied by the `tekton-pipelines` Kustomization. Pipeline folders in `pipelines/`, one per Pipeline with its ServiceAccount and RBAC, and reusable Task definitions in `tasks/` (`fetch-source.yaml`, `kustomization.yaml`), which no Kustomization applies yet.
   * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`. The Tekton Operator in the `tekton-operator` namespace. It is its own Kustomization so the `TektonConfig` CRD exists before `tekton` applies one.
   * **`trust-manager/`**: `kustomization.yaml`, `trust-manager-release.yaml`. trust-manager in `cert-manager`, which copies CA certificates from Secrets there into ConfigMaps and Secrets in every namespace labelled `data-cluster/ca-bundles`.

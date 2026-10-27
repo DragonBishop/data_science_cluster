@@ -1,9 +1,6 @@
 locals {
   internal_pki_domains = [
-    "postgres-cluster-rw", "postgres-cluster-rw.databases", "postgres-cluster-rw.databases.svc",
-    "postgres-cluster-rw.databases.svc.cluster.local", "postgres-cluster-ro",
-    "postgres-cluster-ro.databases.svc.cluster.local", "postgres-cluster-r",
-    "postgres-cluster-r.databases.svc.cluster.local", "localhost", "postgres.internal",
+    "localhost",
     "seaweedfs-s3", "seaweedfs-s3.databases", "seaweedfs-s3.databases.svc",
     "seaweedfs-s3.databases.svc.cluster.local",
     "internal", "cilium.io", "cluster.local", "hubble-relay",

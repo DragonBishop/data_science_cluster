@@ -4,6 +4,7 @@ resources:
   - databases.yaml
   - databases-cluster.yaml
   - databases-dynamic-secrets.yaml
+  - databases-issuers.yaml
   - databases-localhost.yaml
   - databases-networkpolicy.yaml
   - databases-route.yaml
