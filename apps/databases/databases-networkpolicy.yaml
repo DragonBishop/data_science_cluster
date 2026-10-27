@@ -32,6 +32,15 @@ spec:
         - ports:
             - port: "5432"
               protocol: TCP
+    # core-test checks the server certificate and logins
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+            tekton.dev/pipeline: core-test
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
     # Tekton Results stores PipelineRun and TaskRun records
     - fromEndpoints:
         - matchLabels:

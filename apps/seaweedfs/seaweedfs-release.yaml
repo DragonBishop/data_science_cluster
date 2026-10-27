@@ -40,6 +40,17 @@ spec:
               ports:
                 - protocol: TCP
                   port: ${SEAWEEDFS_S3_PORT}
+            # core-test checks the S3 certificate
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: tekton-pipelines
+                  podSelector:
+                    matchLabels:
+                      tekton.dev/pipeline: core-test
+              ports:
+                - protocol: TCP
+                  port: ${SEAWEEDFS_S3_PORT}
     master:
       ipBind: "0.0.0.0"
       data:

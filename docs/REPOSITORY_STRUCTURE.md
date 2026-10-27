@@ -133,6 +133,7 @@ The directory tree of this repository, then what each directory and file does.
 │       ├── seaweedfs.yaml               # Kustomization → apps/seaweedfs/
 │       ├── tekton-operator.yaml         # Kustomization → infrastructure/tekton-operator/
 │       ├── tekton-pipelines.yaml        # Kustomization → infrastructure/tekton-pipelines/
+│       ├── tekton-tasks.yaml            # Kustomization → infrastructure/tekton-pipelines/tasks/
 │       ├── tekton.yaml                  # Kustomization → infrastructure/tekton/
 │       └── trust-manager.yaml           # Kustomization → infrastructure/trust-manager/
 ├── docs/                                # Project documentation; README.md stays at the root
@@ -208,8 +209,15 @@ The directory tree of this repository, then what each directory and file does.
 │   │   ├── kustomization.yaml
 │   │   ├── tekton-pipelines-networkpolicy.yaml
 │   │   ├── pipelines/                   # one folder per Pipeline, with its ServiceAccount and RBAC
+│   │   │   ├── kustomization.yaml
+│   │   │   └── core-test/
+│   │   │       ├── core-test-pipeline.yaml
+│   │   │       ├── core-test-rbac.yaml
+│   │   │       ├── core-test-run.yaml   # hand run, not applied by Flux
+│   │   │       └── kustomization.yaml
 │   │   └── tasks/                       # reusable Task definitions
-│   │       ├── fetch-source.yaml
+│   │       ├── ca-bundles.yaml
+│   │       ├── fetch-source.yaml            # in progress, not applied
 │   │       └── kustomization.yaml
 │   ├── tekton-operator/
 │   │   ├── kustomization.yaml
@@ -320,6 +328,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`seaweedfs.yaml`**: Kustomization → `apps/seaweedfs/`
   * **`tekton-operator.yaml`**: Kustomization → `infrastructure/tekton-operator/`
   * **`tekton-pipelines.yaml`**: Kustomization → `infrastructure/tekton-pipelines/`
+  * **`tekton-tasks.yaml`**: Kustomization → `infrastructure/tekton-pipelines/tasks/`
   * **`tekton.yaml`**: Kustomization → `infrastructure/tekton/`
   * **`trust-manager.yaml`**: Kustomization → `infrastructure/trust-manager/`
 * **`docs/`** - Project documentation, linked from the README's "Documentation" section.
@@ -347,7 +356,8 @@ The directory tree of this repository, then what each directory and file does.
     * **`tekton-networkpolicy.yaml`**: `tekton`'s policy file: the remote resolvers reach their source hosts, and the Results watcher reaches the Results API.
     * **`tekton-results-secrets.yaml`**: The `tekton-results-openbao-auth` `ServiceAccount` ESO presents to OpenBao, and the `VaultDynamicSecret` generator and `ExternalSecret` writing `tekton-results-postgres`, a new OpenBao login every `DB_LOGIN_REFRESH_INTERVAL`.
     * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`. Results verifies Postgres against ConfigMap `postgres-ca`.
-  * **`tekton-pipelines/`**: `kustomization.yaml` and `tekton-pipelines-networkpolicy.yaml` (`tekton-pipelines`' policy file: TaskRun pods reach their source hosts), applied by the `tekton-pipelines` Kustomization. Pipeline folders in `pipelines/`, one per Pipeline with its ServiceAccount and RBAC, and reusable Task definitions in `tasks/` (`fetch-source.yaml`, `kustomization.yaml`), which no Kustomization applies yet.
+  * **`tekton-pipelines/`**: `kustomization.yaml` and `tekton-pipelines-networkpolicy.yaml` (`tekton-pipelines`' policy file: TaskRun pods reach their source hosts), applied by the `tekton-pipelines` Kustomization. Pipeline folders in `pipelines/`, one per Pipeline with its ServiceAccount and RBAC, and reusable Task definitions in `tasks/`, applied by the `tekton-tasks` Kustomization: `ca-bundles.yaml` checks every labelled namespace's CA ConfigMaps and the OpenBao, SeaweedFS and Postgres certificates against them, one check per step. `fetch-source.yaml` is in progress, and `tasks/kustomization.yaml` leaves it out.
+    * **`pipelines/core-test/`**: The `core-test` Pipeline, which checks the core. `core-test-pipeline.yaml` calls its tasks, so far `ca-bundles`. `core-test-rbac.yaml` holds the `core-test` ServiceAccount and the access each task needs. `core-test-run.yaml` starts a run by hand with `kubectl create -f`.
   * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`. The Tekton Operator in the `tekton-operator` namespace. It is its own Kustomization so the `TektonConfig` CRD exists before `tekton` applies one.
   * **`trust-manager/`**: `kustomization.yaml`, `trust-manager-release.yaml`. trust-manager in `cert-manager`, which copies CA certificates from Secrets there into ConfigMaps and Secrets in every namespace labelled `data-cluster/ca-bundles`.
 * **`src/`**

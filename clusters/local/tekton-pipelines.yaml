@@ -5,8 +5,10 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: tekton
+    - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system

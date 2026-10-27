@@ -1,0 +1,10 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: core-test
+  namespace: tekton-pipelines
+spec:
+  tasks:
+    - name: ca-bundles
+      taskRef:
+        name: ca-bundles

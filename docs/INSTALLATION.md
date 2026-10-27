@@ -391,6 +391,7 @@ flowchart TD
     eso --> tekton
     db --> tekton
     tekton --> tektonpipelines["tekton-pipelines"]
+    tekton --> tektontasks["tekton-tasks"]
 ```
 
 * `cilium` requires `gateway-api-crds`, `namespaces` and `cluster-config`.
@@ -405,6 +406,6 @@ flowchart TD
 * `databases` depends on `openbao`, `barman-cloud`, `seaweedfs`, `gateway`, and `databases-secrets`, so the PostGIS cluster starts with its backup bucket and its CA Secrets already in place.
 * `tekton-operator` depends on `cert-manager`.
 * `tekton` depends on `tekton-operator`, `openbao`, `external-secrets`, and `databases`. It holds Results' database login, whose ESO objects need OpenBao and ESO, and every Results login joins the `tekton_readwrite` role, which `databases` creates. The operator holds Results back until the login's Secret exists.
-* `tekton-pipelines` depends on `tekton`, which installs the Task and Pipeline CRDs.
+* `tekton-pipelines` and `tekton-tasks` depend on `tekton`, which installs the Pipeline and Task CRDs.
 
 Once Flux reports every Kustomization Ready, continue with [Verification](VERIFICATION.md).

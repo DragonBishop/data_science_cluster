@@ -1,0 +1,11 @@
+# Hand run: kubectl create -f infrastructure/tekton-pipelines/pipelines/core-test/core-test-run.yaml
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: core-test-
+  namespace: tekton-pipelines
+spec:
+  pipelineRef:
+    name: core-test
+  taskRunTemplate:
+    serviceAccountName: core-test

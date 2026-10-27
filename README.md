@@ -130,7 +130,7 @@ The **Tekton Operator** installs **Tekton Pipelines**, **Tekton Triggers** and *
 
 | Component | Version | Description |
 | --- | --- | --- |
-| `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, the workstation's paths through the local redirects and the Gateway, backups and Hubble drops. |
+| `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, backups and Hubble drops. |
 | Tekton Operator | `v0.81.2` | Installs Pipelines, Triggers, Results and the pruner from one `TektonConfig`. |
 | Tekton Pipelines | `v1.15.3` (via Tekton Operator `v0.81.2`) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. |
 | Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2`) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. ESO writes its OpenBao database login every `DB_LOGIN_REFRESH_INTERVAL`, and each pod reads the current one at start. |
