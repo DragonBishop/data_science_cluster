@@ -51,6 +51,13 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: spire
+  labels:
+    data-cluster/ca-bundles: "true"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: tekton-operator
   labels:
     pod-security.kubernetes.io/enforce: baseline

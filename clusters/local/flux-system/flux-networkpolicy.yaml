@@ -27,6 +27,7 @@ spec:
         # GitHub Pages Helm repos
         - matchName: "cloudnative-pg.github.io"
         - matchName: "seaweedfs.github.io"
+        - matchName: "spiffe.github.io"
         # Quay: registry and CDN
         - matchName: "quay.io"
         - matchPattern: "*.quay.io"

@@ -57,6 +57,7 @@
     - { role: dragonbishop.cluster.trust_manager, tags: [trust_manager] }
     - { role: dragonbishop.cluster.openbao, tags: [openbao] }
     - { role: dragonbishop.cluster.opentofu, tags: [opentofu, openbao] }
+    - { role: dragonbishop.cluster.spire, tags: [spire] }
     - { role: dragonbishop.cluster.flux, tags: [flux] }
 
   tasks:

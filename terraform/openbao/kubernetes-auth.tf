@@ -81,3 +81,20 @@ resource "vault_kubernetes_auth_backend_role" "seaweedfs" {
   token_policies                   = [vault_policy.seaweedfs.name]
   token_ttl                        = 86400 # 24h
 }
+
+resource "vault_policy" "spire_server" {
+  name   = "spire-server-policy"
+  policy = <<EOT
+path "pki/root/sign-intermediate" { capabilities = ["update"] }
+EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "spire_server" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "spire-server-role"
+  bound_service_account_names      = ["spire-server"]
+  bound_service_account_namespaces = ["spire"]
+  audience                         = "openbao"
+  token_policies                   = [vault_policy.spire_server.name]
+  token_ttl                        = 3600 # 1h
+}

@@ -1,0 +1,6 @@
+---
+- name: Render the SPIRE Helm values
+  ansible.builtin.import_tasks: render.yml
+
+- name: Install SPIRE
+  ansible.builtin.import_tasks: install.yml

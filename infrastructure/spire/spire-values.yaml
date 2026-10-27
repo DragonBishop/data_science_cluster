@@ -1,0 +1,71 @@
+global:
+  spire:
+    trustDomain: cluster.internal
+    clusterName: data-science-cluster
+spire-server:
+  caTTL: ${SPIRE_CA_TTL}
+  upstreamAuthority:
+    vault:
+      enabled: true
+      vaultAddr: https://openbao.openbao.svc.cluster.local:8200
+      pkiMountPoint: pki
+      caCert:
+        type: ConfigMap
+        name: openbao-ca-bundle
+      k8sAuth:
+        enabled: true
+        k8sAuthMountPoint: kubernetes
+        k8sAuthRoleName: spire-server-role
+        token:
+          audience: openbao
+  persistence:
+    size: ${SPIRE_SERVER_STORAGE_SIZE}
+  resources:
+    requests:
+      cpu: ${SPIRE_SERVER_CPU_REQUEST}
+      memory: ${SPIRE_SERVER_MEM_REQUEST}
+    limits:
+      memory: ${SPIRE_SERVER_MEM_LIMIT}
+  telemetry:
+    prometheus:
+      enabled: true
+      tls:
+        mode: spireSVID
+        authorizedSPIFFEIDs:
+          - spiffe://cluster.internal/ns/observability/sa/prometheus
+  controllerManager:
+    resources:
+      requests:
+        cpu: ${SPIRE_CONTROLLER_MANAGER_CPU_REQUEST}
+        memory: ${SPIRE_CONTROLLER_MANAGER_MEM_REQUEST}
+      limits:
+        memory: ${SPIRE_CONTROLLER_MANAGER_MEM_LIMIT}
+    identities:
+      clusterSPIFFEIDs:
+        default:
+          enabled: false
+        oidc-discovery-provider:
+          enabled: false
+        test-keys:
+          enabled: false
+spire-agent:
+  resources:
+    requests:
+      cpu: ${SPIRE_AGENT_CPU_REQUEST}
+      memory: ${SPIRE_AGENT_MEM_REQUEST}
+    limits:
+      memory: ${SPIRE_AGENT_MEM_LIMIT}
+
+  workloadAttestors:
+    k8s:
+      verification:
+        type: apiServerCA
+spiffe-csi-driver:
+  resources:
+    requests:
+      cpu: ${SPIFFE_CSI_DRIVER_CPU_REQUEST}
+      memory: ${SPIFFE_CSI_DRIVER_MEM_REQUEST}
+    limits:
+      memory: ${SPIFFE_CSI_DRIVER_MEM_LIMIT}
+spiffe-oidc-discovery-provider:
+  enabled: false

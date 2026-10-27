@@ -46,6 +46,7 @@ run "auth_roles_bound_narrowly" {
         vault_kubernetes_auth_backend_role.tekton_results,
         vault_kubernetes_auth_backend_role.cert_manager,
         vault_kubernetes_auth_backend_role.seaweedfs,
+        vault_kubernetes_auth_backend_role.spire_server,
       ] : length(role.bound_service_account_names) == 1 && length(role.bound_service_account_namespaces) == 1
     ])
     error_message = "A Kubernetes auth role is bound to more than one ServiceAccount or namespace."

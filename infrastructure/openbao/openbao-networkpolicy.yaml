@@ -17,6 +17,9 @@ spec:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: tekton-pipelines
             tekton.dev/pipeline: core-test
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: spire
+            app.kubernetes.io/name: server
       toPorts:
         - ports:
             - port: "8200"

@@ -8,3 +8,43 @@ spec:
     - name: ca-bundles
       taskRef:
         name: ca-bundles
+    - name: spire
+      taskSpec:
+        volumes:
+          - name: spiffe-workload-api
+            csi:
+              driver: csi.spiffe.io
+              readOnly: true
+        steps:
+          - name: fetch-identity
+            image: ghcr.io/spiffe/spire-agent:${SPIRE_AGENT_IMAGE_TAG}
+            onError: continue
+            volumeMounts:
+              - name: spiffe-workload-api
+                mountPath: /spiffe-workload-api
+                readOnly: true
+            command:
+              - /opt/spire/bin/spire-agent
+            args:
+              - api
+              - fetch
+              - x509
+              - -socketPath
+              - /spiffe-workload-api/spire-agent.sock
+              - -timeout
+              - 10s
+          - name: no-identity
+            image: alpine/k8s:${ALPINE_K8S_VERSION}
+            securityContext:
+              runAsUser: 65532
+            script: |
+              #!/usr/bin/env bash
+              set -eu
+              exit_code=$(cat $(steps.step-fetch-identity.exitCode.path))
+              if [ "$exit_code" -eq 0 ]; then
+                echo "FAIL: SPIRE issued an identity to a tekton-pipelines pod instead of the Flux controllers and Prometheus."
+                echo "Run kubectl get clusterspiffeids, and check spire-values.yaml sets spire-server.controllerManager.identities.clusterSPIFFEIDs.default.enabled to false"
+                exit 1
+              else
+                echo "fetch-identity exit code: $exit_code"
+              fi

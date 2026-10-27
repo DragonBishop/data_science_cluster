@@ -29,6 +29,12 @@ data:
   POSTGRES_VERSION: "18.6"
   # renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm
   SEAWEEDFS_VERSION: "4.48.0"
+  # renovate: datasource=docker depName=ghcr.io/spiffe/spire-agent
+  SPIRE_AGENT_IMAGE_TAG: "1.15.5"
+  # renovate: datasource=helm registryUrl=https://spiffe.github.io/helm-charts-hardened depName=spire-crds
+  SPIRE_CRDS_VERSION: "0.6.1"
+  # renovate: datasource=helm registryUrl=https://spiffe.github.io/helm-charts-hardened depName=spire
+  SPIRE_VERSION: "0.30.4"
   # renovate: datasource=docker depName=ghcr.io/tektoncd/operator/charts/tekton-operator
   TEKTON_OPERATOR_VERSION: "0.81.2"
   # renovate: datasource=docker depName=quay.io/jetstack/charts/trust-manager

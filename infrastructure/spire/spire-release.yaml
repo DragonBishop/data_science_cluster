@@ -1,0 +1,53 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: spire
+  namespace: spire
+spec:
+  interval: 24h
+  url: https://spiffe.github.io/helm-charts-hardened/
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: spire-crds
+  namespace: spire
+spec:
+  interval: 1h
+  releaseName: spire-crds
+  chart:
+    spec:
+      chart: spire-crds
+      version: "${SPIRE_CRDS_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: spire
+  install:
+    remediation:
+      retries: ${SPIRE_HELM_RETRIES}
+  upgrade:
+    remediation:
+      retries: ${SPIRE_HELM_RETRIES}
+      remediateLastFailure: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name:  spire
+  namespace: spire
+spec:
+  interval: 1h
+  releaseName: spire
+  chart:
+    spec:
+      chart: spire
+      version: "${SPIRE_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: spire
+  dependsOn:
+    - name: spire-crds
+  valuesFrom:
+    - kind: ConfigMap
+      name: spire-values
+      valuesKey: values.yaml

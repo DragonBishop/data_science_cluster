@@ -148,3 +148,29 @@
         that:
           - (cilium_values_substituted.stdout | from_yaml) == (live_cilium_values.resources[0].data['values.yaml'] | from_yaml)
         fail_msg: the cilium role's values differ from the cilium-values ConfigMap, so Flux reconciles Cilium away from them
+
+    - name: Wait for the SPIRE workloads to report ready
+      kubernetes.core.k8s_info:
+        kind: "{{ item.kind }}"
+        name: "{{ item.name }}"
+        namespace: spire
+        wait: true
+        wait_timeout: 300
+      register: spire_workloads
+      loop:
+        - kind: StatefulSet
+          name: spire-server
+        - kind: DaemonSet
+          name: spire-agent
+        - kind: DaemonSet
+          name: spire-spiffe-csi-driver
+
+    - name: It should run a ready pod for every SPIRE workload
+      ansible.builtin.assert:
+        that:
+          - item.resources | length == 1
+          - (item.resources[0].status.numberReady | default(item.resources[0].status.readyReplicas)) >= 1
+        fail_msg: "{{ item.item.kind }} {{ item.item.name }} is missing from spire or is not ready"
+      loop: "{{ spire_workloads.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
