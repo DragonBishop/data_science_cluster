@@ -4,3 +4,66 @@ resources:
 - gotk-components.yaml
 - gotk-sync.yaml
 - flux-networkpolicy.yaml
+patches:
+# SPIFFE Workload API socket for inter-controller mTLS
+- target:
+    kind: Deployment
+    name: (source-controller|kustomize-controller|helm-controller|notification-controller)
+  patch: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: all
+    spec:
+      template:
+        spec:
+          containers:
+          - name: manager
+            env:
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: unix:///spiffe-workload-api/spire-agent.sock
+            volumeMounts:
+            - name: spiffe-workload-api
+              mountPath: /spiffe-workload-api
+              readOnly: true
+          volumes:
+          - name: spiffe-workload-api
+            csi:
+              driver: csi.spiffe.io
+              readOnly: true
+- target:
+    kind: Deployment
+    name: source-controller
+  patch: |
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --authorized-artifact-client-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/kustomize-controller
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --authorized-artifact-client-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/helm-controller
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --authorized-event-server-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/notification-controller
+- target:
+    kind: Deployment
+    name: (kustomize-controller|helm-controller)
+  patch: |
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --authorized-artifact-server-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/source-controller
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --authorized-event-server-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/notification-controller
+- target:
+    kind: Deployment
+    name: notification-controller
+  patch: |
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --authorized-notifier-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/source-controller
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --authorized-notifier-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/kustomize-controller
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --authorized-notifier-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/helm-controller

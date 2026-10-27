@@ -48,3 +48,6 @@ spec:
               else
                 echo "fetch-identity exit code: $exit_code"
               fi
+    - name: flux-mtls
+      taskRef:
+        name: flux-mtls

@@ -1,5 +1,17 @@
 ---
+- name: Build the Flux controllers with their SPIFFE patches
+  ansible.builtin.set_fact:
+    flux_build: "{{ lookup('kubernetes.core.kustomize', dir=repo_root + '/clusters/local/flux-system') }}"
+
+- name: Parse the Flux build into objects
+  ansible.builtin.set_fact:
+    flux_build_objects: "{{ flux_build | from_yaml_all | list }}"
+
+- name: Leave out the objects sync.yml and policies.yml apply
+  ansible.builtin.set_fact:
+    flux_controllers: "{{ flux_build_objects | rejectattr('kind', 'in', ['GitRepository', 'Kustomization', 'CiliumNetworkPolicy']) | list }}"
+
 - name: Apply Flux controllers (gotk-components)
   kubernetes.core.k8s:
     state: present
-    src: "{{ repo_root }}/clusters/local/flux-system/gotk-components.yaml"
+    definition: "{{ flux_controllers }}"
