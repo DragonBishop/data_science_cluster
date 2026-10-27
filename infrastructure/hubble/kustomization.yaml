@@ -3,7 +3,7 @@ kind: Kustomization
 resources:
   - hubble-localhost.yaml
 configMapGenerator:
-  - name: cilium-values-hubble
+  - name: hubble-values
     namespace: kube-system
     files:
       - values.yaml=hubble-values.yaml

@@ -22,7 +22,25 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: seaweedfs
+  install:
+    remediation:
+      retries: ${SEAWEEDFS_HELM_RETRIES}
+  upgrade:
+    remediation:
+      retries: ${SEAWEEDFS_HELM_RETRIES}
+      remediateLastFailure: true
   values:
+    # gRPC mTLS between master, filer, volume and S3, from the chart's own cert-manager CA
+    global:
+      seaweedfs:
+        enableSecurity: true
+    certificates:
+      keyAlgorithm: ${CERT_KEY_ALGORITHM}
+      keySize: ${CERT_KEY_SIZE}
+      duration: ${LOCAL_CA_CERT_DURATION}
+      renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
+      ca:
+        duration: ${LOCAL_CA_ROOT_DURATION}
     # One policy per component, admitting the release's own pods on that component's ports
     networkPolicy:
       enabled: true
