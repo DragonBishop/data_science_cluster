@@ -31,7 +31,7 @@ Once host-side prerequisites are met, running `just bootstrap` orchestrates the 
 Install the version the committed `clusters/local/flux-system/gotk-components.yaml` pins:
 
 ```bash
-curl -s https://fluxcd.io/install.sh | sudo FLUX_VERSION=2.9.6 bash
+curl -s https://fluxcd.io/install.sh | sudo FLUX_VERSION=2.10.0 bash
 flux version --client
 ```
 

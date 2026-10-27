@@ -56,7 +56,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
 | Ansible | `ansible` `14.5.0` (`ansible-core` `2.21.5`), from `uv.lock` | Idempotent cluster bootstrap playbook and host setup (`dragonbishop.cluster.data_cluster`). `just bootstrap` runs it through `uv run` and first installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on. |
-| Flux CLI | `v2.9.6` (`fluxcd.io`) | Creates Flux's Git credentials during bootstrap (`flux create secret`), and inspects and reconciles Flux afterwards. |
+| Flux CLI | `v2.10.0` (`fluxcd.io`) | Creates Flux's Git credentials during bootstrap (`flux create secret`), and inspects and reconciles Flux afterwards. |
 | GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |
 | Helm | `v4.x` (`get-helm-4`) | Installs Cilium during bootstrap, before Flux exists, and reads chart metadata for `just preflight`. |
 | OpenTofu | `1.13.1` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
@@ -94,7 +94,7 @@ The core is always on and holds every piece of the cluster's state. It relies on
 
 | Component | Version | Description |
 | --- | --- | --- |
-| Flux | `v2.9.6` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. Pinned by the committed `clusters/local/flux-system/gotk-components.yaml`, which `flux install --components=source-controller,kustomize-controller,helm-controller,notification-controller --network-policy=false --export` regenerates after a CLI upgrade. |
+| Flux | `v2.10.0` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. Pinned by the committed `clusters/local/flux-system/gotk-components.yaml`, which `flux install --components=source-controller,kustomize-controller,helm-controller,notification-controller --network-policy=false --export` regenerates after a CLI upgrade. |
 | k3s | `v1.37.1+k3s1` | Core control plane and execution environment. `just bootstrap` installs `K3S_VERSION`; an existing node upgrades through the k3s installer with `INSTALL_K3S_VERSION`. k3s also bundles the Gateway API CRDs (its `gateway-api-crd` chart), so the vendored `infrastructure/gateway-api-crds/standard-install.yaml` follows k3s's bundled version. |
 | Prometheus Operator CRDs | `32.0.1` (chart, operator `v0.94.1`; planned for 3.0) | `ServiceMonitor`, `PodMonitor` and the other Prometheus Operator CRDs, installed in the core so the monitors beside core components keep resolving while observability is off. Pinned to the operator version kube-prometheus-stack ships. |
 
@@ -176,7 +176,6 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Component | Version | Description |
 | --- | --- | --- |
 | BentoML | `v1.4.39` (planned for 3.0) | Packages models into self-contained, production-ready services using a Python-first framework. |
-| Flux image automation | `v1.2.5` (image-reflector and image-automation controllers, Flux `v2.9.6`; planned for 3.0) | Watches the registry for new model image tags and pushes each one to the `flux/image-updates` branch, so a merged pull request rolls out the new model. The controllers join the core Flux install. |
 | MLflow | `3.17.0` (planned for 3.0) | Tracks code versions, hyperparameters, and experiment results, storing metadata in PostgreSQL and artifacts in the cluster's SeaweedFS object store. |
 
 ---
@@ -278,6 +277,5 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | BentoML | [https://docs.bentoml.com/](https://docs.bentoml.com/) |
 | dbt | [https://docs.getdbt.com/](https://docs.getdbt.com/) |
 | dlt | [https://dlthub.com/docs](https://dlthub.com/docs) |
-| Flux image automation | [https://fluxcd.io/flux/guides/image-update/](https://fluxcd.io/flux/guides/image-update/) |
 | MLflow | [https://mlflow.org/docs/latest/index.html](https://mlflow.org/docs/latest/index.html) |
 | Prefect | [https://docs.prefect.io/](https://docs.prefect.io/) |
