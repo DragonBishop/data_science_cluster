@@ -1,9 +1,8 @@
 ---
 - name: Substitute cluster-config values into Cilium Helm values
-  ansible.builtin.shell:
-    cmd: |
-      while IFS= read -r line || [ -n "$line" ]; do eval "echo \"$line\""; done < "{{ repo_root }}/infrastructure/cilium/cilium-values.yaml"
-    executable: /bin/bash
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/cilium-values.yaml') }}"
   environment:
     CILIUM_CPU_REQUEST: "{{ cilium_cpu_request }}"
     CILIUM_ENVOY_CPU_REQUEST: "{{ cilium_envoy_cpu_request }}"

@@ -127,7 +127,7 @@
     - name: Render the Cilium values the cilium role installs
       ansible.builtin.import_role:
         name: dragonbishop.cluster.cilium
-        tasks_from: render_values
+        tasks_from: render
 
     - name: Read the cilium-values ConfigMap Flux applies
       kubernetes.core.k8s_info:

@@ -1,6 +1,6 @@
 ---
 - name: Initialize OpenBao
-  when: not (openbao_status_result.stdout | from_json).initialized
+  when: not openbao_status.initialized | default(false)
   block:
     - name: Initialize in-cluster OpenBao
       kubernetes.core.k8s_exec:
@@ -12,6 +12,11 @@
 
     - name: Parse OpenBao init output
       ansible.builtin.set_fact:
-        openbao_root_token: "{{ (openbao_init_result.stdout | from_json).root_token }}"
-        openbao_fresh_unseal_keys: "{{ (openbao_init_result.stdout | from_json).unseal_keys_b64[:3] }}"
+        openbao_init: "{{ openbao_init_result.stdout | from_json }}"
+      no_log: true
+
+    - name: Keep the root token and the first three unseal keys
+      ansible.builtin.set_fact:
+        openbao_root_token: "{{ openbao_init.root_token }}"
+        openbao_fresh_unseal_keys: "{{ openbao_init.unseal_keys_b64[:3] }}"
       no_log: true
