@@ -376,7 +376,8 @@ flowchart TD
     %% Applications
     openbao --> dbsecrets["databases-secrets"]
     eso --> dbsecrets
-    dbsecrets --> seaweedfs["seaweedfs"]
+    openbao --> seaweedfs["seaweedfs"]
+    eso --> seaweedfs
     barman --> db["databases"]
     seaweedfs --> db
     dbsecrets --> db
@@ -400,7 +401,7 @@ flowchart TD
 * `cnpg-operator` depends on `external-secrets`, and `barman-cloud` depends on `cnpg-operator`.
 * `hubble` depends on `gateway`.
 * `databases-secrets` depends on `openbao` and `external-secrets` (whose webhook must admit its `ExternalSecret`s).
-* `seaweedfs` depends on `databases-secrets` (for `seaweedfs-credentials`) and is Ready only after its install hook creates the `cnpg-backups` bucket.
+* `seaweedfs` depends on `namespaces`, `openbao` and `external-secrets` (for its own `seaweedfs-credentials`) and is Ready only after its install hook creates the `cnpg-backups` bucket.
 * `databases` depends on `openbao`, `barman-cloud`, `seaweedfs`, `gateway`, and `databases-secrets`, so the PostGIS cluster starts with its backup bucket and its CA Secrets already in place.
 * `tekton-operator` depends on `cert-manager`.
 * `tekton` depends on `tekton-operator`, `openbao`, `external-secrets`, and `databases`. It holds Results' database login, whose ESO objects need OpenBao and ESO, and every Results login joins the `tekton_readwrite` role, which `databases` creates. The operator holds Results back until the login's Secret exists.

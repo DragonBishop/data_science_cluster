@@ -45,6 +45,7 @@ run "auth_roles_bound_narrowly" {
         vault_kubernetes_auth_backend_role.databases,
         vault_kubernetes_auth_backend_role.tekton_results,
         vault_kubernetes_auth_backend_role.cert_manager,
+        vault_kubernetes_auth_backend_role.seaweedfs,
       ] : length(role.bound_service_account_names) == 1 && length(role.bound_service_account_namespaces) == 1
     ])
     error_message = "A Kubernetes auth role is bound to more than one ServiceAccount or namespace."
@@ -59,6 +60,7 @@ run "policies_read_only" {
       for policy in [
         vault_policy.databases,
         vault_policy.tekton_results,
+        vault_policy.seaweedfs,
       ] : length(regexall("capabilities\\s*=\\s*\\[\"read\"\\]", policy.policy)) == length(regexall("capabilities", policy.policy))
     ])
     error_message = "A policy grants more than read."

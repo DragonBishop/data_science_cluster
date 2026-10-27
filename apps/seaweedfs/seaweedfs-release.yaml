@@ -2,7 +2,7 @@ apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
   name: seaweedfs
-  namespace: databases
+  namespace: seaweedfs
 spec:
   interval: 24h
   url: https://seaweedfs.github.io/seaweedfs/helm
@@ -11,7 +11,7 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: seaweedfs
-  namespace: databases
+  namespace: seaweedfs
 spec:
   interval: 1h
   releaseName: seaweedfs
@@ -31,7 +31,10 @@ spec:
           extraIngress:
             # Barman Cloud WAL archiving and base backups
             - from:
-                - podSelector:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: databases
+                  podSelector:
                     matchLabels:
                       cnpg.io/cluster: postgres-cluster
               ports:

@@ -80,16 +80,16 @@ spec:
   retentionPolicy: "${POSTGRES_BACKUP_RETENTION}"
   configuration:
     destinationPath: s3://${CNPG_BACKUP_BUCKET}/
-    endpointURL: https://seaweedfs-s3.databases.svc:${SEAWEEDFS_S3_PORT}
+    endpointURL: https://seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
     endpointCA:
-      name: postgres-server-cert
+      name: openbao-root-ca
       key: ca.crt
     s3Credentials:
       accessKeyId:
-        name: seaweedfs-credentials
+        name: barman-s3-credentials
         key: ACCESS_KEY_ID
       secretAccessKey:
-        name: seaweedfs-credentials
+        name: barman-s3-credentials
         key: ACCESS_SECRET_KEY
     wal:
       compression: gzip

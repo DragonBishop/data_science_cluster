@@ -19,11 +19,9 @@ resource "vault_kv_secret_v2" "seaweedfs" {
   mount = vault_mount.kv.path
   name  = "seaweedfs"
   data_json_wo = jsonencode({
-    ACCESS_KEY_ID     = var.s3_access_key
-    ACCESS_SECRET_KEY = var.s3_secret_key
     config = jsonencode({
       identities = [{
-        name = "cnpg"
+        name = "barman"
         credentials = [{
           accessKey = var.s3_access_key
           secretKey = var.s3_secret_key
@@ -31,6 +29,16 @@ resource "vault_kv_secret_v2" "seaweedfs" {
         actions = ["Read", "Write", "List", "Tagging"]
       }]
     })
+  })
+  data_json_wo_version = var.secrets_wo_version
+}
+
+resource "vault_kv_secret_v2" "barman_s3" {
+  mount = vault_mount.kv.path
+  name  = "barman-s3"
+  data_json_wo = jsonencode({
+    ACCESS_KEY_ID     = var.s3_access_key
+    ACCESS_SECRET_KEY = var.s3_secret_key
   })
   data_json_wo_version = var.secrets_wo_version
 }

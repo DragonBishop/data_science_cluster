@@ -1,8 +1,8 @@
 locals {
   internal_pki_domains = [
     "localhost",
-    "seaweedfs-s3", "seaweedfs-s3.databases", "seaweedfs-s3.databases.svc",
-    "seaweedfs-s3.databases.svc.cluster.local",
+    "seaweedfs-s3", "seaweedfs-s3.seaweedfs", "seaweedfs-s3.seaweedfs.svc",
+    "seaweedfs-s3.seaweedfs.svc.cluster.local",
     "internal", "cilium.io", "cluster.local", "hubble-relay",
   ]
 }

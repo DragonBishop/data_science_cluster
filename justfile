@@ -55,7 +55,7 @@ status:
 
   echo ""
   echo "== SeaweedFS =="
-  kubectl get svc,pods -n databases -l app.kubernetes.io/instance=seaweedfs
+  kubectl get svc,pods -n seaweedfs -l app.kubernetes.io/instance=seaweedfs
 
   echo ""
   echo "== Hubble =="

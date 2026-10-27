@@ -44,6 +44,13 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: seaweedfs
+  labels:
+    data-cluster/ca-bundles: "true"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: tekton-operator
   labels:
     pod-security.kubernetes.io/enforce: baseline

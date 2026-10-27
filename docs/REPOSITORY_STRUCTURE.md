@@ -109,6 +109,7 @@ The directory tree of this repository, then what each directory and file does.
 │   └── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases
 │       ├── kustomization.yaml
 │       ├── seaweedfs-release.yaml
+│       ├── seaweedfs-secrets.yaml
 │       └── seaweedfs-tls.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
@@ -287,7 +288,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`extensions/molecule/`**: The Molecule scenarios. `config.yml` holds what every scenario inherits: the collections path, the shared inventory and the unit test sequence. `default/` creates and destroys the one podman container the `unit-*` scenarios share. `inventory/hosts.yml` describes that container, and `inventory/group_vars` links to `playbooks/group_vars`. `molecule test --all --exclude full-playbook` from the collection's directory runs the unit scenarios. `full-playbook/` runs the whole playbook on a GitHub runner, from `e2e.yml`.
 * **`apps/databases/`** - The PostgreSQL clusters and their databases, credentials, networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`). Filenames describe the database group so additional PostgreSQL clusters can share the directory.
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
-  * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster` (with `tekton_readwrite` as a managed role), its `ObjectStore` (configured with `https://seaweedfs-s3.databases.svc:9000`), and `ScheduledBackup`.
+  * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster` (with `tekton_readwrite` as a managed role), its `ObjectStore` (configured with `https://seaweedfs-s3.seaweedfs.svc:9000`, verified against Secret `openbao-root-ca`), and `ScheduledBackup`.
   * **`databases.yaml`**: CNPG `Database` resources for `data_science` (with its schemas and PostGIS extensions) and `tekton_results`.
   * **`databases-dynamic-secrets.yaml`**: `VaultDynamicSecret` generator and `ExternalSecret` writing `postgres-app-dynamic-credentials`, a login OpenBao creates in Postgres, so it deploys with the PostgreSQL cluster.
   * **`databases-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
@@ -296,12 +297,13 @@ The directory tree of this repository, then what each directory and file does.
   * **`databases-issuers.yaml`**: Postgres's own CA, Certificate `postgres-ca` in `cert-manager`, self-signed through `openbao-selfsigned-bootstrap`, and ClusterIssuer `postgres-ca-issuer`, which signs with it.
   * **`databases-tls.yaml`**: cert-manager `Certificate` `postgres-server-cert` from `postgres-ca-issuer`, labelled `cnpg.io/reload` so CNPG reloads renewals, and Bundle `postgres-ca`, which publishes the CA as ConfigMap `postgres-ca` in every labelled namespace. SANs cover the Cluster's Services, `localhost`/`127.0.0.1`, `databases.${INTERNAL_DOMAIN}`, and the shared Gateway's static LAN IP.
 * **`apps/databases/secrets/`** - The ESO SecretStore and the static ExternalSecrets for `databases`, in their own Flux `Kustomization` (`clusters/local/databases-secrets.yaml`) so `databases` is applied only after those Secrets exist. The dynamic `postgres-app-dynamic-credentials` lives in `apps/databases/databases-dynamic-secrets.yaml`, because OpenBao needs `postgres-cluster-rw` to issue it.
-  * **`databases-secrets.yaml`**: The `databases-openbao-auth` `ServiceAccount`, the `openbao` `SecretStore` (Kubernetes auth to OpenBao), and the `ExternalSecret`s `postgres-superuser-credentials` (from `secret/postgres`) and `seaweedfs-credentials` (from `secret/seaweedfs`).
+  * **`databases-secrets.yaml`**: The `databases-openbao-auth` `ServiceAccount`, the `openbao` `SecretStore` (Kubernetes auth to OpenBao), and the `ExternalSecret`s `postgres-superuser-credentials` (from `secret/postgres`) and `barman-s3-credentials` (from `secret/barman-s3`).
 * **`apps/barman-cloud/`** - The Barman Cloud CNPG plugin, in its own Flux `Kustomization` (`clusters/local/barman-cloud.yaml`).
   * **`barman-cloud-release.yaml`**: `HelmRelease` for the plugin in `cnpg-system`.
   * **`cnpg-system-networkpolicy.yaml`**: `cnpg-system`'s policy file; the CNPG operator reaches the plugin.
 * **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`) so `databases` is applied only after the `cnpg-backups` bucket exists.
   * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, `cnpg-backups` bucket created by the chart's post-install hook, and the chart's own network policies, which also admit Postgres backups to S3.
+  * **`seaweedfs-secrets.yaml`**: The `seaweedfs-openbao-auth` `ServiceAccount`, the `openbao` `SecretStore` (Kubernetes auth to OpenBao as `seaweedfs-role`), and the `ExternalSecret` `seaweedfs-credentials` (from `secret/seaweedfs`), the S3 identity config the gateway loads.
   * **`seaweedfs-tls.yaml`**: cert-manager `Certificate` requesting the SeaweedFS S3 server certificate from `openbao-pki-issuer`.
 * **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/` and `apps/` below.
   * **`barman-cloud.yaml`**: Kustomization → `apps/barman-cloud/`
@@ -361,7 +363,7 @@ The directory tree of this repository, then what each directory and file does.
     * **`uninstall-cluster.sh`**: Tears down k3s and clears stale local cluster state: Cilium's persistent host files, `.local/openbao`, the Hubble cache and `terraform/openbao` state. Asks for a reboot before reinstalling.
   * **`src/data_science_cluster/__init__.py`**: The project package and its `__version__`, which release-please bumps.
 * **`terraform/`** - OpenTofu module configuring OpenBao's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
-  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: KV mounts/secrets (`secret/postgres`, `secret/seaweedfs`), Kubernetes auth backend and roles (`databases-role`, `tekton-results-role`, `cert-manager-pki-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic roles (`postgres-cluster`, `postgres-app-role`, `tekton-results-app-role`).
+  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: KV mounts/secrets (`secret/postgres`, `secret/seaweedfs`, `secret/barman-s3`), Kubernetes auth backend and roles (`databases-role`, `tekton-results-role`, `cert-manager-pki-role`, `seaweedfs-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic roles (`postgres-cluster`, `postgres-app-role`, `tekton-results-app-role`).
     * **`tests/openbao.tftest.hcl`**: Mocked-provider plan tests of the roles, policies and TTLs, run by `tofu test` in the `opentofu-unit` job.
 * **`tests/`**
   * **`conftest.py`**: Stops the session before collection if `kubectl`, `flux`, `ansible` or `ansible-playbook` is missing.

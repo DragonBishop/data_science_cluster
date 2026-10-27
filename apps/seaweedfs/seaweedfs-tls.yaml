@@ -3,7 +3,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: seaweedfs-s3-tls
-  namespace: databases
+  namespace: seaweedfs
 spec:
   secretName: seaweedfs-s3-tls
   duration: ${OPENBAO_PKI_CERT_DURATION}
@@ -13,9 +13,9 @@ spec:
     size: ${CERT_KEY_SIZE}
   dnsNames:
     - seaweedfs-s3
-    - seaweedfs-s3.databases
-    - seaweedfs-s3.databases.svc
-    - seaweedfs-s3.databases.svc.cluster.local
+    - seaweedfs-s3.seaweedfs
+    - seaweedfs-s3.seaweedfs.svc
+    - seaweedfs-s3.seaweedfs.svc.cluster.local
     - localhost
   issuerRef:
     name: openbao-pki-issuer

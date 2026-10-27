@@ -263,14 +263,14 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Barman Cloud Plugin backups start failing**
   * **What's happening:** The database cannot reach or authenticate to the object store, or S3 TLS handshake fails.
-  * **How to fix it:** Run `kubectl cnpg status postgres-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.databases.svc:9000`) with a valid certificate from `openbao-pki-issuer`. Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `seaweedfs-credentials` Secret match the credentials inside its `config` field. Confirm the bucket exists:
+  * **How to fix it:** Run `kubectl cnpg status postgres-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.seaweedfs.svc:9000`) with a valid certificate from `openbao-pki-issuer`. Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `barman-s3-credentials` Secret in `databases` match the `barman` identity in the `config` field of the `seaweedfs-credentials` Secret in `seaweedfs`. Confirm the bucket exists:
 
     ```bash
-    kubectl exec -n databases seaweedfs-master-0 -- sh -c 'echo "fs.ls /buckets" | weed shell -master=localhost:9333'
+    kubectl exec -n seaweedfs seaweedfs-master-0 -- sh -c 'echo "fs.ls /buckets" | weed shell -master=localhost:9333'
     # cnpg-backups
     ```
 
-    If it is missing, re-reconcile `apps/seaweedfs/seaweedfs-release.yaml` (`flux reconcile helmrelease seaweedfs -n databases`); `createBuckets` in that chart's values creates it at install.
+    If it is missing, re-reconcile `apps/seaweedfs/seaweedfs-release.yaml` (`flux reconcile helmrelease seaweedfs -n seaweedfs`); `createBuckets` in that chart's values creates it at install.
 
 > [!CAUTION]
 > A mismatch between the Secret's `ACCESS_KEY_ID`/`ACCESS_SECRET_KEY` fields and its `config` field produces no error until an archive is actually attempted — a "healthy" cluster can still be silently failing every backup.

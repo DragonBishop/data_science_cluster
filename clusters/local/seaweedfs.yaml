@@ -6,8 +6,10 @@ metadata:
 spec:
   interval: 1h
   dependsOn:
-    - name: databases-secrets
     - name: cluster-config
+    - name: external-secrets
+    - name: namespaces
+    - name: openbao
   sourceRef:
     kind: GitRepository
     name: flux-system
