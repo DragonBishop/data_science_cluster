@@ -5,9 +5,11 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: cert-manager
     - name: cluster-config
+    - name: trust-manager
   sourceRef:
     kind: GitRepository
     name: flux-system

@@ -361,7 +361,9 @@ flowchart TD
 
     %% Core Services & PKI
     cilium --> certmgr["cert-manager"]
+    certmgr --> trustmgr["trust-manager"]
     certmgr --> openbao["openbao"]
+    trustmgr --> openbao
 
     %% Platform Services
     openbao --> eso["external-secrets"]
@@ -391,7 +393,8 @@ flowchart TD
 
 * `cilium` requires `gateway-api-crds`, `namespaces` and `cluster-config`.
 * `cert-manager` depends on `cilium`.
-* `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap).
+* `trust-manager` depends on `cert-manager`, which holds the `jetstack` HelmRepository and issues the trust-manager webhook's certificate.
+* `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap) and `trust-manager` (for the Bundle CRD its CA Bundles use).
 * `external-secrets` and `gateway` depend on `openbao` (for secrets sync and PKI).
 * `cnpg-operator` depends on `external-secrets`, and `barman-cloud` depends on `cnpg-operator`.
 * `hubble` depends on `gateway`.

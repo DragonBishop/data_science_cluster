@@ -1,0 +1,37 @@
+# jetstack Helm Repository -> ./infrastructure/cert-manager/cert-manager-release.yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: trust-manager
+  namespace: cert-manager
+spec:
+  interval: 1h
+  releaseName: trust-manager
+  chart:
+    spec:
+      chart: trust-manager
+      version: "${TRUST_MANAGER_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: jetstack
+  values:
+    crds:
+      enabled: true
+    defaultPackage:
+      enabled: false
+    secretTargets:
+      enabled: true
+      authorizedSecrets:
+        - openbao-root-ca
+    app:
+      trust:
+        namespace: cert-manager
+      metrics:
+        service:
+          enabled: false
+    resources:
+      requests:
+        cpu: ${TRUST_MANAGER_CPU_REQUEST}
+        memory: ${TRUST_MANAGER_MEM_REQUEST}
+      limits:
+        memory: ${TRUST_MANAGER_MEM_LIMIT}
