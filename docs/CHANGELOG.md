@@ -1,3 +1,48 @@
+## [2.2.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.1.0...v2.2.0) - 2026-10-28
+
+### 🚀 Features
+
+- *(trust-manager)* Publish the OpenBao CA bundles through trust-manager Bundles ([1602475](https://github.com/DragonBishop/data_science_cluster/commit/1602475b1c991cfc61bd0663a40352955adc7521))
+- *(postgres)* Sign the Postgres server certificate with its own CA ([9428441](https://github.com/DragonBishop/data_science_cluster/commit/942844111b0109690532916587bbce586373b879))
+- *(tekton)* Add the core-test Pipeline with the ca-bundles Task ([3747917](https://github.com/DragonBishop/data_science_cluster/commit/3747917e0bc3b12fe197453239870a1e3ec0bb81))
+- *(ansible)* Install cert-manager, trust-manager and OpenBao before Flux ([a033afa](https://github.com/DragonBishop/data_science_cluster/commit/a033afa0d33ffd42d6adeece61d6ab3d2e626918))
+- *(spire)* Install SPIRE before Flux with its CA signed by OpenBao's root ([d949ec1](https://github.com/DragonBishop/data_science_cluster/commit/d949ec1f6d344fc4a21a3aad7ba546a9bba54b6e))
+- *(flux)* Require SPIFFE mTLS between the Flux controllers ([26bf0cc](https://github.com/DragonBishop/data_science_cluster/commit/26bf0cc3798659f2058abc4827bde1311dbf2902))
+- *(seaweedfs)* Require mTLS on gRPC between master, filer, volume and S3 ([c606e13](https://github.com/DragonBishop/data_science_cluster/commit/c606e1336bd59f89f4ea8ed97cea30abea1bf57e))
+- *(postgres)* Let core_test log in with its SVID ([1fe6166](https://github.com/DragonBishop/data_science_cluster/commit/1fe61665b66edc7867219dcf3910da9d4f26da6a))
+- *(spire)* Give core-test and rotate-credentials SVIDs ([b1a6f55](https://github.com/DragonBishop/data_science_cluster/commit/b1a6f55368a3f81dc752e2c29a36e8afefe2e4ec))
+- *(openbao)* Replace ESO with SVID logins and a daily rotate-credentials CronJob ([ad2e98b](https://github.com/DragonBishop/data_science_cluster/commit/ad2e98b85bb98120aa2a42d67877b8c18ef8b6d6))
+- *(spire)* Close the server's metrics port and drop Prometheus's SPIFFE ID ([0db0397](https://github.com/DragonBishop/data_science_cluster/commit/0db0397d81f3dbb190fda9eca1f68cb5edb697dd))
+
+### 🐛 Bug Fixes
+
+- *(renovate)* Track cluster-config pins through timestamped datasources ([b594de2](https://github.com/DragonBishop/data_science_cluster/commit/b594de2f2a0bb2d61e1b9fa8ce1ee74753b4c2e5))
+
+### 📚 Documentation
+
+- Naming conventions and the new policy, file and namespace layout ([7791fa8](https://github.com/DragonBishop/data_science_cluster/commit/7791fa83e090406f2bb4c6f25700023eca2aeadc))
+- Document the trust-base-first bootstrap and rotate-credentials in place of ESO ([de6bdeb](https://github.com/DragonBishop/data_science_cluster/commit/de6bdeb8fc22ebcf186ba90f5804eb61d4b81c7b))
+
+### ♻️ Refactor
+
+- Standardize PostgreSQL names and reorganize Tekton resources ([471e532](https://github.com/DragonBishop/data_science_cluster/commit/471e532b470b538b97b56a21e5f7d61ed3bcf2d3))
+- *(cluster-config)* Drop GATEWAY_API_VERSION ([9b64c8a](https://github.com/DragonBishop/data_science_cluster/commit/9b64c8ac9711466996ef065c2ce02f51cb82e144))
+- *(flux)* One policy file per namespace and role-based file names ([4a2fa3e](https://github.com/DragonBishop/data_science_cluster/commit/4a2fa3e95ba24289744e6823a37b0a514fb93b54))
+- *(tekton)* Split Tekton into the tekton, tekton-triggers and tekton-pipelines namespaces ([519d5d2](https://github.com/DragonBishop/data_science_cluster/commit/519d5d2dba961a149d4a48cb15de64dac5a77052))
+- *(seaweedfs)* Move SeaweedFS into its own namespace with its own OpenBao login ([973bee3](https://github.com/DragonBishop/data_science_cluster/commit/973bee38620f27535c692ab3a287695b3f0d1ae4))
+- *(eso)* Refresh the Tekton Results database login daily and drop the app login ([10e40bb](https://github.com/DragonBishop/data_science_cluster/commit/10e40bb6d29098a945d02b949681c05b90033181))
+- *(ansible)* Substitute values with flux envsubst and parse OpenBao output once ([fefd895](https://github.com/DragonBishop/data_science_cluster/commit/fefd89531d7411dbf360b1b9d00a0127fc848d59))
+
+### 🧪 Testing
+
+- *(molecule)* Check cluster-config drift on the live full-playbook install ([b41f210](https://github.com/DragonBishop/data_science_cluster/commit/b41f2105a5cf8fed81d8f7c140e120cce538f0cc))
+- *(molecule)* Template the trust base charts and check SPIRE's CA and Flux adoption ([932f017](https://github.com/DragonBishop/data_science_cluster/commit/932f017c04d1c3addcb1483dcd259492c2c6ba40))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(bash)* Run the host scripts with env bash ([dfc2981](https://github.com/DragonBishop/data_science_cluster/commit/dfc2981e0724b34cbbab2544f21a6ec69174fc9c))
+- *(flux)* Upgrade Flux from v2.9.6 to v2.10.0 ([910b447](https://github.com/DragonBishop/data_science_cluster/commit/910b44772aa64140fab690ecc99bdf92fec7514b))
+
 ## [2.1.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.0.0...v2.1.0) - 2026-10-23
 
 ### 🚀 Features
