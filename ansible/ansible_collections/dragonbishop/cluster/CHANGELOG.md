@@ -1,3 +1,24 @@
+## [2.2.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.1.0...v2.2.0) - 2026-10-28
+
+### 🚀 Features
+
+- *(ansible)* Install cert-manager, trust-manager and OpenBao before Flux ([a033afa](https://github.com/DragonBishop/data_science_cluster/commit/a033afa0d33ffd42d6adeece61d6ab3d2e626918))
+- *(spire)* Install SPIRE before Flux with its CA signed by OpenBao's root ([d949ec1](https://github.com/DragonBishop/data_science_cluster/commit/d949ec1f6d344fc4a21a3aad7ba546a9bba54b6e))
+- *(flux)* Require SPIFFE mTLS between the Flux controllers ([26bf0cc](https://github.com/DragonBishop/data_science_cluster/commit/26bf0cc3798659f2058abc4827bde1311dbf2902))
+- *(openbao)* Replace ESO with SVID logins and a daily rotate-credentials CronJob ([ad2e98b](https://github.com/DragonBishop/data_science_cluster/commit/ad2e98b85bb98120aa2a42d67877b8c18ef8b6d6))
+
+### ♻️ Refactor
+
+- Standardize PostgreSQL names and reorganize Tekton resources ([471e532](https://github.com/DragonBishop/data_science_cluster/commit/471e532b470b538b97b56a21e5f7d61ed3bcf2d3))
+- *(flux)* One policy file per namespace and role-based file names ([4a2fa3e](https://github.com/DragonBishop/data_science_cluster/commit/4a2fa3e95ba24289744e6823a37b0a514fb93b54))
+- *(tekton)* Split Tekton into the tekton, tekton-triggers and tekton-pipelines namespaces ([519d5d2](https://github.com/DragonBishop/data_science_cluster/commit/519d5d2dba961a149d4a48cb15de64dac5a77052))
+- *(ansible)* Substitute values with flux envsubst and parse OpenBao output once ([fefd895](https://github.com/DragonBishop/data_science_cluster/commit/fefd89531d7411dbf360b1b9d00a0127fc848d59))
+
+### 🧪 Testing
+
+- *(molecule)* Check cluster-config drift on the live full-playbook install ([b41f210](https://github.com/DragonBishop/data_science_cluster/commit/b41f2105a5cf8fed81d8f7c140e120cce538f0cc))
+- *(molecule)* Template the trust base charts and check SPIRE's CA and Flux adoption ([932f017](https://github.com/DragonBishop/data_science_cluster/commit/932f017c04d1c3addcb1483dcd259492c2c6ba40))
+
 ## [2.1.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.0.0...v2.1.0) - 2026-10-23
 
 ### 🚀 Features
