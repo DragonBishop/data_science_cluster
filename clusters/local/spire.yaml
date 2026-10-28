@@ -3,8 +3,11 @@ kind: Kustomization
 metadata:
   name: spire
   namespace: flux-system
+  labels:
+    data-cluster/core: "true"
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: cilium
     - name: namespaces

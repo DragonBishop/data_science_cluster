@@ -1,0 +1,23 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: core-test
+spec:
+  className: spire-spire
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  dnsNameTemplates:
+    - core-test.spiffe
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: tekton-pipelines
+  podSelector:
+    matchExpressions:
+      - key: tekton.dev/pipeline
+        operator: In
+        values:
+          - core-test
+      - key: tekton.dev/pipelineTask
+        operator: In
+        values:
+          - openbao
+          - postgres-login
