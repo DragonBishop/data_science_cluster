@@ -26,13 +26,6 @@ spire-server:
       memory: ${SPIRE_SERVER_MEM_REQUEST}
     limits:
       memory: ${SPIRE_SERVER_MEM_LIMIT}
-  telemetry:
-    prometheus:
-      enabled: true
-      tls:
-        mode: spireSVID
-        authorizedSPIFFEIDs:
-          - spiffe://cluster.internal/ns/observability/sa/prometheus
   controllerManager:
     resources:
       requests:
