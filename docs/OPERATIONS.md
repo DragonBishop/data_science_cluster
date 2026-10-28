@@ -24,7 +24,7 @@ One-time, first-install setup: see [Installation](INSTALLATION.md) for Requireme
 | --- | --- | --- |
 | `just setup-firewall` | Configure host firewall rules | Before install; opens what Kubernetes and Cilium need in firewalld (Fedora) or ufw (Ubuntu) |
 | `just preflight` | Run host readiness check | Verify host tooling, `gh` auth, firewall rules, and reserved IP range before install |
-| `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Provision k3s, Cilium, Flux, OpenBao, and apply initial OpenTofu secrets |
+| `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Install k3s, Cilium, cert-manager, trust-manager and OpenBao, apply `terraform/openbao`, then install SPIRE and Flux |
 
 ## Cluster Lifecycle
 

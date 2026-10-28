@@ -1,0 +1,7 @@
+---
+- name: The cert-manager values against the pinned chart
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Install Helm and the Flux CLI
+      ansible.builtin.import_tasks: ../tasks/install_render_tools.yml

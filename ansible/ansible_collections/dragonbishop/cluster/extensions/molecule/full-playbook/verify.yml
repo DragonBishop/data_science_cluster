@@ -100,20 +100,29 @@
                group_vars_dir + '/versions.yml')
          | map('from_yaml') | map('list') | flatten }}
   tasks:
-    - name: Wait for Flux to apply cluster-config and Cilium's values
+    - name: Wait for Flux to apply cluster-config
       kubernetes.core.k8s_info:
         api_version: kustomize.toolkit.fluxcd.io/v1
         kind: Kustomization
-        name: "{{ item }}"
+        name: cluster-config
         namespace: flux-system
         wait: true
         wait_condition:
           type: Ready
           status: "True"
         wait_timeout: 600
-      loop:
-        - cluster-config
-        - cilium
+
+    - name: Wait for Flux to apply Cilium's values
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: cilium
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
 
     - name: Read the live cluster-config ConfigMap
       kubernetes.core.k8s_info:
@@ -149,28 +158,161 @@
           - (cilium_values_substituted.stdout | from_yaml) == (live_cilium_values.resources[0].data['values.yaml'] | from_yaml)
         fail_msg: the cilium role's values differ from the cilium-values ConfigMap, so Flux reconciles Cilium away from them
 
-    - name: Wait for the SPIRE workloads to report ready
+    - name: Wait for the SPIRE server to report ready
       kubernetes.core.k8s_info:
-        kind: "{{ item.kind }}"
-        name: "{{ item.name }}"
+        kind: StatefulSet
+        name: spire-server
         namespace: spire
         wait: true
         wait_timeout: 300
-      register: spire_workloads
-      loop:
-        - kind: StatefulSet
-          name: spire-server
-        - kind: DaemonSet
-          name: spire-agent
-        - kind: DaemonSet
-          name: spire-spiffe-csi-driver
+      register: spire_server
 
-    - name: It should run a ready pod for every SPIRE workload
+    - name: It should create the SPIRE server StatefulSet
       ansible.builtin.assert:
         that:
-          - item.resources | length == 1
-          - (item.resources[0].status.numberReady | default(item.resources[0].status.readyReplicas)) >= 1
-        fail_msg: "{{ item.item.kind }} {{ item.item.name }} is missing from spire or is not ready"
-      loop: "{{ spire_workloads.results }}"
-      loop_control:
-        label: "{{ item.item.name }}"
+          - spire_server.resources | length == 1
+        fail_msg: StatefulSet spire-server is missing from spire
+
+    - name: It should run a ready SPIRE server pod
+      ansible.builtin.assert:
+        that:
+          - spire_server.resources[0].status.readyReplicas | default(0) >= 1
+        fail_msg: StatefulSet spire-server has no ready pod
+
+    - name: Wait for the SPIRE agent to report ready
+      kubernetes.core.k8s_info:
+        kind: DaemonSet
+        name: spire-agent
+        namespace: spire
+        wait: true
+        wait_timeout: 300
+      register: spire_agent
+
+    - name: It should create the SPIRE agent DaemonSet
+      ansible.builtin.assert:
+        that:
+          - spire_agent.resources | length == 1
+        fail_msg: DaemonSet spire-agent is missing from spire
+
+    - name: It should run a ready SPIRE agent pod
+      ansible.builtin.assert:
+        that:
+          - spire_agent.resources[0].status.numberReady | default(0) >= 1
+        fail_msg: DaemonSet spire-agent has no ready pod
+
+    - name: Wait for the SPIFFE CSI driver to report ready
+      kubernetes.core.k8s_info:
+        kind: DaemonSet
+        name: spire-spiffe-csi-driver
+        namespace: spire
+        wait: true
+        wait_timeout: 300
+      register: spire_spiffe_csi_driver
+
+    - name: It should create the SPIFFE CSI driver DaemonSet
+      ansible.builtin.assert:
+        that:
+          - spire_spiffe_csi_driver.resources | length == 1
+        fail_msg: DaemonSet spire-spiffe-csi-driver is missing from spire
+
+    - name: It should run a ready SPIFFE CSI driver pod
+      ansible.builtin.assert:
+        that:
+          - spire_spiffe_csi_driver.resources[0].status.numberReady | default(0) >= 1
+        fail_msg: DaemonSet spire-spiffe-csi-driver has no ready pod
+
+    - name: Read OpenBao's root CA in spire
+      kubernetes.core.k8s_info:
+        kind: ConfigMap
+        name: openbao-root-ca
+        namespace: spire
+      register: spire_openbao_root_ca
+
+    - name: Read the SPIRE server Service
+      kubernetes.core.k8s_info:
+        kind: Service
+        name: spire-server
+        namespace: spire
+      register: spire_server_service
+
+    - name: Create a file for OpenBao's root CA
+      ansible.builtin.tempfile:
+        suffix: .pem
+      register: openbao_root_ca_file
+
+    - name: Write OpenBao's root CA
+      ansible.builtin.copy:
+        content: "{{ spire_openbao_root_ca.resources[0].data['ca.crt'] }}"
+        dest: "{{ openbao_root_ca_file.path }}"
+        mode: "0600"
+
+    - name: It should sign SPIRE's CA with the OpenBao root
+      ansible.builtin.command:
+        cmd: >-
+          openssl s_client -brief -alpn h2 -verify_return_error
+          -CAfile {{ openbao_root_ca_file.path }}
+          -connect {{ spire_server_service.resources[0].spec.clusterIP }}:443
+        stdin: ""
+      changed_when: false
+
+    - name: Remove the OpenBao root CA file
+      ansible.builtin.file:
+        path: "{{ openbao_root_ca_file.path }}"
+        state: absent
+
+    - name: Wait for Flux to adopt cert-manager
+      kubernetes.core.k8s_info:
+        api_version: helm.toolkit.fluxcd.io/v2
+        kind: HelmRelease
+        name: cert-manager
+        namespace: cert-manager
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+      register: cert_manager_release
+
+    - name: It should let Flux adopt cert-manager
+      ansible.builtin.assert:
+        that:
+          - cert_manager_release.resources | length == 1
+        fail_msg: HelmRelease cert-manager is missing, so Flux did not adopt the release Ansible installed
+
+    - name: Wait for Flux to adopt trust-manager
+      kubernetes.core.k8s_info:
+        api_version: helm.toolkit.fluxcd.io/v2
+        kind: HelmRelease
+        name: trust-manager
+        namespace: cert-manager
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+      register: trust_manager_release
+
+    - name: It should let Flux adopt trust-manager
+      ansible.builtin.assert:
+        that:
+          - trust_manager_release.resources | length == 1
+        fail_msg: HelmRelease trust-manager is missing, so Flux did not adopt the release Ansible installed
+
+    - name: Wait for Flux to adopt OpenBao
+      kubernetes.core.k8s_info:
+        api_version: helm.toolkit.fluxcd.io/v2
+        kind: HelmRelease
+        name: openbao
+        namespace: openbao
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+      register: openbao_release
+
+    - name: It should let Flux adopt openbao
+      ansible.builtin.assert:
+        that:
+          - openbao_release.resources | length == 1
+        fail_msg: HelmRelease openbao is missing, so Flux did not adopt the release Ansible installed

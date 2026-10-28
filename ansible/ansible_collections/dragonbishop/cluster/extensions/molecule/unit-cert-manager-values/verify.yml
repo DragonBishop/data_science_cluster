@@ -1,0 +1,21 @@
+---
+- name: The cert-manager values against the pinned chart
+  hosts: molecule
+  gather_facts: true
+  tasks:
+    - name: Render the cert-manager Helm values
+      ansible.builtin.import_role:
+        name: dragonbishop.cluster.cert_manager
+        tasks_from: render
+
+    - name: Parse the rendered values
+      ansible.builtin.set_fact:
+        cert_manager_values: "{{ cert_manager_values_substituted.stdout | from_yaml }}"
+
+    - name: It should render the cert-manager chart with the role's values
+      kubernetes.core.helm_template:
+        chart_ref: oci://quay.io/jetstack/charts/cert-manager
+        chart_version: "{{ cert_manager_version }}"
+        release_name: cert-manager
+        release_namespace: cert-manager
+        release_values: "{{ cert_manager_values }}"

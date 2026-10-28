@@ -1,0 +1,9 @@
+---
+- name: The cert-manager values against the pinned chart
+  hosts: molecule
+  gather_facts: true
+  tasks:
+    - name: Render the cert-manager Helm values
+      ansible.builtin.import_role:
+        name: dragonbishop.cluster.cert_manager
+        tasks_from: render

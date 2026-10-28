@@ -1,0 +1,9 @@
+---
+- name: The OpenBao values against the pinned chart
+  hosts: molecule
+  gather_facts: true
+  tasks:
+    - name: Render the openbao Helm values
+      ansible.builtin.import_role:
+        name: dragonbishop.cluster.openbao
+        tasks_from: render
