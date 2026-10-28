@@ -4,12 +4,12 @@ This repository provisions a self-contained local Kubernetes cluster tailored fo
 
 Four tools roll out this cluster:
 
-* **Ansible:** Bootstraps the host and the cluster idempotently: k3s, Cilium, the Flux controllers, and OpenBao's initialization and unseal. It runs OpenTofu as its last step.
+* **Ansible:** Bootstraps the host and the cluster idempotently, in order: k3s, Cilium, cert-manager, trust-manager, OpenBao, OpenTofu, SPIRE, and the Flux controllers. Flux adopts each release Ansible installed.
 * **Flux CD:** Reconciles the cluster against this Git repository, its single source of truth. Each Flux `Kustomization` applies one directory of manifests in the order its `dependsOn` chain sets, and third-party charts arrive as `HelmRelease`s.
 * **OpenTofu:** Declares OpenBao's secrets engines, access policies, PKI and Kubernetes authentication (`terraform/openbao/`).
 * **Tekton:** Tests the core after every change Flux applies to it, including the paths into it that the workstation uses.
 
-Cluster secrets and security rely on an in-cluster OpenBao, unsealed at boot from a GPG-encrypted keyfile kept gitignored in this repo (`.local/openbao/`). Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, while the External Secrets Operator (ESO) syncs static configuration and short-lived, dynamic database credentials into Kubernetes `Secret`s for application workloads.
+Cluster secrets and security rely on an in-cluster OpenBao, unsealed at boot from a GPG-encrypted keyfile kept gitignored in this repo (`.local/openbao/`). Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, and its database engine issues the short-lived logins the `rotate-credentials` CronJob writes into Kubernetes `Secret`s every day.
 
 Workloads are structured modularly to maximize compute efficiency on local hardware. The cluster maintains an always-on core database architecture, powered by PostgreSQL/PostGIS (CloudNativePG), Cilium eBPF networking and Gateway routing, and SeaweedFS S3-compatible storage. Specialized modules for testing, cluster observability, ETL data pipelines, and machine learning workflows can be deployed dynamically when performing specific data science tasks and torn down afterward to conserve memory and CPU.
 
@@ -56,7 +56,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
 | Ansible | `ansible` `14.5.0` (`ansible-core` `2.21.5`), from `uv.lock` | Idempotent cluster bootstrap playbook and host setup (`dragonbishop.cluster.data_cluster`). `just bootstrap` runs it through `uv run` and first installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on. |
-| Flux CLI | `v2.9.6` (`fluxcd.io`) | Creates Flux's Git credentials during bootstrap (`flux create secret`), and inspects and reconciles Flux afterwards. |
+| Flux CLI | `v2.10.0` (`fluxcd.io`) | Creates Flux's Git credentials during bootstrap (`flux create secret`), and inspects and reconciles Flux afterwards. |
 | GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |
 | Helm | `v4.x` (`get-helm-4`) | Installs Cilium during bootstrap, before Flux exists, and reads chart metadata for `just preflight`. |
 | OpenTofu | `1.13.1` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
@@ -77,7 +77,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | Headlamp | `0.45.0` (desktop app) | Cluster GUI on the host, reading `~/.kube/config`. Its plugins assist with cluster management. |
 | Hubble CLI | `hubble` (`cilium/hubble` release) | Streams flows and policy verdicts from Hubble Relay (`just hubble`). |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
-| kubectl | `v1.37.1` (`KUBECTL_VERSION`, matching `K3S_VERSION`) | Kubernetes CLI for every cluster operation and recipe. The same version runs in-cluster as the `registry.k8s.io/kubectl` image in the Tekton Results init containers. |
+| kubectl | `v1.37.1` (`KUBECTL_VERSION`, matching `K3S_VERSION`) | Kubernetes CLI for every cluster operation and recipe. |
 | kubectl cnpg plugin | `1.30.1` (the CNPG operator version) | CloudNativePG status, backups, restarts, and `psql` sessions inside the primary pod (`kubectl cnpg ...`), so the host needs no PostgreSQL client. |
 
 **pgiscluster** reaches the database from the host:
@@ -94,8 +94,8 @@ The core is always on and holds every piece of the cluster's state. It relies on
 
 | Component | Version | Description |
 | --- | --- | --- |
-| Flux | `v2.9.6` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. Pinned by the committed `clusters/local/flux-system/gotk-components.yaml`, which `flux install --components=source-controller,kustomize-controller,helm-controller,notification-controller --network-policy=false --export` regenerates after a CLI upgrade. |
-| k3s | `v1.37.1+k3s1` | Core control plane and execution environment. `just bootstrap` installs `K3S_VERSION`; an existing node upgrades through the k3s installer with `INSTALL_K3S_VERSION`. k3s also bundles the Gateway API CRDs (its `gateway-api-crd` chart), so `GATEWAY_API_VERSION` follows k3s's bundled version. |
+| Flux | `v2.10.0` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. Pinned by the committed `clusters/local/flux-system/gotk-components.yaml`, which `flux install --components=source-controller,kustomize-controller,helm-controller,notification-controller --network-policy=false --export` regenerates after a CLI upgrade. |
+| k3s | `v1.37.1+k3s1` | Core control plane and execution environment. `just bootstrap` installs `K3S_VERSION`; an existing node upgrades through the k3s installer with `INSTALL_K3S_VERSION`. k3s also bundles the Gateway API CRDs (its `gateway-api-crd` chart), so the vendored `infrastructure/gateway-api-crds/standard-install.yaml` follows k3s's bundled version. |
 | Prometheus Operator CRDs | `32.0.1` (chart, operator `v0.94.1`; planned for 3.0) | `ServiceMonitor`, `PodMonitor` and the other Prometheus Operator CRDs, installed in the core so the monitors beside core components keep resolving while observability is off. Pinned to the operator version kube-prometheus-stack ships. |
 
 **Cilium** carries the cluster's traffic, one shared **Gateway** built on the **Gateway API** takes every request from the LAN, **CoreDNS** resolves its names, and **Hubble** shows its flows:
@@ -103,17 +103,16 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | Component | Version | Description |
 | --- | --- | --- |
 | Cilium | `1.20.2` | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
-| DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with an `internal` zone via a `coredns-custom` ConfigMap (`infrastructure/coredns-custom/`). Resolves `*.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
+| DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with an `internal` zone via a `coredns-custom` ConfigMap (`infrastructure/cilium/coredns-custom.yaml`). Resolves `*.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
 | Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`) every tool attaches a `Route` to: an HTTPS listener (443, wildcard cert) for web UIs, a raw TCP listener (5432) for Postgres. |
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
 | Hubble | `v1.20.2` (Relay), `v0.13.6` (UI) | Cilium's network observability layer. Relay runs its own cert-manager mTLS trust domain; the `hubble` CLI reaches it at `localhost:4245` through a local redirect. |
 
-**OpenBao** holds the cluster's secrets and issues its certificates and database logins through its **Database & PKI Engines**. **cert-manager** and **ESO** deliver them into Kubernetes:
+**OpenBao** holds the cluster's secrets and issues its certificates and database logins through its **Database & PKI Engines**. **cert-manager** delivers the certificates into Kubernetes:
 
 | Component | Version | Description |
 | --- | --- | --- |
 | cert-manager | `1.21.2` | Manages local edge CA, provisions OpenBao TLS, and mints leaf certificates via `openbao-pki-issuer`. |
-| External Secrets Operator (ESO) | `2.12.0` | Syncs OpenBao values into Kubernetes `Secret`s; refreshes static secrets hourly and generates new dynamic database credentials every 2h. |
 | OpenBao (in-cluster) | `2.7.1` (chart `0.30.3`) | Secrets backend on PebbleDB storage; `just start` unseals it from the GPG-encrypted keyfile in `.local/openbao/`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
 | OpenBao Database & PKI Engines | Same as OpenBao | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
 
@@ -124,16 +123,16 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | Barman Cloud Plugin | `0.8.1` | WAL archiving and base backups for CNPG, via the `ObjectStore` resource rather than in-tree `spec.backup.barmanObjectStore`. |
 | CloudNativePG (CNPG) | `0.29.1` | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
 | PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` | Image the CNPG `Cluster` runs (`18.6` PostgreSQL, `3.6.4` PostGIS). |
-| SeaweedFS | `4.48.0` | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.databases.svc:9000`). |
+| SeaweedFS | `4.51.0` | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.seaweedfs.svc:9000`). |
 
-The **Tekton Operator** installs **Tekton Pipelines**, **Tekton Triggers** and **Tekton Results**, which run **`core-test`** after every change Flux applies to the core. **Zot** holds the cluster's images. Runs live in the `tekton-runs` namespace, and Tekton's controllers and their Secrets live in `tekton-pipelines`:
+The **Tekton Operator** installs **Tekton Pipelines**, **Tekton Triggers** and **Tekton Results**, which run **`core-test`** after every change Flux applies to the core. **Zot** holds the cluster's images. Tekton's controllers, Results and their Secrets live in `tekton`, the EventListener and Triggers in `tekton-triggers`, and Tasks, Pipelines and their runs in `tekton-pipelines`:
 
 | Component | Version | Description |
 | --- | --- | --- |
-| `core-test` | `infrastructure/tekton-tasks/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, the workstation's paths through the local redirects and the Gateway, backups and Hubble drops. |
+| `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, backups and Hubble drops. |
 | Tekton Operator | `v0.81.2` | Installs Pipelines, Triggers, Results and the pruner from one `TektonConfig`. |
 | Tekton Pipelines | `v1.15.3` (via Tekton Operator `v0.81.2`) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. |
-| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2`) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. Each pod start gets its own OpenBao database login. |
+| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2`) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. Each pod reads its database login from Secret `tekton-results-postgres` at start. |
 | Tekton Triggers | `v0.37.1` (via Tekton Operator `v0.81.2`) | The `flux-events` EventListener (planned for 3.0) turns events from Flux's notification-controller into PipelineRuns, so a merge to `main` starts `core-test`. |
 | Zot | `v2.1.22` (chart `0.1.128`; planned for 3.0) | In-cluster OCI registry and pull-through cache for every public registry the node pulls from, storing images in the `zot` SeaweedFS bucket. The Tekton module builds images into it, and containerd pulls through it. |
 
@@ -176,7 +175,6 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Component | Version | Description |
 | --- | --- | --- |
 | BentoML | `v1.4.39` (planned for 3.0) | Packages models into self-contained, production-ready services using a Python-first framework. |
-| Flux image automation | `v1.2.5` (image-reflector and image-automation controllers, Flux `v2.9.6`; planned for 3.0) | Watches the registry for new model image tags and pushes each one to the `flux/image-updates` branch, so a merged pull request rolls out the new model. The controllers join the core Flux install. |
 | MLflow | `3.17.0` (planned for 3.0) | Tracks code versions, hyperparameters, and experiment results, storing metadata in PostgreSQL and artifacts in the cluster's SeaweedFS object store. |
 
 ---
@@ -230,7 +228,6 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Component | Documentation Link |
 | --- | --- |
 | cert-manager | [https://cert-manager.io/docs/](https://cert-manager.io/docs/) |
-| External Secrets Operator | [https://external-secrets.io/latest/](https://external-secrets.io/latest/) |
 | OpenBao | [https://openbao.org/docs/](https://openbao.org/docs/) |
 | OpenBao Database Secrets Engine | [https://openbao.org/docs/secrets/databases/](https://openbao.org/docs/secrets/databases/) |
 | OpenBao PKI Secrets Engine | [https://openbao.org/docs/secrets/pki/](https://openbao.org/docs/secrets/pki/) |
@@ -278,6 +275,5 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | BentoML | [https://docs.bentoml.com/](https://docs.bentoml.com/) |
 | dbt | [https://docs.getdbt.com/](https://docs.getdbt.com/) |
 | dlt | [https://dlthub.com/docs](https://dlthub.com/docs) |
-| Flux image automation | [https://fluxcd.io/flux/guides/image-update/](https://fluxcd.io/flux/guides/image-update/) |
 | MLflow | [https://mlflow.org/docs/latest/index.html](https://mlflow.org/docs/latest/index.html) |
 | Prefect | [https://docs.prefect.io/](https://docs.prefect.io/) |

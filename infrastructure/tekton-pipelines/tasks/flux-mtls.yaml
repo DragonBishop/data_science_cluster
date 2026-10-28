@@ -1,0 +1,42 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: flux-mtls
+  namespace: tekton-pipelines
+spec:
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+  steps:
+    - name: artifact-server-requires-svid
+      script: |
+        #!/usr/bin/env bash
+        curl --insecure --silent --show-error --max-time 10 --output /dev/null https://source-controller.flux-system.svc.cluster.local./
+        exit_code=$?
+        if [[ $exit_code -eq 0 ]]; then
+          echo "FAIL: source-controller served a client without an SVID; check the patches in clusters/local/flux-system/kustomization.yaml"
+          exit 1
+        fi
+        if [[ $exit_code -eq 7 || $exit_code -eq 28 ]]; then
+          echo "FAIL: source-controller unreachable (curl exit $exit_code); check kubectl get pods -n flux-system and the flux CiliumNetworkPolicy"
+          exit 1
+        fi
+        echo "ok: source-controller refused a client without an SVID (curl exit $exit_code)"
+    - name: event-server-requires-svid
+      script: |
+        #!/usr/bin/env bash
+        curl --insecure --silent --show-error --max-time 10 --output /dev/null https://notification-controller.flux-system.svc.cluster.local./
+        exit_code=$?
+        if [[ $exit_code -eq 0 ]]; then
+          echo "FAIL: notification-controller served a client without an SVID; check the patches in clusters/local/flux-system/kustomization.yaml"
+          exit 1
+        fi
+        if [[ $exit_code -eq 7 || $exit_code -eq 28 ]]; then
+          echo "FAIL: notification-controller unreachable (curl exit $exit_code); check kubectl get pods -n flux-system and the flux CiliumNetworkPolicy"
+          exit 1
+        fi
+        echo "ok: notification-controller refused a client without an SVID (curl exit $exit_code)"

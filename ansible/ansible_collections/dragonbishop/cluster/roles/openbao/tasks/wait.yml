@@ -1,0 +1,27 @@
+---
+- name: Wait for openbao-0 to run
+  vars:
+    openbao_pod_status: "{{ (openbao_pod_state.resources | default([]) | first | default({})).status | default({}) }}"
+    openbao_pod_phase: "{{ openbao_pod_status.phase | default('') }}"
+    openbao_pod_waiting_reasons: >-
+      {{ openbao_pod_status.containerStatuses | default([])
+         | selectattr('state.waiting.reason', 'defined')
+         | map(attribute='state.waiting.reason') | list }}
+    openbao_pod_stuck: "{{ openbao_pod_waiting_reasons | intersect(['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull']) | length > 0 }}"
+  block:
+    - name: Wait for openbao-0 to run
+      kubernetes.core.k8s_info:
+        kind: Pod
+        name: "{{ openbao_pod }}"
+        namespace: "{{ openbao_namespace }}"
+      register: openbao_pod_state
+      until: openbao_pod_phase in ["Running", "Failed"] or openbao_pod_stuck | bool
+      retries: 24
+      delay: 10
+
+    - name: Fail with a diagnostic if openbao-0 did not run
+      ansible.builtin.fail:
+        msg: >-
+          openbao-0 did not reach Running: phase={{ openbao_pod_phase | default('unknown', true) }},
+          containerStatuses={{ openbao_pod_status.containerStatuses | default([]) }}
+      when: openbao_pod_phase != "Running"

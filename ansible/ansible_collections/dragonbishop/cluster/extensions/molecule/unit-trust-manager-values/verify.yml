@@ -1,0 +1,21 @@
+---
+- name: The trust-manager values against the pinned chart
+  hosts: molecule
+  gather_facts: true
+  tasks:
+    - name: Render the trust-manager Helm values
+      ansible.builtin.import_role:
+        name: dragonbishop.cluster.trust_manager
+        tasks_from: render
+
+    - name: Parse the rendered values
+      ansible.builtin.set_fact:
+        trust_manager_values: "{{ trust_manager_values_substituted.stdout | from_yaml }}"
+
+    - name: It should render the trust-manager chart with the role's values
+      kubernetes.core.helm_template:
+        chart_ref: oci://quay.io/jetstack/charts/trust-manager
+        chart_version: "{{ trust_manager_version }}"
+        release_name: trust-manager
+        release_namespace: cert-manager
+        release_values: "{{ trust_manager_values }}"

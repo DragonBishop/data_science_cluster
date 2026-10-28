@@ -1,39 +1,5 @@
-# OpenBao TLS certificates, local CA, and cert-manager ClusterIssuer configuration
+# OpenBao's server certificate, and the OpenBao CA and PKI root Bundles
 
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: openbao-selfsigned-bootstrap
-spec:
-  selfSigned: {}
----
-# Dedicated local CA for OpenBao
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: openbao-local-ca
-  namespace: cert-manager
-spec:
-  isCA: true
-  commonName: openbao-local-ca
-  secretName: openbao-local-ca-secret
-  duration: ${LOCAL_CA_ROOT_DURATION}
-  privateKey:
-    algorithm: ${CERT_KEY_ALGORITHM}
-    size: ${CERT_KEY_SIZE}
-  issuerRef:
-    name: openbao-selfsigned-bootstrap
-    kind: ClusterIssuer
----
-# ClusterIssuer backed by the OpenBao local CA
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: openbao-ca-issuer
-spec:
-  ca:
-    secretName: openbao-local-ca-secret
----
 # Server certificate for OpenBao
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -62,85 +28,57 @@ spec:
     name: openbao-ca-issuer
     kind: ClusterIssuer
 ---
-# OpenBao CA bundle for the databases namespace
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: openbao-ca-bundle           # trust-manager names each target ConfigMap after the Bundle
+spec:
+  sources:
+    - secret:
+        name: openbao-local-ca-secret
+        key: tls.crt
+  target:
+    configMap:
+      key: ca.crt
+    namespaceSelector:
+      matchLabels:
+        data-cluster/ca-bundles: "true"
+---
+# Leaf from openbao-pki-issuer; its ca.crt carries the PKI root for Bundle openbao-root-ca
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: openbao-ca-databases
-  namespace: databases
+  name: openbao-root-ca-source
+  namespace: cert-manager
 spec:
-  commonName: openbao-ca-bundle
-  secretName: openbao-ca-bundle
-  duration: ${LOCAL_CA_CERT_DURATION}
-  renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
+  secretName: openbao-root-ca-source
+  commonName: openbao-root-ca-source.cert-manager.svc.cluster.local
+  dnsNames:
+    - openbao-root-ca-source.cert-manager.svc.cluster.local
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
-  dnsNames:
-    - openbao-ca-bundle.unused.invalid
   issuerRef:
-    name: openbao-ca-issuer
+    name: openbao-pki-issuer
     kind: ClusterIssuer
 ---
-# OpenBao CA bundle for the tekton-pipelines namespace
-apiVersion: cert-manager.io/v1
-kind: Certificate
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
 metadata:
-  name: openbao-ca-tekton-pipelines
-  namespace: tekton-pipelines
+  name: openbao-root-ca             # trust-manager names each target ConfigMap after the Bundle
 spec:
-  commonName: openbao-ca-bundle
-  secretName: openbao-ca-bundle
-  duration: ${LOCAL_CA_CERT_DURATION}
-  renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
-  privateKey:
-    algorithm: ${CERT_KEY_ALGORITHM}
-    size: ${CERT_KEY_SIZE}
-  dnsNames:
-    - openbao-ca-bundle.unused.invalid
-  issuerRef:
-    name: openbao-ca-issuer
-    kind: ClusterIssuer
----
-# ClusterIssuer backed by OpenBao's Intermediate PKI secrets engine.
-# Signs leaf certificates for Postgres (postgis-tls) and SeaweedFS S3.
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: openbao-pki-issuer
-spec:
-  vault:
-    server: https://openbao.openbao.svc.cluster.local:8200
-    path: pki_int/sign/internal-server
-    caBundleSecretRef:
-      name: openbao-local-ca-secret
-      key: tls.crt
-    auth:
-      kubernetes:
-        role: cert-manager-pki-role
-        mountPath: /v1/auth/kubernetes
-        serviceAccountRef:
-          name: cert-manager
----
-# RBAC allowing cert-manager to request tokens for OpenBao Kubernetes authentication.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: cert-manager-tokenrequest
-rules:
-  - apiGroups: [""]
-    resources: ["serviceaccounts/token"]
-    verbs: ["create"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: cert-manager-tokenrequest
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cert-manager-tokenrequest
-subjects:
-  - kind: ServiceAccount
-    name: cert-manager
-    namespace: cert-manager
+  sources:
+    - secret:
+        name: openbao-root-ca-source
+        key: ca.crt
+  target:
+    configMap:
+      key: ca.crt
+    # CNPG's ObjectStore endpointCA reads a Secret
+    secret:
+      key: ca.crt
+    namespaceSelector:
+      matchLabels:
+        data-cluster/ca-bundles: "true"

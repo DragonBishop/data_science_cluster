@@ -1,0 +1,40 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: flux
+  namespace: flux-system
+spec:
+  endpointSelector: {}
+  ingress:
+    # Artifacts and events between the controllers
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: flux-system
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+  egress:
+    # Wildcard vendor-owned hosts; list tenant hosts (one owner per subdomain) by name
+    - toFQDNs:
+        # Git forge: clone, API, codeload
+        - matchName: "github.com"
+        - matchPattern: "*.github.com"
+        - matchName: "ghcr.io"
+        - matchPattern: "*.githubusercontent.com"
+        # GitHub Pages Helm repos
+        - matchName: "cloudnative-pg.github.io"
+        - matchName: "seaweedfs.github.io"
+        - matchName: "spiffe.github.io"
+        # Quay: registry and CDN
+        - matchName: "quay.io"
+        - matchPattern: "*.quay.io"
+        # Docker Hub: auth and registry on docker.io, CDN on docker.com
+        - matchPattern: "*.docker.io"
+        - matchPattern: "**.docker.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

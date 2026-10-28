@@ -1,0 +1,10 @@
+---
+# --- cluster-config/versions.yaml ---
+cert_manager_version: "{{ cluster_config.CERT_MANAGER_VERSION }}"
+cilium_version: "{{ cluster_config.CILIUM_VERSION }}"
+k3s_version: "{{ cluster_config.K3S_VERSION }}"
+openbao_image_tag: "{{ cluster_config.OPENBAO_IMAGE_TAG }}"
+openbao_version: "{{ cluster_config.OPENBAO_VERSION }}"
+spire_crds_version: "{{ cluster_config.SPIRE_CRDS_VERSION }}"
+spire_version: "{{ cluster_config.SPIRE_VERSION }}"
+trust_manager_version: "{{ cluster_config.TRUST_MANAGER_VERSION }}"

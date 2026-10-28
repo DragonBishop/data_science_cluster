@@ -8,6 +8,9 @@
 - name: Fetch the OpenBao CA and wait for OpenBao
   ansible.builtin.import_tasks: openbao_ca.yml
 
+- name: Write the first copies of the cluster's credentials
+  ansible.builtin.import_tasks: secrets.yml
+
 - name: Apply terraform/openbao
   ansible.builtin.import_tasks: apply.yml
 

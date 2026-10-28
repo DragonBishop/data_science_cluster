@@ -1,9 +1,0 @@
-# Reserved LAN IP address pool for LoadBalancer Services
-apiVersion: cilium.io/v2
-kind: CiliumLoadBalancerIPPool
-metadata:
-  name: lan-ip-pool
-spec:
-  blocks:
-    - start: "${GATEWAY_IP}"
-      stop: "${LAN_LB_POOL_STOP}"

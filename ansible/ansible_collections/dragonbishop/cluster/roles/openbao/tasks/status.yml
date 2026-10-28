@@ -7,3 +7,7 @@
   register: openbao_status_result
   changed_when: false
   failed_when: false
+
+- name: Parse OpenBao's status
+  ansible.builtin.set_fact:
+    openbao_status: "{{ openbao_status_result.stdout | default('{}', true) | from_json }}"

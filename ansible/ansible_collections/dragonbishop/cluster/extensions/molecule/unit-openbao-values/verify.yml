@@ -1,0 +1,21 @@
+---
+- name: The OpenBao values against the pinned chart
+  hosts: molecule
+  gather_facts: true
+  tasks:
+    - name: Render the openbao Helm values
+      ansible.builtin.import_role:
+        name: dragonbishop.cluster.openbao
+        tasks_from: render
+
+    - name: Parse the rendered values
+      ansible.builtin.set_fact:
+        openbao_values: "{{ openbao_values_substituted.stdout | from_yaml }}"
+
+    - name: It should render the openbao chart with the role's values
+      kubernetes.core.helm_template:
+        chart_ref: oci://ghcr.io/openbao/charts/openbao
+        chart_version: "{{ openbao_version }}"
+        release_name: openbao
+        release_namespace: openbao
+        release_values: "{{ openbao_values }}"

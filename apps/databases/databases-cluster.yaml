@@ -1,0 +1,108 @@
+# CloudNativePG PostgreSQL cluster configuration, backup storage target,
+# and localhost database bridge.
+
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-cluster
+  namespace: databases
+spec:
+  instances: ${POSTGRES_INSTANCES}
+  smartShutdownTimeout: ${POSTGRES_SMART_SHUTDOWN_TIMEOUT}
+  stopDelay: ${POSTGRES_STOP_DELAY}
+  imageName: ghcr.io/cloudnative-pg/postgis:${POSTGRES_VERSION}-${POSTGIS_VERSION}-system-trixie
+
+  resources:
+    requests:
+      cpu: "${POSTGRES_CPU_REQUEST}"
+      memory: "${POSTGRES_MEM_REQUEST}"
+    limits:
+      memory: "${POSTGRES_MEM_LIMIT}"
+
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: postgres-superuser-credentials
+  bootstrap:
+    initdb:
+      database: postgres
+      owner: postgres
+      secret:
+        name: postgres-superuser-credentials
+
+      # Runs once at initdb to establish the shared read/write role
+      postInitSQL:
+        - CREATE ROLE app_readwrite NOLOGIN
+        - GRANT pg_read_all_data, pg_write_all_data TO app_readwrite
+
+  managed:
+    roles:
+      - name: tekton_readwrite
+        login: false
+      - name: core_test
+        ensure: present
+        login: true
+        inRoles:
+          - app_readwrite
+
+  postgresql:
+    pg_hba:
+      - hostssl all core_test all cert map=spiffe
+    pg_ident:
+      - spiffe core-test.spiffe core_test
+
+  storage:
+    size: ${POSTGRES_STORAGE_SIZE}
+    storageClass: ${POSTGRES_STORAGE_CLASS}
+
+  # TLS server certificate and CA issued via cert-manager and OpenBao PKI
+  certificates:
+    serverTLSSecret: postgres-server-cert
+    serverCASecret: postgres-server-cert
+    clientCASecret: postgres-client-ca
+    replicationTLSSecret: postgres-replication-cert
+
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: postgres-backups
+---
+# Daily scheduled backup at midnight
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-cluster-daily-backup
+  namespace: databases
+spec:
+  schedule: "${POSTGRES_BACKUP_SCHEDULE}"
+  immediate: true
+  cluster:
+    name: postgres-cluster
+  backupOwnerReference: cluster
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+---
+# S3 object store for WAL archiving and base backups (SeaweedFS)
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: postgres-backups
+  namespace: databases
+spec:
+  retentionPolicy: "${POSTGRES_BACKUP_RETENTION}"
+  configuration:
+    destinationPath: s3://${CNPG_BACKUP_BUCKET}/
+    endpointURL: https://seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
+    endpointCA:
+      name: openbao-root-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: barman-s3-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: barman-s3-credentials
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip

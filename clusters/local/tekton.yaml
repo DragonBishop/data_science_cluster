@@ -5,10 +5,12 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: tekton-operator
-    # The operator holds Results back until its database Secret exists
-    - name: tekton-results-secrets
+    - name: openbao
+    # Dynamic logins join tekton_readwrite, which the databases Kustomization creates
+    - name: databases
     - name: cluster-config
   sourceRef:
     kind: GitRepository

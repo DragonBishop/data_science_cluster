@@ -1,0 +1,16 @@
+---
+- name: Read the trust-manager release
+  kubernetes.core.helm_info:
+    name: trust-manager
+    release_namespace: cert-manager
+  register: trust_manager_release
+
+- name: Install trust-manager
+  kubernetes.core.helm:
+    name: trust-manager
+    chart_ref: oci://quay.io/jetstack/charts/trust-manager
+    chart_version: "{{ trust_manager_version }}"
+    release_namespace: cert-manager
+    values: "{{ trust_manager_values_substituted.stdout | from_yaml }}"
+    wait: true
+  when: trust_manager_release.status is not defined

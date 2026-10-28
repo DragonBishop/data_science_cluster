@@ -10,21 +10,26 @@
   delay: 5
 
 # Policies Flux needs to fetch its source are applied here, ahead of Flux
+- name: Substitute cluster-config values into the Cilium cluster-default network policy
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml') }}"
+  environment:
+    LAN_CIDR: "{{ lan_cidr }}"
+  register: flux_clusterwide_policy_substituted
+  changed_when: false
+
 - name: Apply Cilium cluster-default network policy
   kubernetes.core.k8s:
     state: present
-    definition: >-
-      {{ lookup('file', repo_root + '/infrastructure/cilium/clusterwide-networkpolicy.yaml')
-      | regex_replace('\$\{LAN_CIDR\}', lan_cidr) }}
+    definition: "{{ flux_clusterwide_policy_substituted.stdout | from_yaml }}"
 
-- name: Apply CoreDNS network policy
+- name: Apply kube-system network policy
   kubernetes.core.k8s:
     state: present
-    src: "{{ repo_root }}/infrastructure/coredns-custom/coredns-networkpolicy.yaml"
+    src: "{{ repo_root }}/infrastructure/cilium/kube-system-networkpolicy.yaml"
 
 - name: Apply flux network policy
   kubernetes.core.k8s:
     state: present
-    definition: >-
-      {{ lookup('file', repo_root + '/infrastructure/flux-system/flux-networkpolicy.yaml')
-      | regex_replace('\$\{GIT_FORGE_HOST\}', git_forge_host) }}
+    src: "{{ repo_root }}/clusters/local/flux-system/flux-networkpolicy.yaml"

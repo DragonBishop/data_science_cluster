@@ -30,13 +30,17 @@
           changed_when: false
           failed_when: false
 
+        - name: Parse OpenBao's status
+          ansible.builtin.set_fact:
+            openbao_status: "{{ openbao_initial_status.stdout | default('{}', true) | from_json }}"
+
         - name: Prompt for the OpenBao root token
           ansible.builtin.pause:
             prompt: "OpenBao root token (printed by the run that first initialized OpenBao)"
             echo: false
           register: openbao_root_token_prompt
           when:
-            - (openbao_initial_status.stdout | default('{}', true) | from_json).initialized | default(false)
+            - openbao_status.initialized | default(false)
             - openbao_root_token | default(lookup('ansible.builtin.env', 'OPENBAO_ROOT_TOKEN'), true) | length == 0
           no_log: true
 
@@ -49,9 +53,12 @@
   roles:
     - { role: dragonbishop.cluster.k3s, tags: [k3s] }
     - { role: dragonbishop.cluster.cilium, tags: [cilium] }
-    - { role: dragonbishop.cluster.flux, tags: [flux] }
+    - { role: dragonbishop.cluster.cert_manager, tags: [cert_manager] }
+    - { role: dragonbishop.cluster.trust_manager, tags: [trust_manager] }
     - { role: dragonbishop.cluster.openbao, tags: [openbao] }
     - { role: dragonbishop.cluster.opentofu, tags: [opentofu, openbao] }
+    - { role: dragonbishop.cluster.spire, tags: [spire] }
+    - { role: dragonbishop.cluster.flux, tags: [flux] }
 
   tasks:
     - name: Print freshly-generated OpenBao root token and unseal keys

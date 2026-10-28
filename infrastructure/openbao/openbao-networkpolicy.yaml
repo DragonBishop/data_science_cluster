@@ -10,10 +10,16 @@ spec:
   ingress:
     - fromEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: external-secrets
-            app.kubernetes.io/name: external-secrets
-        - matchLabels:
             k8s:io.kubernetes.pod.namespace: cert-manager
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: openbao
+            app.kubernetes.io/name: rotate-credentials
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+            tekton.dev/pipeline: core-test
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: spire
+            app.kubernetes.io/name: server
       toPorts:
         - ports:
             - port: "8200"

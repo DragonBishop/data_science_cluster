@@ -44,9 +44,9 @@ status:
 
   echo ""
   echo "== Database =="
-  kubectl cnpg status postgis-cluster -n databases
+  kubectl cnpg status postgres-cluster -n databases
   kubectl get database -n databases
-  echo -n "TCPRoute: "; kubectl get tcproute -n databases postgis-external -o jsonpath='{.status.parents[*].conditions[*].message}'; echo
+  echo -n "TCPRoute: "; kubectl get tcproute -n databases postgres-external -o jsonpath='{.status.parents[*].conditions[*].message}'; echo
 
   echo ""
   echo "== Backups =="
@@ -55,7 +55,7 @@ status:
 
   echo ""
   echo "== SeaweedFS =="
-  kubectl get svc,pods -n databases -l app.kubernetes.io/instance=seaweedfs
+  kubectl get svc,pods -n seaweedfs -l app.kubernetes.io/instance=seaweedfs
 
   echo ""
   echo "== Hubble =="
@@ -118,22 +118,9 @@ bao-shell:
 
 # --- Database ------------------------------------------------------------
 
-# Open psql in the postgis-cluster primary as the current OpenBao-issued login
-db-connect:
-  #!/usr/bin/env bash
-  set -uo pipefail
-  LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
-  LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
-  DATABASE_NAME=$(kubectl get configmap cluster-config -n flux-system -o jsonpath='{.data.DATA_SCIENCE_DB_NAME}')
-  if [ -z "$DATABASE_NAME" ]; then
-    echo "Error: DATA_SCIENCE_DB_NAME not found in the live cluster-config ConfigMap." >&2
-    exit 1
-  fi
-  kubectl cnpg psql postgis-cluster -n databases -- "host=localhost dbname=$DATABASE_NAME user=$LEASE_USER password=$LEASE_PASS"
-
-# Trigger a manual base backup of postgis-cluster to SeaweedFS through the Barman Cloud plugin
+# Trigger a manual base backup of postgres-cluster to SeaweedFS through the Barman Cloud plugin
 backup:
-  kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
+  kubectl cnpg backup postgres-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
 
 # --- Development -------------------------------------------------------
 

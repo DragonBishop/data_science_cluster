@@ -1,0 +1,3 @@
+---
+# --- cluster-config/replicas.yaml ---
+cilium_operator_replicas: "{{ cluster_config.CILIUM_OPERATOR_REPLICAS }}"

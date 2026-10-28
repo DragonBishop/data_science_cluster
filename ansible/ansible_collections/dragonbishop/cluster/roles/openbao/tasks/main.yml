@@ -1,4 +1,16 @@
 ---
+- name: Render the OpenBao Helm values
+  ansible.builtin.import_tasks: render.yml
+
+- name: Render and apply OpenBao's certificates, Bundles, policy and redirect
+  ansible.builtin.import_tasks: manifests.yml
+
+- name: Install OpenBao
+  ansible.builtin.import_tasks: install.yml
+
+- name: Wait for openbao-0 to run
+  ansible.builtin.import_tasks: wait.yml
+
 - name: Check OpenBao's status
   ansible.builtin.import_tasks: status.yml
 

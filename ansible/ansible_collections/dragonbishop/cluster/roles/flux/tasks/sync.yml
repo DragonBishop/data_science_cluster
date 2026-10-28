@@ -1,10 +1,18 @@
 ---
+- name: Resolve the branch Flux syncs
+  ansible.builtin.set_fact:
+    flux_git_branch: "{{ lookup('ansible.builtin.env', 'FLUX_GIT_BRANCH', default='main') }}"
+
+- name: Point gotk-sync at that branch
+  ansible.builtin.set_fact:
+    flux_gotk_sync: >-
+      {{ lookup('ansible.builtin.file', repo_root + '/clusters/local/flux-system/gotk-sync.yaml')
+         | regex_replace('branch: main', 'branch: ' + flux_git_branch) }}
+
 - name: Apply Flux GitRepository (gotk-sync)
   kubernetes.core.k8s:
     state: present
-    definition: >-
-      {{ lookup('file', repo_root + '/clusters/local/flux-system/gotk-sync.yaml')
-      | regex_replace('branch: main', 'branch: ' + lookup('ansible.builtin.env', 'FLUX_GIT_BRANCH', default='main')) }}
+    definition: "{{ flux_gotk_sync }}"
 
 # gotk-sync.yaml pins main, so Flux would reset the branch on its first sync without this patch
 - name: Keep Flux on the branch under test
@@ -26,5 +34,5 @@
             patch: |
               - op: replace
                 path: /spec/ref/branch
-                value: {{ lookup('ansible.builtin.env', 'FLUX_GIT_BRANCH') }}
-  when: lookup('ansible.builtin.env', 'FLUX_GIT_BRANCH', default='main') != 'main'
+                value: {{ flux_git_branch }}
+  when: flux_git_branch != 'main'

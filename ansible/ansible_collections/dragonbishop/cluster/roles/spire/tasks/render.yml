@@ -1,0 +1,22 @@
+---
+- name: Substitute cluster-config values into SPIRE Helm values
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/spire/spire-values.yaml') }}"
+  environment:
+    SPIRE_AGENT_CPU_REQUEST: "{{ spire_agent_cpu_request }}"
+    SPIRE_AGENT_MEM_LIMIT: "{{ spire_agent_mem_limit }}"
+    SPIRE_AGENT_MEM_REQUEST: "{{ spire_agent_mem_request }}"
+    SPIRE_CONTROLLER_MANAGER_CPU_REQUEST: "{{ spire_controller_manager_cpu_request }}"
+    SPIRE_CONTROLLER_MANAGER_MEM_LIMIT: "{{ spire_controller_manager_mem_limit }}"
+    SPIRE_CONTROLLER_MANAGER_MEM_REQUEST: "{{ spire_controller_manager_mem_request }}"
+    SPIRE_SERVER_CPU_REQUEST: "{{ spire_server_cpu_request }}"
+    SPIRE_SERVER_MEM_LIMIT: "{{ spire_server_mem_limit }}"
+    SPIRE_SERVER_MEM_REQUEST: "{{ spire_server_mem_request }}"
+    SPIRE_CA_TTL: "{{ spire_ca_ttl }}"
+    SPIFFE_CSI_DRIVER_CPU_REQUEST: "{{ spiffe_csi_driver_cpu_request }}"
+    SPIFFE_CSI_DRIVER_MEM_LIMIT: "{{ spiffe_csi_driver_mem_limit }}"
+    SPIFFE_CSI_DRIVER_MEM_REQUEST: "{{ spiffe_csi_driver_mem_request }}"
+    SPIRE_SERVER_STORAGE_SIZE: "{{ spire_server_storage_size }}"
+  register: spire_values_substituted
+  changed_when: false

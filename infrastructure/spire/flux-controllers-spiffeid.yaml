@@ -1,0 +1,19 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: flux-controllers
+spec:
+  className: spire-spire
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: flux-system
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - source-controller
+          - kustomize-controller
+          - helm-controller
+          - notification-controller

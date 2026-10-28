@@ -1,0 +1,30 @@
+---
+- name: Substitute cluster-config values into OpenBao's manifests
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/openbao/' + item) }}"
+  environment:
+    CERT_KEY_ALGORITHM: "{{ cert_key_algorithm }}"
+    CERT_KEY_SIZE: "{{ cert_key_size }}"
+    LOCAL_CA_CERT_DURATION: "{{ local_ca_cert_duration }}"
+    LOCAL_CA_CERT_RENEW_BEFORE: "{{ local_ca_cert_renew_before }}"
+    LOCAL_CA_ROOT_DURATION: "{{ local_ca_root_duration }}"
+    OPENBAO_PKI_CERT_DURATION: "{{ openbao_pki_cert_duration }}"
+    OPENBAO_PKI_CERT_RENEW_BEFORE: "{{ openbao_pki_cert_renew_before }}"
+  loop:
+    - openbao-issuers.yaml
+    - openbao-tls.yaml
+    - openbao-networkpolicy.yaml
+    - openbao-localhost.yaml
+  register: openbao_manifests_substituted
+  changed_when: false
+
+- name: Apply OpenBao's certificates, Bundles, policy and redirect
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item.stdout | from_yaml_all | list }}"
+    server_side_apply:
+      field_manager: ansible
+  loop: "{{ openbao_manifests_substituted.results }}"
+  loop_control:
+    label: "{{ item.item }}"

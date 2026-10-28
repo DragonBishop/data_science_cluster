@@ -11,9 +11,6 @@
   * [Database Ownership](#database-ownership)
   * [Gateway TCPRoute Binding](#gateway-tcproute-binding)
   * [Restored Schemas (if migrating data)](#restored-schemas-if-migrating-data)
-* [Verify Dynamic Credentials](#verify-dynamic-credentials)
-  * [Check Dynamic Secret & Role Membership](#check-dynamic-secret--role-membership)
-  * [Test Leased Database Access](#test-leased-database-access)
 * [Verify Gateway Routing](#verify-gateway-routing)
 * [Hubble Observability Access](#hubble-observability-access)
 * [Verify Cluster Health](#verify-cluster-health)
@@ -39,7 +36,7 @@
 > **Manual Shell Command:**
 >
 > ```bash
-> kubectl cnpg status postgis-cluster -n databases
+> kubectl cnpg status postgres-cluster -n databases
 > ```
 
 Verify output shows `Status: Healthy`, `1/1 ready`, and `WAL archiving: OK`.
@@ -60,12 +57,12 @@ Verify output shows `Status: Healthy`, `1/1 ready`, and `WAL archiving: OK`.
 > kubectl get database -n databases
 > ```
 
-Verify output shows `postgis-cluster/data-science` with `status.applied: true`.
+Verify output shows `postgres-cluster/data-science` with `status.applied: true`.
 
 ### PostGIS Extensions
 
 ```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d data_science -c '\dx'
+kubectl cnpg psql postgres-cluster -n databases -- -d data_science -c '\dx'
 ```
 
 Verify installed extensions: `postgis`, `postgis_topology`, `postgis_tiger_geocoder`, and `fuzzystrmatch`.
@@ -73,7 +70,7 @@ Verify installed extensions: `postgis`, `postgis_topology`, `postgis_tiger_geoco
 ### Database Ownership
 
 ```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c \
+kubectl cnpg psql postgres-cluster -n databases -- -c \
   "SELECT datname, pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname='data_science';"
 ```
 
@@ -92,7 +89,7 @@ Verify database owner is `app_readwrite`.
 > **Manual Shell Command:**
 >
 > ```bash
-> kubectl get tcproute -n databases postgis-external -o jsonpath='{.status.parents[*].conditions[*].message}'
+> kubectl get tcproute -n databases postgres-external -o jsonpath='{.status.parents[*].conditions[*].message}'
 > ```
 
 Verify condition returns `Service reference is valid`.
@@ -100,45 +97,10 @@ Verify condition returns `Service reference is valid`.
 ### Restored Schemas (if migrating data)
 
 ```bash
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d data_science -c '\dn'
+kubectl cnpg psql postgres-cluster -n databases -- -d data_science -c '\dn'
 ```
 
 Verify all application schemas are present.
-
-## Verify Dynamic Credentials
-
-Once the CNPG cluster is healthy, ESO's `VaultDynamicSecret` generator requests credentials from OpenBao and writes them to the `postgis-app-dynamic-credentials` Secret. Every 2h (`ESO_DYNAMIC_REFRESH_INTERVAL`) it generates a new role; each old role expires at its 3h TTL.
-
-### Check Dynamic Secret & Role Membership
-
-```bash
-kubectl get externalsecret postgis-app-dynamic-credentials -n databases
-kubectl exec -i postgis-cluster-1 -n databases -- psql -U postgres -d postgres -c '\du'
-```
-
-Verify the generated role is a member of `app_readwrite`.
-
-### Test Leased Database Access
-
-Open psql in the CNPG primary pod as the current OpenBao-issued login:
-
-> [!TIP]
-> **Just Recipe:**
->
-> ```bash
-> just db-connect
-> ```
-
-> [!NOTE]
-> **Manual Shell Command:**
->
-> ```bash
-> LEASE_USER=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.username}' | base64 -d)
-> LEASE_PASS=$(kubectl get secret -n databases postgis-app-dynamic-credentials -o jsonpath='{.data.password}' | base64 -d)
-> kubectl cnpg psql postgis-cluster -n databases -- "host=localhost dbname=data_science user=$LEASE_USER password=$LEASE_PASS"
-> ```
-
----
 
 ## Verify Gateway Routing
 
@@ -227,7 +189,7 @@ Verify `suspend: false` and scheduled backup intervals.
 > **Manual Shell Command:**
 >
 > ```bash
-> kubectl cnpg backup postgis-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
+> kubectl cnpg backup postgres-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
 > ```
 
 ### Confirm Backup Status
@@ -243,7 +205,7 @@ Verify `suspend: false` and scheduled backup intervals.
 > **Manual Shell Command:**
 >
 > ```bash
-> kubectl cnpg status postgis-cluster -n databases
+> kubectl cnpg status postgres-cluster -n databases
 > ```
 
 Verify `Last Successful Backup` timestamp updates to the current time.

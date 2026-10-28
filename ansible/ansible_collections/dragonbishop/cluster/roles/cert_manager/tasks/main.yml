@@ -1,0 +1,6 @@
+---
+- name: Render the cert-manager Helm values
+  ansible.builtin.import_tasks: render.yml
+
+- name: Install cert-manager
+  ansible.builtin.import_tasks: install.yml

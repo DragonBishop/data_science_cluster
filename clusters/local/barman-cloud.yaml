@@ -5,13 +5,14 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: cnpg-operator
     - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./infrastructure/barman-cloud
+  path: ./apps/barman-cloud
   prune: true
   wait: true
   timeout: 3m

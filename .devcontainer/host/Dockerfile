@@ -9,7 +9,7 @@ ENV REPOSITORY=${REPOSITORY} \
     REPO_REF=${REPO_REF}
 
 # Versions cluster-config doesn't pin; see docs/INSTALLATION.md.
-ARG FLUX_VERSION=2.9.6
+ARG FLUX_VERSION=2.10.0
 ARG OPENTOFU_VERSION=1.13.1
 
 # Install prerequisites, plus just, fzf, gnupg, openssl, unzip and sudo.

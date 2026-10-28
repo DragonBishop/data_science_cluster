@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # stop-cluster.sh: Hibernates CloudNativePG cluster and stops k3s.
 #
 set -uo pipefail
 
-CLUSTER_NAME=postgis-cluster
+CLUSTER_NAME=postgres-cluster
 CLUSTER_NS=databases
 CNPG_NS=cnpg-system
 FORCE=false
@@ -106,7 +106,7 @@ wait_for_hibernation() {
           kubectl logs -n $CNPG_NS -l app.kubernetes.io/name=cloudnative-pg --tail=50"
 }
 
-attempt_hibernate_postgis() {
+attempt_hibernate_databases() {
     if ! kubectl get --raw='/readyz' &>/dev/null; then
         halt "$CLUSTER_NAME cannot be hibernated, Kubernetes API is unreachable.
    Check: sudo tail -n 50 /var/log/k3s.log   (or: journalctl -u k3s -n 50)"
@@ -127,8 +127,8 @@ attempt_hibernate_postgis() {
     wait_for_hibernation
 }
 
-hibernate_postgis() {
-    attempt_hibernate_postgis
+hibernate_databases() {
+    attempt_hibernate_databases
     local exit_code=$?
     echo ""
     return "$exit_code"
@@ -155,7 +155,7 @@ main() {
     acquire_sudo
     exit_if_k3s_not_running
 
-    hibernate_postgis
+    hibernate_databases
     stop_k3s
 }
 

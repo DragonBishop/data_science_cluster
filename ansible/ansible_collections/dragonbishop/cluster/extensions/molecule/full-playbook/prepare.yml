@@ -9,3 +9,13 @@
         state: directory
         mode: "0755"
       become: true
+
+    - name: Run the host firewall setup
+      ansible.builtin.command:
+        cmd: src/bash/setup-firewall.sh
+        chdir: "{{ repo_root }}"
+      register: setup_firewall_result
+      changed_when: false
+      failed_when: >-
+        setup_firewall_result.rc != 0
+        or 'not found in infrastructure/cluster-config' in setup_firewall_result.stderr

@@ -1,0 +1,57 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: postgres-cluster
+  namespace: databases
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: postgres-cluster
+  ingress:
+    # Replication and join between instances
+    - fromEndpoints:
+        - matchLabels:
+            cnpg.io/cluster: postgres-cluster
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    # CNPG operator status checks
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+    # OpenBao creates dynamic database roles
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: openbao
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    # core-test checks the server certificate and logins
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+            tekton.dev/pipeline: core-test
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    # Tekton Results stores PipelineRun and TaskRun records
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - tekton-results-api
+                - tekton-results-retention-policy-agent
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

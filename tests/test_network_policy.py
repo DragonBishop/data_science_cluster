@@ -9,7 +9,7 @@
 #   with its "who" part (entities, endpoints, CIDRs, domain names) and its "which ports" part
 #
 # test: every rule outside the baseline names its ports                  (Opening a Path)
-#   baseline file = infrastructure/cilium/clusterwide-networkpolicy.yaml
+#   baseline file = infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml
 #   for each policy in any other file, for each rule:
 #     expect it to list ports
 #

@@ -1,0 +1,32 @@
+---
+- name: Install the packages the installers and helm_template need
+  ansible.builtin.dnf:
+    name:
+      - openssl
+      - python3-pyyaml
+      - tar
+    state: present
+
+- name: Download the Helm installer
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+    dest: /tmp/get-helm-4
+    mode: "0700"
+
+- name: Install Helm
+  ansible.builtin.command:
+    cmd: /tmp/get-helm-4
+    creates: /usr/local/bin/helm
+
+- name: Download the Flux CLI installer
+  ansible.builtin.get_url:
+    url: https://fluxcd.io/install.sh
+    dest: /tmp/install-flux.sh
+    mode: "0700"
+
+- name: Install the Flux CLI
+  ansible.builtin.command:
+    cmd: /tmp/install-flux.sh
+    creates: /usr/local/bin/flux
+  environment:
+    FLUX_VERSION: 2.10.0

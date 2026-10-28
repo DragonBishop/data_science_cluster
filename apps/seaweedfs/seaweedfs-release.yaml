@@ -2,7 +2,7 @@ apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
   name: seaweedfs
-  namespace: databases
+  namespace: seaweedfs
 spec:
   interval: 24h
   url: https://seaweedfs.github.io/seaweedfs/helm
@@ -11,7 +11,7 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: seaweedfs
-  namespace: databases
+  namespace: seaweedfs
 spec:
   interval: 1h
   releaseName: seaweedfs
@@ -22,7 +22,25 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: seaweedfs
+  install:
+    remediation:
+      retries: ${SEAWEEDFS_HELM_RETRIES}
+  upgrade:
+    remediation:
+      retries: ${SEAWEEDFS_HELM_RETRIES}
+      remediateLastFailure: true
   values:
+    # gRPC mTLS between master, filer, volume and S3, from the chart's own cert-manager CA
+    global:
+      seaweedfs:
+        enableSecurity: true
+    certificates:
+      keyAlgorithm: ${CERT_KEY_ALGORITHM}
+      keySize: ${CERT_KEY_SIZE}
+      duration: ${LOCAL_CA_CERT_DURATION}
+      renewBefore: ${LOCAL_CA_CERT_RENEW_BEFORE}
+      ca:
+        duration: ${LOCAL_CA_ROOT_DURATION}
     # One policy per component, admitting the release's own pods on that component's ports
     networkPolicy:
       enabled: true
@@ -31,9 +49,23 @@ spec:
           extraIngress:
             # Barman Cloud WAL archiving and base backups
             - from:
-                - podSelector:
+                - namespaceSelector:
                     matchLabels:
-                      cnpg.io/cluster: postgis-cluster
+                      kubernetes.io/metadata.name: databases
+                  podSelector:
+                    matchLabels:
+                      cnpg.io/cluster: postgres-cluster
+              ports:
+                - protocol: TCP
+                  port: ${SEAWEEDFS_S3_PORT}
+            # core-test checks the S3 certificate
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: tekton-pipelines
+                  podSelector:
+                    matchLabels:
+                      tekton.dev/pipeline: core-test
               ports:
                 - protocol: TCP
                   port: ${SEAWEEDFS_S3_PORT}

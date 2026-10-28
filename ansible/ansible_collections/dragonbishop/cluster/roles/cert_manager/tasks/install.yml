@@ -1,0 +1,16 @@
+---
+- name: Read the cert-manager release
+  kubernetes.core.helm_info:
+    name: cert-manager
+    release_namespace: cert-manager
+  register: cert_manager_release
+
+- name: Install cert-manager
+  kubernetes.core.helm:
+    name: cert-manager
+    chart_ref: oci://quay.io/jetstack/charts/cert-manager
+    chart_version: "{{ cert_manager_version }}"
+    release_namespace: cert-manager
+    values: "{{ cert_manager_values_substituted.stdout | from_yaml }}"
+    wait: true
+  when: cert_manager_release.status is not defined

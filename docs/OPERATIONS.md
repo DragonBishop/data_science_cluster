@@ -24,7 +24,7 @@ One-time, first-install setup: see [Installation](INSTALLATION.md) for Requireme
 | --- | --- | --- |
 | `just setup-firewall` | Configure host firewall rules | Before install; opens what Kubernetes and Cilium need in firewalld (Fedora) or ufw (Ubuntu) |
 | `just preflight` | Run host readiness check | Verify host tooling, `gh` auth, firewall rules, and reserved IP range before install |
-| `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Provision k3s, Cilium, Flux, OpenBao, and apply initial OpenTofu secrets |
+| `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Install k3s, Cilium, cert-manager, trust-manager and OpenBao, apply `terraform/openbao`, then install SPIRE and Flux |
 
 ## Cluster Lifecycle
 
@@ -32,7 +32,7 @@ Start and stop the cluster each work session, check its health, and inspect or r
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just start` | Start the cluster | Each work session; starts k3s, unseals OpenBao, wakes `postgis-cluster` from hibernation and resumes its scheduled backups |
+| `just start` | Start the cluster | Each work session; starts k3s, unseals OpenBao, wakes `postgres-cluster` from hibernation and resumes its scheduled backups |
 | `just status` | Check overall cluster health | Post-install verification or periodic health check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
 | `just stop` (`just stop --force` if a stuck stop needs it) | Stop the cluster | Each work session; gracefully hibernates CNPG PostgreSQL before shutting down k3s |
 | `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears `.local/openbao`, the local Hubble cache, orphaned `terraform/openbao` state, and Cilium's persistent host files; reboot before the next `just bootstrap` |
@@ -48,8 +48,7 @@ Restoring from a backup is in [Backups and Restore](BACKUPS_RESTORE.md).
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just db-connect` | Connect via psql (app role, in-cluster) | Application-level database access with OpenBao-issued dynamic credentials, in the CNPG primary pod |
-| `kubectl cnpg psql postgis-cluster -n databases` | Connect via psql (superuser, in-cluster) | Ad hoc direct administrative query access as `postgres` superuser |
+| `kubectl cnpg psql postgres-cluster -n databases` | Connect via psql (superuser, in-cluster) | Ad hoc direct administrative query access as `postgres` superuser |
 | `just backup` | Trigger a manual DB backup | Before schema changes or risky migrations; writes backup to SeaweedFS S3 |
 | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Check scheduled backup status | Confirming automated nightly backups are active (`suspend: false`) |
-| `kubectl cnpg status postgis-cluster -n databases` | Verify CNPG cluster state | Detailed PostgreSQL replication, WAL archiving, and instance diagnostics |
+| `kubectl cnpg status postgres-cluster -n databases` | Verify CNPG cluster state | Detailed PostgreSQL replication, WAL archiving, and instance diagnostics |

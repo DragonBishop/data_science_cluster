@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # preflight.sh: Read-only host readiness checks.
 #

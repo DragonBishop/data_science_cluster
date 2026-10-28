@@ -5,9 +5,11 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
-    - name: databases-secrets
     - name: cluster-config
+    - name: namespaces
+    - name: openbao
   sourceRef:
     kind: GitRepository
     name: flux-system

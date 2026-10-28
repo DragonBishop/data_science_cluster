@@ -1,0 +1,91 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: ca-bundles
+  namespace: tekton-pipelines
+spec:
+  volumes:
+    - name: openbao-ca-bundle
+      configMap:
+        name: openbao-ca-bundle
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+    - name: postgres-ca
+      configMap:
+        name: postgres-ca
+  results:
+    - name: namespaces
+      type: string
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+    volumeMounts:
+      - name: openbao-ca-bundle
+        mountPath: /ca/openbao
+      - name: openbao-root-ca
+        mountPath: /ca/root
+      - name: postgres-ca
+        mountPath: /ca/postgres
+  steps:
+    - name: labelled-namespaces
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        kubectl get namespaces -l data-cluster/ca-bundles=true -o jsonpath='{.items[*].metadata.name}' > $(results.namespaces.path)
+        echo "labelled: $(cat $(results.namespaces.path))"
+        grep -q . $(results.namespaces.path)
+    - name: openbao-ca-bundle-present
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        for namespace in $(cat $(results.namespaces.path)); do
+          kubectl get configmap openbao-ca-bundle -n "$namespace" -o jsonpath='{.data.ca\.crt}' | grep -q 'BEGIN CERTIFICATE'
+          echo "ok: $namespace"
+        done
+    - name: openbao-root-ca-present
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        for namespace in $(cat $(results.namespaces.path)); do
+          kubectl get configmap openbao-root-ca -n "$namespace" -o jsonpath='{.data.ca\.crt}' | grep -q 'BEGIN CERTIFICATE'
+          echo "ok: $namespace"
+        done
+    - name: postgres-ca-present
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        for namespace in $(cat $(results.namespaces.path)); do
+          kubectl get configmap postgres-ca -n "$namespace" -o jsonpath='{.data.ca\.crt}' | grep -q 'BEGIN CERTIFICATE'
+          echo "ok: $namespace"
+        done
+    - name: no-private-keys
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        for namespace in $(cat $(results.namespaces.path)); do
+          if kubectl get configmap openbao-ca-bundle openbao-root-ca postgres-ca -n "$namespace" -o yaml | grep -q 'PRIVATE KEY'; then
+            echo "FAIL: a CA ConfigMap in $namespace holds a private key"
+            exit 1
+          fi
+          echo "ok: $namespace"
+        done
+    - name: openbao-server
+      script: |
+        #!/usr/bin/env bash
+        openssl s_client -brief -connect openbao.openbao.svc.cluster.local:8200 \
+          -verify_hostname openbao.openbao.svc.cluster.local -verify_return_error -CAfile /ca/openbao/ca.crt </dev/null
+    - name: seaweedfs-server
+      script: |
+        #!/usr/bin/env bash
+        openssl s_client -brief -connect seaweedfs-s3.seaweedfs.svc.cluster.local:${SEAWEEDFS_S3_PORT} \
+          -verify_hostname seaweedfs-s3.seaweedfs.svc.cluster.local -verify_return_error -CAfile /ca/root/ca.crt </dev/null
+    - name: postgres-server
+      script: |
+        #!/usr/bin/env bash
+        openssl s_client -brief -connect postgres-cluster-rw.databases.svc.cluster.local:5432 -starttls postgres \
+          -verify_hostname postgres-cluster-rw.databases.svc.cluster.local -verify_return_error -CAfile /ca/postgres/ca.crt </dev/null

@@ -15,12 +15,14 @@
   when: k3s_installed.rc != 0
 
 - name: Refuse to install k3s over stale Cilium state
+  vars:
+    k3s_stale_cilium_paths: "{{ k3s_stale_cilium_state.results | selectattr('stat.exists') | map(attribute='item') | list }}"
   ansible.builtin.assert:
     that:
-      - k3s_stale_cilium_state.results | selectattr('stat.exists') | list | length == 0
+      - k3s_stale_cilium_paths | length == 0
     fail_msg: >-
       Cilium runtime state from a previous cluster is still present
-      ({{ k3s_stale_cilium_state.results | selectattr('stat.exists') | map(attribute='item') | join(', ') }}).
+      ({{ k3s_stale_cilium_paths | join(', ') }}).
       Its BPF programs stay attached after k3s-uninstall and break pod networking. Reboot, then re-run just bootstrap.
   when: k3s_installed.rc != 0
 

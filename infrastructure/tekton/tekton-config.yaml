@@ -1,0 +1,205 @@
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonConfig
+metadata:
+  name: config
+spec:
+  targetNamespace: tekton
+  profile: basic
+  pipeline:
+    default-timeout-minutes: ${TEKTON_DEFAULT_TIMEOUT_MINUTES}
+    # One node, so the per-run affinity-assistant pod has nothing to co-locate
+    coschedule: disabled
+    options:
+      configMaps:
+        config-defaults:
+          data:
+            default-container-resource-requirements: |
+              default:
+                requests:
+                  cpu: ${TEKTON_STEP_CPU_REQUEST}
+                  memory: ${TEKTON_STEP_MEM_REQUEST}
+                limits:
+                  memory: ${TEKTON_STEP_MEM_LIMIT}
+      deployments:
+        tekton-pipelines-controller:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tekton-pipelines-controller
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_PIPELINES_CONTROLLER_CPU_REQUEST}
+                        memory: ${TEKTON_PIPELINES_CONTROLLER_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_PIPELINES_CONTROLLER_MEM_LIMIT}
+        tekton-pipelines-webhook:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: webhook
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_PIPELINES_WEBHOOK_CPU_REQUEST}
+                        memory: ${TEKTON_PIPELINES_WEBHOOK_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_PIPELINES_WEBHOOK_MEM_LIMIT}
+        tekton-pipelines-remote-resolvers:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: controller
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESOLVERS_CPU_REQUEST}
+                        memory: ${TEKTON_RESOLVERS_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESOLVERS_MEM_LIMIT}
+        tekton-events-controller:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tekton-events-controller
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_EVENTS_CONTROLLER_CPU_REQUEST}
+                        memory: ${TEKTON_EVENTS_CONTROLLER_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_EVENTS_CONTROLLER_MEM_LIMIT}
+        tekton-operator-proxy-webhook:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: proxy
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_PROXY_WEBHOOK_CPU_REQUEST}
+                        memory: ${TEKTON_PROXY_WEBHOOK_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_PROXY_WEBHOOK_MEM_LIMIT}
+  trigger:
+    options:
+      deployments:
+        tekton-triggers-controller:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tekton-triggers-controller
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_TRIGGERS_CONTROLLER_CPU_REQUEST}
+                        memory: ${TEKTON_TRIGGERS_CONTROLLER_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_TRIGGERS_CONTROLLER_MEM_LIMIT}
+        tekton-triggers-webhook:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: webhook
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_TRIGGERS_WEBHOOK_CPU_REQUEST}
+                        memory: ${TEKTON_TRIGGERS_WEBHOOK_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_TRIGGERS_WEBHOOK_MEM_LIMIT}
+        tekton-triggers-core-interceptors:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tekton-triggers-core-interceptors
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_TRIGGERS_INTERCEPTORS_CPU_REQUEST}
+                        memory: ${TEKTON_TRIGGERS_INTERCEPTORS_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_TRIGGERS_INTERCEPTORS_MEM_LIMIT}
+  pruner:
+    disabled: false
+    schedule: "${TEKTON_PRUNER_SCHEDULE}"
+    keep: ${TEKTON_PRUNER_KEEP}
+    resources:
+      - taskrun
+      - pipelinerun
+  chain:
+    disabled: true
+  result:
+    disabled: false
+    is_external_db: true
+    db_host: postgres-cluster-rw.databases.svc.cluster.local
+    db_port: 5432
+    db_name: ${TEKTON_RESULTS_DB_NAME}
+    db_sslmode: verify-full
+    # postgres-ca holds the Postgres CA, which signs Postgres
+    db_sslrootcert: /etc/postgres-ca/ca.crt
+    db_enable_auto_migration: true
+    db_secret_name: tekton-results-postgres
+    db_secret_user_key: username
+    db_secret_password_key: password
+    logs_api: false
+    options:
+      configMaps:
+        # Enforced on an interval while the cluster runs, not at a clock time the machine may be off for
+        tekton-results-config-results-retention-policy:
+          data:
+            runAt: "@every ${TEKTON_RESULTS_RETENTION_INTERVAL}"
+            defaultRetention: "${TEKTON_RESULTS_RETENTION}"
+      deployments:
+        tekton-results-api:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: api
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESULTS_API_CPU_REQUEST}
+                        memory: ${TEKTON_RESULTS_API_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESULTS_API_MEM_LIMIT}
+                    volumeMounts:
+                      - name: postgres-ca
+                        mountPath: /etc/postgres-ca
+                        readOnly: true
+                volumes:
+                  - name: postgres-ca
+                    configMap:
+                      name: postgres-ca
+        tekton-results-retention-policy-agent:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: retention-policy-agent
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESULTS_RETENTION_AGENT_CPU_REQUEST}
+                        memory: ${TEKTON_RESULTS_RETENTION_AGENT_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESULTS_RETENTION_AGENT_MEM_LIMIT}
+                    volumeMounts:
+                      - name: postgres-ca
+                        mountPath: /etc/postgres-ca
+                        readOnly: true
+                volumes:
+                  - name: postgres-ca
+                    configMap:
+                      name: postgres-ca
+        tekton-results-watcher:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: watcher
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESULTS_WATCHER_CPU_REQUEST}
+                        memory: ${TEKTON_RESULTS_WATCHER_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESULTS_WATCHER_MEM_LIMIT}

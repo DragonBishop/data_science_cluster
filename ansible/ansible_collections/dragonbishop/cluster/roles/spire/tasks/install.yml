@@ -1,0 +1,40 @@
+---
+- name: Read the SPIRE CRDs release
+  kubernetes.core.helm_info:
+    name: spire-crds
+    release_namespace: spire
+  register: spire_crds_release
+
+- name: Install the SPIRE CRDs
+  kubernetes.core.helm:
+    name: spire-crds
+    chart_ref: spire-crds
+    chart_repo_url: https://spiffe.github.io/helm-charts-hardened/
+    chart_version: "{{ spire_crds_version }}"
+    release_namespace: spire
+    create_namespace: true
+    wait: true
+  when: spire_crds_release.status is not defined
+
+- name: Read the SPIRE release
+  kubernetes.core.helm_info:
+    name: spire
+    release_namespace: spire
+  register: spire_release
+
+- name: Install SPIRE
+  kubernetes.core.helm:
+    name: spire
+    chart_ref: spire
+    chart_repo_url: https://spiffe.github.io/helm-charts-hardened/
+    chart_version: "{{ spire_version }}"
+    release_namespace: spire
+    values: "{{ spire_values_substituted.stdout | from_yaml }}"
+    wait: true
+    timeout: 5m
+  when: spire_release.status is not defined
+
+- name: Register the Flux controllers' SPIFFE IDs
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/infrastructure/spire/flux-controllers-spiffeid.yaml"

@@ -1,0 +1,23 @@
+# Helm values for trust-manager
+
+crds:
+  enabled: true
+defaultPackage:
+  enabled: false
+secretTargets:
+  enabled: true
+  authorizedSecrets:
+    - openbao-root-ca
+    - postgres-client-ca
+app:
+  trust:
+    namespace: cert-manager
+  metrics:
+    service:
+      enabled: false
+resources:
+  requests:
+    cpu: ${TRUST_MANAGER_CPU_REQUEST}
+    memory: ${TRUST_MANAGER_MEM_REQUEST}
+  limits:
+    memory: ${TRUST_MANAGER_MEM_LIMIT}

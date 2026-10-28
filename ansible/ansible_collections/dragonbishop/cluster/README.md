@@ -1,6 +1,6 @@
 # dragonbishop.cluster
 
-The playbook and roles that bootstrap the [data science cluster](https://github.com/DragonBishop/data_science_cluster): a single-node k3s cluster with Cilium, Flux and OpenBao. The playbook brings the host from nothing to a running Flux, then hands the cluster to Flux. Flux reconciles everything else from the repository.
+The playbook and roles that bootstrap the [data science cluster](https://github.com/DragonBishop/data_science_cluster): a single-node k3s cluster with Cilium, cert-manager, trust-manager, OpenBao, SPIRE and Flux. The playbook brings the host from nothing to a running Flux, then hands the cluster to Flux, which adopts each release the playbook installed. Flux reconciles everything else from the repository.
 
 ## Table of Contents
 
@@ -20,10 +20,13 @@ The playbook runs them in this order.
 | Role | What it does |
 | --- | --- |
 | `k3s` | Installs k3s without its bundled Traefik, ServiceLB, network policy, kube-proxy and flannel, ready for Cilium. Refuses to install over a previous cluster's Cilium state. |
-| `cilium` | Installs Cilium with Helm, from the same values Flux later manages, before Flux exists. |
-| `flux` | Installs Flux, its Git credentials and the network policies Flux needs to fetch its first source. |
-| `openbao` | Initializes and unseals OpenBao, and keeps its unseal keys in a GPG-encrypted keyfile. |
+| `cilium` | Applies the cluster's Namespaces, then installs Cilium with Helm, from the same values Flux later manages, before Flux exists. |
+| `cert_manager` | Installs cert-manager from `cert-manager-values.yaml`, the values Flux later manages. |
+| `trust_manager` | Installs trust-manager from `trust-manager-values.yaml`, the values Flux later manages. |
+| `openbao` | Installs OpenBao with its certificates, Bundles, network policy and local redirect, initializes and unseals it, and keeps its unseal keys in a GPG-encrypted keyfile. |
 | `opentofu` | Applies `terraform/openbao`, which sets up OpenBao's secrets engines, PKI and Kubernetes authentication. |
+| `spire` | Installs SPIRE, whose CA OpenBao's PKI root signs, so the Flux controllers have identities when they start. |
+| `flux` | Installs Flux, its Git credentials and the network policies Flux needs to fetch its first source. |
 
 ## Requirements
 
@@ -76,7 +79,7 @@ The playbook asks for three secrets. A run that initializes OpenBao needs the GP
 `playbooks/group_vars/all/` holds the variables Ansible loads beside the playbook:
 
 * `ansible.yml`: `repo_root`, `kubeconfig_path`, the OpenBao namespace and pod, and `cluster_config`, which merges every fragment of the repository's `infrastructure/cluster-config/`
-* `cluster_config.yml`: the cluster-config keys the roles use, routed to lowercase variables such as `k3s_version` and `cilium_version`. Flux reads the same keys, so Ansible and Flux install the same versions and values.
+* `certificates.yml`, `cpu_memory.yml`, `networking.yml`, `replicas.yml`, `storage.yml` and `versions.yml`: the cluster-config keys the roles use, one file per cluster-config category, routed to lowercase variables such as `k3s_version` and `cilium_version`. Flux reads the same keys, so Ansible and Flux install the same versions and values.
 
 The role defaults:
 
@@ -104,12 +107,15 @@ The run that initializes OpenBao prints the root token and the unseal keys once.
 
 | Scenario | Proves |
 | --- | --- |
+| `unit-cert-manager-values` | The pinned cert-manager chart renders with the values the role renders, and its schema accepts them |
 | `unit-k3s-config` | `config.yaml` disables flannel, kube-proxy, network policy, Traefik and ServiceLB, enables secrets encryption, and sets `write-kubeconfig` |
 | `unit-k3s-stale-cilium-dir` | With `/run/cilium` present and no k3s installed, the install refuses, naming `/run/cilium` |
 | `unit-k3s-stale-cilium-interface` | With a `cilium_host` interface and no `/run/cilium`, the install refuses, naming `/sys/class/net/cilium_host` |
 | `unit-openbao-keyfile` | The unseal keys are written once to a mode-0600 GPG file that decrypts to exactly those keys, and a second run skips the write |
 | `unit-openbao-no-passphrase` | With an empty GPG passphrase, the role refuses and writes no keyfile |
+| `unit-openbao-values` | The pinned OpenBao chart renders with the values the role renders, and its schema accepts them |
 | `unit-opentofu` | With the rotation marker present, OpenTofu gets a new secrets version, the file holds it, and the marker is gone |
+| `unit-trust-manager-values` | The pinned trust-manager chart renders with the values the role renders, and its schema accepts them |
 | `full-playbook` | The whole playbook on a fresh host: converge, idempotence, and an OpenBao restart the `openbao` role unseals again |
 
 The unit scenarios share one podman container, which `default` creates and destroys. From the collection's directory:

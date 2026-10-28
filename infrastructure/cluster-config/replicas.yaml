@@ -6,4 +6,4 @@ metadata:
   namespace: flux-system
 data:
   CILIUM_OPERATOR_REPLICAS: "1"
-  POSTGIS_INSTANCES: "1"
+  POSTGRES_INSTANCES: "1"

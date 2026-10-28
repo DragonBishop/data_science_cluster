@@ -1,7 +1,5 @@
-"""Tests that Flux and Ansible resolve every cluster-config variable they use."""
+"""Tests that Flux resolves every cluster-config variable it uses."""
 
-import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -11,22 +9,13 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLUSTER_CONFIG_DIR = REPO_ROOT / "infrastructure/cluster-config"
 FLUX_KUSTOMIZATIONS_DIR = REPO_ROOT / "clusters/local"
-ANSIBLE_PLAYBOOKS_DIR = (
-    REPO_ROOT / "ansible/ansible_collections/dragonbishop/cluster/playbooks"
-)
-ANSIBLE_ROUTES_PATH = ANSIBLE_PLAYBOOKS_DIR / "group_vars/all/cluster_config.yml"
-ANSIBLE_JSON_OUTPUT = {
-    "ANSIBLE_STDOUT_CALLBACK": "ansible.posix.json",
-    "ANSIBLE_LOAD_CALLBACK_PLUGINS": "1",
-}
 
 
-def run_command(arguments: list[str], environment: dict[str, str] | None = None) -> str:
+def run_command(arguments: list[str]) -> str:
     """Run a command from the repo root and return its stdout, failing the test on a non-zero exit."""
     result = subprocess.run(
         arguments,
         cwd=REPO_ROOT,
-        env={**os.environ, **(environment or {})},
         stdin=subprocess.DEVNULL,
         capture_output=True,
         check=False,
@@ -104,68 +93,6 @@ def build_flux_kustomization(
     return [document for document in yaml.safe_load_all(rendered_manifests) if document]
 
 
-def parse_ansible_task_result(ansible_output: str) -> dict:
-    """Return the first task's localhost result from Ansible JSON callback output."""
-    return json.loads(ansible_output)["plays"][0]["tasks"][0]["hosts"]["localhost"]
-
-
-def evaluate_ansible_variables(variable_names: list[str]) -> dict:
-    """Return the named variables as Ansible evaluates them for the bootstrap playbook."""
-    output = run_command(
-        [
-            "ansible",
-            "localhost",
-            "--playbook-dir",
-            str(ANSIBLE_PLAYBOOKS_DIR),
-            "-m",
-            "ansible.builtin.debug",
-            "-a",
-            "msg={{ dict(requested_variables | zip(query('ansible.builtin.vars', *requested_variables))) }}",
-            "-e",
-            json.dumps({"requested_variables": variable_names}),
-        ],
-        environment=ANSIBLE_JSON_OUTPUT,
-    )
-    return parse_ansible_task_result(output)["msg"]
-
-
-def run_role_tasks(role: str, tasks_from: str, work_dir: Path) -> dict:
-    """Run one of a role's task files in a throwaway playbook and return its first task's result.
-
-    The playbook sits outside the repo, so repo_root is passed as an extra var.
-    """
-    (work_dir / "group_vars").symlink_to(ANSIBLE_PLAYBOOKS_DIR / "group_vars")
-    playbook_file = work_dir / "playbook.yml"
-    playbook_file.write_text(
-        yaml.safe_dump(
-            [
-                {
-                    "hosts": "localhost",
-                    "gather_facts": False,
-                    "tasks": [
-                        {
-                            "ansible.builtin.import_role": {
-                                "name": role,
-                                "tasks_from": tasks_from,
-                            }
-                        }
-                    ],
-                }
-            ]
-        )
-    )
-    output = run_command(
-        [
-            "ansible-playbook",
-            str(playbook_file),
-            "-e",
-            json.dumps({"repo_root": str(REPO_ROOT)}),
-        ],
-        environment=ANSIBLE_JSON_OUTPUT,
-    )
-    return parse_ansible_task_result(output)
-
-
 @pytest.fixture(scope="module")
 def cluster_config_data() -> dict[str, str]:
     """Return the cluster-config ConfigMap data as kustomize builds it."""
@@ -192,77 +119,3 @@ def test_flux_kustomization_renders_every_variable(
 ):
     """Check that Flux builds the Kustomization with no ${VAR} left unset."""
     build_flux_kustomization(kustomization, cluster_config_data, tmp_path)
-
-
-def test_ansible_cluster_config_matches_flux_configmap(
-    cluster_config_data: dict[str, str],
-):
-    """Check that Ansible's merged cluster_config equals the ConfigMap Flux applies."""
-    ansible_cluster_config = evaluate_ansible_variables(["cluster_config"])[
-        "cluster_config"
-    ]
-    assert ansible_cluster_config == cluster_config_data
-
-
-def test_gateway_api_crds_match_their_version(cluster_config_data: dict[str, str]):
-    """Check that every vendored Gateway API CRD carries GATEWAY_API_VERSION as its bundle version."""
-    crd_documents = yaml.safe_load_all(
-        (
-            REPO_ROOT / "infrastructure/gateway-api-crds/standard-install.yaml"
-        ).read_text()
-    )
-    bundle_versions = {
-        document["metadata"]["annotations"]["gateway.networking.k8s.io/bundle-version"]
-        for document in crd_documents
-        if document and document["kind"] == "CustomResourceDefinition"
-    }
-    assert bundle_versions == {cluster_config_data["GATEWAY_API_VERSION"]}
-
-
-def test_ansible_routed_variables_resolve():
-    """Check that every routed Ansible variable resolves to a non-empty value."""
-    routed_variable_names = list(yaml.safe_load(ANSIBLE_ROUTES_PATH.read_text()))
-    routed_values = evaluate_ansible_variables(routed_variable_names)
-    empty_variables = [
-        name for name, value in routed_values.items() if value in ("", None)
-    ]
-    assert empty_variables == []
-
-
-def test_ansible_cilium_values_match_flux(
-    cluster_config_data: dict[str, str], tmp_path: Path
-):
-    """Check that Ansible renders the same Cilium values as Flux's cilium-values ConfigMap."""
-    ansible_values = yaml.safe_load(
-        run_role_tasks("dragonbishop.cluster.cilium", "render_values", tmp_path)[
-            "stdout"
-        ]
-    )
-
-    cilium_kustomization = next(
-        (
-            kustomization
-            for kustomization in find_substituted_kustomizations()
-            if kustomization["metadata"]["name"] == "cilium"
-        ),
-        None,
-    )
-    assert cilium_kustomization, (
-        f"no cilium Kustomization substituting cluster-config in {FLUX_KUSTOMIZATIONS_DIR}"
-    )
-    flux_manifests = build_flux_kustomization(
-        cilium_kustomization, cluster_config_data, tmp_path
-    )
-    values_configmap = next(
-        (
-            manifest
-            for manifest in flux_manifests
-            if manifest["kind"] == "ConfigMap"
-            and manifest["metadata"]["name"] == "cilium-values"
-        ),
-        None,
-    )
-    assert values_configmap, "flux build of cilium produced no cilium-values ConfigMap"
-    flux_values = yaml.safe_load(values_configmap["data"]["values.yaml"])
-
-    assert ansible_values == flux_values

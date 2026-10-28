@@ -1,0 +1,6 @@
+---
+- name: Render the trust-manager Helm values
+  ansible.builtin.import_tasks: render.yml
+
+- name: Install trust-manager
+  ansible.builtin.import_tasks: install.yml

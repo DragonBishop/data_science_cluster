@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # setup-firewall.sh: Configures host firewall rules for Kubernetes & Cilium.
 # Supports Fedora/RHEL (firewalld) and Ubuntu/Debian (ufw).
