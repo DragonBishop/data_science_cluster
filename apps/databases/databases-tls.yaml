@@ -1,4 +1,4 @@
-# Postgres's server certificate from the Postgres CA, and the Bundle that publishes the CA
+# Postgres's server and replication certificates from the Postgres CA, and the Bundles that publish the CAs
 
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -50,3 +50,47 @@ spec:
     namespaceSelector:
       matchLabels:
         data-cluster/ca-bundles: "true"
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: postgres-replication-cert
+  namespace: databases
+spec:
+  secretName: postgres-replication-cert
+  secretTemplate:
+    labels:
+      cnpg.io/reload: ""
+  commonName: streaming_replica
+  usages:
+    - client auth
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  issuerRef:
+    name: postgres-ca-issuer
+    kind: ClusterIssuer
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: postgres-client-ca          # CNPG's clientCASecret: the Root CA for SVIDs, the Postgres CA for replication
+spec:
+  sources:
+    - secret:
+        name: openbao-root-ca-source
+        key: ca.crt
+    - secret:
+        name: postgres-ca
+        key: tls.crt
+  target:
+    secret:
+      key: ca.crt
+      metadata:
+        labels:
+          cnpg.io/reload: ""
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: databases

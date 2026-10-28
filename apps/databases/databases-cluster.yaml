@@ -38,6 +38,17 @@ spec:
     roles:
       - name: tekton_readwrite
         login: false
+      - name: core_test
+        ensure: present
+        login: true
+        inRoles:
+          - app_readwrite
+
+  postgresql:
+    pg_hba:
+      - hostssl all core_test all cert map=spiffe
+    pg_ident:
+      - spiffe core-test.spiffe core_test
 
   storage:
     size: ${POSTGRES_STORAGE_SIZE}
@@ -47,6 +58,8 @@ spec:
   certificates:
     serverTLSSecret: postgres-server-cert
     serverCASecret: postgres-server-cert
+    clientCASecret: postgres-client-ca
+    replicationTLSSecret: postgres-replication-cert
 
   plugins:
     - name: barman-cloud.cloudnative-pg.io

@@ -8,6 +8,7 @@ secretTargets:
   enabled: true
   authorizedSecrets:
     - openbao-root-ca
+    - postgres-client-ca
 app:
   trust:
     namespace: cert-manager
