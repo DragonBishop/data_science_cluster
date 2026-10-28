@@ -202,19 +202,12 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 * **OpenBao throws a "permission denied" error**
   * **How to fix it:** Check the policies and roles applied from `terraform/openbao/`. `kubectl exec -n openbao openbao-0 -- bao policy read databases-policy` and `... bao policy read cert-manager-pki-policy` show the paths granted; `... bao read auth/kubernetes/role/databases-role` and `... bao read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
 
-* **`bao kv get secret/postgres` or `secret/seaweedfs` returns "No value found at secret/data/..."**
-  * **What's happening:** The `vault_kv_secret_v2` resources in `terraform/openbao/kv.tf` that write this data have never been applied for this OpenBao instance.
-  * **How to fix it:** Re-run `just bootstrap` (or `tofu -chdir=terraform/openbao apply` directly with the usual `TF_VAR_*` exported). If the resources exist in config but values still don't appear after that, see the next entry.
-
 * **A freshly-typed or corrected value (e.g. fixing a mistyped superuser password) doesn't reach OpenBao after re-running bootstrap**
-  * **What's happening:** `postgres_superuser_password`, `s3_access_key`, and `s3_secret_key` all share one write-only version counter (`secrets_wo_version`). Terraform only pushes a new write-only value when its version changes; an ordinary rerun leaves the version unchanged by design, so a differing typed value is silently not written.
-  * **How to fix it:** Run `touch ~/.config/data_science_cluster/rotate-openbao-secrets`, then `just bootstrap`. The run bumps the version, forces all three secrets to be rewritten (this also regenerates the S3 keys as a side effect), and deletes the marker.
-
-> [!IMPORTANT]
-> The `rotate-openbao-secrets` marker regenerates the S3 keys as a side effect of bumping the shared write-only version — don't set it just to fix one of the three secrets unless you're prepared for all three to rotate.
+  * **What's happening:** `postgres_superuser_password` reaches OpenBao's database connection as a write-only value with a version counter (`secrets_wo_version`). Terraform only pushes a new write-only value when its version changes, and an ordinary rerun leaves the version unchanged.
+  * **How to fix it:** Run `touch ~/.config/data_science_cluster/rotate-openbao-secrets`, then `just bootstrap`. The run bumps the version, rewrites the password in OpenBao, and deletes the marker. The bootstrap writes Secret `postgres-superuser-credentials` from the typed value on every run.
 
 * **Secrets or certificates are failing to issue/mount into Kubernetes**
-  * **How to fix it:** Run `kubectl describe externalsecret <name> -n databases` (and `kubectl describe secretstore openbao -n databases` for auth or connection errors). For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why ESO or cert-manager could not pull or mint the resource.
+  * **How to fix it:** For a Secret `rotate-credentials` writes, run `kubectl get jobs -n openbao -l app.kubernetes.io/name=rotate-credentials` and `kubectl logs job/<name> -n openbao --all-containers` to see why the last run failed. For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why cert-manager could not mint the resource.
 
 * **Certificate issuance fails with a Name Constraint or permission error from OpenBao PKI**
   * **What's happening:** OpenBao's intermediate CA enforces RFC 5280 Name Constraints (`permitted_dns_domains`) and role-level domain allowlists (`allowed_domains` in `terraform/openbao/pki.tf`).
@@ -248,7 +241,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > `DROP ROLE` at lease expiry fails with `cannot be dropped because some objects depend on it` until ownership is reassigned — OpenBao will keep leaving the stale role behind on every expiry until you fix this.
 
 * **Application credentials stop working after a password rotation**
-  * **What's happening:** Superuser credential refreshes reload automatically, as `postgres-superuser-credentials` carries a permanent `cnpg.io/reload=true` label (in `apps/databases/secrets/databases-secrets.yaml`), so CNPG picks up the new Secret on its own.
+  * **What's happening:** Superuser credential refreshes reload automatically, as `postgres-superuser-credentials` carries a permanent `cnpg.io/reload=true` label (written by the `opentofu` role's `tasks/secrets.yml`), so CNPG picks up the new Secret on its own.
   * **How to fix it:** For the superuser password, update `database/config/postgres-cluster` in OpenBao (via `terraform/openbao/database.tf`). If a refresh still isn't picked up, confirm the `cnpg.io/reload=true` label is actually present on the Secret (`kubectl get secret postgres-superuser-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
@@ -274,15 +267,15 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **`TektonResult` never becomes Ready and no Results pods exist**
   * **What's happening:** The operator holds Results back until `tekton-results-postgres` exists in `tekton`.
-  * **How to fix it:** `flux get kustomization tekton` and `kubectl describe externalsecret tekton-results-postgres -n tekton` report what is missing, usually OpenBao auth or the `tekton-results-app-role` role not yet applied by `just bootstrap --tags opentofu`.
+  * **How to fix it:** `kubectl get secret tekton-results-postgres -n tekton` shows whether it exists. The `opentofu` role creates it empty, so `just bootstrap --tags opentofu` restores it.
 
 * **A Results pod is stuck in `CreateContainerConfigError`**
-  * **What's happening:** The pod reads its database login from Secret `tekton-results-postgres`, which ESO writes from OpenBao. The kubelet starts the container once the Secret exists.
-  * **How to fix it:** `kubectl describe externalsecret tekton-results-postgres -n tekton` reports why ESO could not write the Secret, usually OpenBao auth or the `tekton-results-app-role` role.
+  * **What's happening:** The pod reads `username` and `password` from Secret `tekton-results-postgres`, which `rotate-credentials` fills from OpenBao. The bootstrap's `flux` role runs it once, and the kubelet starts the container once both keys exist.
+  * **How to fix it:** `kubectl create job --from=cronjob/rotate-credentials rotate-now -n openbao` fills the Secret, and `kubectl logs job/rotate-now -n openbao --all-containers` shows why a run failed, usually the SVID login or the `tekton-results-app-role` role.
 
 * **The Results API crash-loops on its database connection**
-  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/postgres-ca/ca.crt` from ConfigMap `postgres-ca`, as a login that must still be within its 4-day lease. ESO writes a new login every day, and the pod reads it at its next start.
-  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `postgres-server-cert` was issued by `postgres-ca-issuer` (`kubectl describe certificate postgres-server-cert -n databases`) and that ConfigMap `postgres-ca` exists in `tekton`. For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it with a new login.
+  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/postgres-ca/ca.crt` from ConfigMap `postgres-ca`, as a login that must still be within its 4-day lease. `rotate-credentials` writes a new login every day, and the pod reads it at its next start.
+  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `postgres-server-cert` was issued by `postgres-ca-issuer` (`kubectl describe certificate postgres-server-cert -n databases`) and that ConfigMap `postgres-ca` exists in `tekton`. For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, run `kubectl create job --from=cronjob/rotate-credentials rotate-now -n openbao`, then `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it with the new login.
 
 * **PipelineRuns finish but no records appear**
   * **What's happening:** The API serves the certificate it loaded at startup, so an API pod running past `tekton-results-tls` expiry fails the watcher's TLS handshake.

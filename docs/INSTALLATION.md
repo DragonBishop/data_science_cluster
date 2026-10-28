@@ -2,7 +2,7 @@
 
 This guide installs and configures a local single-node Kubernetes cluster tailored for data science workloads. [Verification](VERIFICATION.md) checks the result once Flux has reconciled it.
 
-The process uses Ansible to provision k3s, Cilium eBPF networking, Flux GitOps controllers, in-cluster OpenBao secrets management, and OpenTofu infrastructure configurations. Once Ansible finishes, Flux takes over GitOps management of the cluster.
+The process uses Ansible to provision k3s, Cilium eBPF networking, cert-manager and trust-manager, in-cluster OpenBao secrets management, OpenTofu infrastructure configurations, SPIRE workload identity, and the Flux GitOps controllers, in that order. Once Ansible finishes, Flux takes over GitOps management of the cluster.
 
 Once host-side prerequisites are met, running `just bootstrap` orchestrates the entire cluster lifecycle and reconciles all platform services declaratively.
 
@@ -324,7 +324,7 @@ cd data_science_cluster
 
 ### Step 2: Execute Ansible Bootstrap
 
-Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on, then runs the full setup via the collection's playbook (`dragonbishop.cluster.data_cluster`): k3s, Cilium, Flux, OpenBao, and `terraform/openbao`. On a fresh clone, `uv run` first builds `.venv` from `uv.lock`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
+Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on, then runs the full setup via the collection's playbook (`dragonbishop.cluster.data_cluster`): k3s, Cilium, cert-manager, trust-manager, OpenBao, `terraform/openbao`, SPIRE and Flux. On a fresh clone, `uv run` first builds `.venv` from `uv.lock`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
 > [!TIP]
 > **Just Recipe (automatically prompts for sudo):**
@@ -362,50 +362,42 @@ flowchart TD
     %% Core Services & PKI
     cilium --> certmgr["cert-manager"]
     certmgr --> trustmgr["trust-manager"]
-    certmgr --> openbao["openbao"]
-    trustmgr --> openbao
+    trustmgr --> openbao["openbao"]
+    cilium --> spire["spire"]
 
     %% Platform Services
-    openbao --> eso["external-secrets"]
-    eso --> cnpg["cnpg-operator"]
+    openbao --> cnpg["cnpg-operator"]
     cnpg --> barman["barman-cloud"]
 
     openbao --> gw["gateway"]
     gw --> hubble["hubble"]
 
     %% Applications
-    openbao --> dbsecrets["databases-secrets"]
-    eso --> dbsecrets
     openbao --> seaweedfs["seaweedfs"]
-    eso --> seaweedfs
     barman --> db["databases"]
     seaweedfs --> db
-    dbsecrets --> db
-    openbao --> db
     gw --> db
 
     %% CI
     certmgr --> tektonop["tekton-operator"]
     tektonop --> tekton["tekton"]
-    openbao --> tekton
-    eso --> tekton
     db --> tekton
     tekton --> tektonpipelines["tekton-pipelines"]
     tekton --> tektontasks["tekton-tasks"]
 ```
 
 * `cilium` requires `gateway-api-crds`, `namespaces` and `cluster-config`.
+* `spire` depends on `cilium`, `namespaces` and `cluster-config`.
 * `cert-manager` depends on `cilium`.
 * `trust-manager` depends on `cert-manager`, which holds the `jetstack` HelmRepository and issues the trust-manager webhook's certificate.
 * `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap) and `trust-manager` (for the Bundle CRD its CA Bundles use).
-* `external-secrets` and `gateway` depend on `openbao` (for secrets sync and PKI).
-* `cnpg-operator` depends on `external-secrets`, and `barman-cloud` depends on `cnpg-operator`.
+* `gateway` depends on `openbao` (for PKI).
+* `cnpg-operator` depends on `openbao`, and `barman-cloud` depends on `cnpg-operator`.
 * `hubble` depends on `gateway`.
-* `databases-secrets` depends on `openbao` and `external-secrets` (whose webhook must admit its `ExternalSecret`s).
-* `seaweedfs` depends on `namespaces`, `openbao` and `external-secrets` (for its own `seaweedfs-credentials`) and is Ready only after its install hook creates the `cnpg-backups` bucket.
-* `databases` depends on `openbao`, `barman-cloud`, `seaweedfs`, `gateway`, and `databases-secrets`, so the PostGIS cluster starts with its backup bucket and its CA Secrets already in place.
+* `seaweedfs` depends on `namespaces` and `openbao` and is Ready only after its install hook creates the `cnpg-backups` bucket.
+* `databases` depends on `openbao`, `barman-cloud`, `seaweedfs` and `gateway`, so the PostGIS cluster starts with its backup bucket and its CA Secrets already in place.
 * `tekton-operator` depends on `cert-manager`.
-* `tekton` depends on `tekton-operator`, `openbao`, `external-secrets`, and `databases`. It holds Results' database login, whose ESO objects need OpenBao and ESO, and every Results login joins the `tekton_readwrite` role, which `databases` creates. The operator holds Results back until the login's Secret exists.
+* `tekton` depends on `tekton-operator`, `openbao` and `databases`. Every Results login joins the `tekton_readwrite` role, which `databases` creates. The operator holds Results back until the login's Secret exists.
 * `tekton-pipelines` and `tekton-tasks` depend on `tekton`, which installs the Pipeline and Task CRDs.
 
 Once Flux reports every Kustomization Ready, continue with [Verification](VERIFICATION.md).

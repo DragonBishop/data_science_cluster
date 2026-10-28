@@ -4,12 +4,12 @@ This repository provisions a self-contained local Kubernetes cluster tailored fo
 
 Four tools roll out this cluster:
 
-* **Ansible:** Bootstraps the host and the cluster idempotently: k3s, Cilium, the Flux controllers, and OpenBao's initialization and unseal. It runs OpenTofu as its last step.
+* **Ansible:** Bootstraps the host and the cluster idempotently, in order: k3s, Cilium, cert-manager, trust-manager, OpenBao, OpenTofu, SPIRE, and the Flux controllers. Flux adopts each release Ansible installed.
 * **Flux CD:** Reconciles the cluster against this Git repository, its single source of truth. Each Flux `Kustomization` applies one directory of manifests in the order its `dependsOn` chain sets, and third-party charts arrive as `HelmRelease`s.
 * **OpenTofu:** Declares OpenBao's secrets engines, access policies, PKI and Kubernetes authentication (`terraform/openbao/`).
 * **Tekton:** Tests the core after every change Flux applies to it, including the paths into it that the workstation uses.
 
-Cluster secrets and security rely on an in-cluster OpenBao, unsealed at boot from a GPG-encrypted keyfile kept gitignored in this repo (`.local/openbao/`). Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, while the External Secrets Operator (ESO) syncs static configuration and short-lived, dynamic database credentials into Kubernetes `Secret`s for application workloads.
+Cluster secrets and security rely on an in-cluster OpenBao, unsealed at boot from a GPG-encrypted keyfile kept gitignored in this repo (`.local/openbao/`). Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, and its database engine issues the short-lived logins the `rotate-credentials` CronJob writes into Kubernetes `Secret`s every day.
 
 Workloads are structured modularly to maximize compute efficiency on local hardware. The cluster maintains an always-on core database architecture, powered by PostgreSQL/PostGIS (CloudNativePG), Cilium eBPF networking and Gateway routing, and SeaweedFS S3-compatible storage. Specialized modules for testing, cluster observability, ETL data pipelines, and machine learning workflows can be deployed dynamically when performing specific data science tasks and torn down afterward to conserve memory and CPU.
 
@@ -108,12 +108,11 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
 | Hubble | `v1.20.2` (Relay), `v0.13.6` (UI) | Cilium's network observability layer. Relay runs its own cert-manager mTLS trust domain; the `hubble` CLI reaches it at `localhost:4245` through a local redirect. |
 
-**OpenBao** holds the cluster's secrets and issues its certificates and database logins through its **Database & PKI Engines**. **cert-manager** and **ESO** deliver them into Kubernetes:
+**OpenBao** holds the cluster's secrets and issues its certificates and database logins through its **Database & PKI Engines**. **cert-manager** delivers the certificates into Kubernetes:
 
 | Component | Version | Description |
 | --- | --- | --- |
 | cert-manager | `1.21.2` | Manages local edge CA, provisions OpenBao TLS, and mints leaf certificates via `openbao-pki-issuer`. |
-| External Secrets Operator (ESO) | `2.12.0` | Syncs OpenBao values into Kubernetes `Secret`s; refreshes static secrets hourly and writes Tekton Results' database login from OpenBao every day. |
 | OpenBao (in-cluster) | `2.7.1` (chart `0.30.3`) | Secrets backend on PebbleDB storage; `just start` unseals it from the GPG-encrypted keyfile in `.local/openbao/`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
 | OpenBao Database & PKI Engines | Same as OpenBao | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
 
@@ -133,7 +132,7 @@ The **Tekton Operator** installs **Tekton Pipelines**, **Tekton Triggers** and *
 | `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, backups and Hubble drops. |
 | Tekton Operator | `v0.81.2` | Installs Pipelines, Triggers, Results and the pruner from one `TektonConfig`. |
 | Tekton Pipelines | `v1.15.3` (via Tekton Operator `v0.81.2`) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. |
-| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2`) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. ESO writes its OpenBao database login every `DB_LOGIN_REFRESH_INTERVAL`, and each pod reads the current one at start. |
+| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2`) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. Each pod reads its database login from Secret `tekton-results-postgres` at start. |
 | Tekton Triggers | `v0.37.1` (via Tekton Operator `v0.81.2`) | The `flux-events` EventListener (planned for 3.0) turns events from Flux's notification-controller into PipelineRuns, so a merge to `main` starts `core-test`. |
 | Zot | `v2.1.22` (chart `0.1.128`; planned for 3.0) | In-cluster OCI registry and pull-through cache for every public registry the node pulls from, storing images in the `zot` SeaweedFS bucket. The Tekton module builds images into it, and containerd pulls through it. |
 
@@ -229,7 +228,6 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Component | Documentation Link |
 | --- | --- |
 | cert-manager | [https://cert-manager.io/docs/](https://cert-manager.io/docs/) |
-| External Secrets Operator | [https://external-secrets.io/latest/](https://external-secrets.io/latest/) |
 | OpenBao | [https://openbao.org/docs/](https://openbao.org/docs/) |
 | OpenBao Database Secrets Engine | [https://openbao.org/docs/secrets/databases/](https://openbao.org/docs/secrets/databases/) |
 | OpenBao PKI Secrets Engine | [https://openbao.org/docs/secrets/pki/](https://openbao.org/docs/secrets/pki/) |
