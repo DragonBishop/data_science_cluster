@@ -6,5 +6,6 @@ resources:
   - databases-issuers.yaml
   - databases-localhost.yaml
   - databases-networkpolicy.yaml
+  - databases-rbac.yaml
   - databases-route.yaml
   - databases-tls.yaml

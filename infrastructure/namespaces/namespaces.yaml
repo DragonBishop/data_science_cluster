@@ -3,14 +3,8 @@ kind: Namespace
 metadata:
   name: openbao
   labels:
+    data-cluster/ca-bundles: "true"
     # Pod Security baseline: refuses host network, host paths, privileged containers and added capabilities
-    pod-security.kubernetes.io/enforce: baseline
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: external-secrets
-  labels:
     pod-security.kubernetes.io/enforce: baseline
 ---
 apiVersion: v1

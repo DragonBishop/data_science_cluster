@@ -11,10 +11,6 @@ resource "vault_policy" "databases" {
   name = "databases-policy"
 
   policy = <<EOT
-path "secret/data/postgres" { capabilities = ["read"] }
-path "secret/data/barman-s3" { capabilities = ["read"] }
-path "secret/metadata/postgres" { capabilities = ["read"] }
-path "secret/metadata/barman-s3" { capabilities = ["read"] }
 path "database/creds/postgres-app-role" { capabilities = ["read"] }
 EOT
 }
@@ -36,33 +32,6 @@ path "pki_int/sign/internal-server" { capabilities = ["update"] }
 EOT
 }
 
-resource "vault_policy" "tekton_results" {
-  name = "tekton-results-policy"
-
-  policy = <<EOT
-path "database/creds/tekton-results-app-role" { capabilities = ["read"] }
-EOT
-}
-
-resource "vault_policy" "seaweedfs" {
-  name = "seaweedfs-policy"
-
-  policy = <<EOT
-path "secret/data/seaweedfs" { capabilities = ["read"] }
-path "secret/metadata/seaweedfs" { capabilities = ["read"] }
-EOT
-}
-
-resource "vault_kubernetes_auth_backend_role" "tekton_results" {
-  backend                          = vault_auth_backend.kubernetes.path
-  role_name                        = "tekton-results-role"
-  bound_service_account_names      = ["tekton-results-openbao-auth"]
-  bound_service_account_namespaces = ["tekton"]
-  audience                         = "openbao"
-  token_policies                   = [vault_policy.tekton_results.name]
-  token_ttl                        = 86400 # 24h
-}
-
 resource "vault_kubernetes_auth_backend_role" "cert_manager" {
   backend                          = vault_auth_backend.kubernetes.path
   role_name                        = "cert-manager-pki-role"
@@ -70,16 +39,6 @@ resource "vault_kubernetes_auth_backend_role" "cert_manager" {
   bound_service_account_namespaces = ["cert-manager"]
   token_policies                   = [vault_policy.cert_manager_pki.name]
   token_ttl                        = 3600 # 1h
-}
-
-resource "vault_kubernetes_auth_backend_role" "seaweedfs" {
-  backend                          = vault_auth_backend.kubernetes.path
-  role_name                        = "seaweedfs-role"
-  bound_service_account_names      = ["seaweedfs-openbao-auth"]
-  bound_service_account_namespaces = ["seaweedfs"]
-  audience                         = "openbao"
-  token_policies                   = [vault_policy.seaweedfs.name]
-  token_ttl                        = 86400 # 24h
 }
 
 resource "vault_policy" "spire_server" {

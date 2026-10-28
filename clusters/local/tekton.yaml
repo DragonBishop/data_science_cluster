@@ -5,10 +5,10 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: tekton-operator
     - name: openbao
-    - name: external-secrets
     # Dynamic logins join tekton_readwrite, which the databases Kustomization creates
     - name: databases
     - name: cluster-config

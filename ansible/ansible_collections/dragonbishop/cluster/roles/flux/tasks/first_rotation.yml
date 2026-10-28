@@ -1,0 +1,198 @@
+---
+- name: Read Results' login Secret
+  kubernetes.core.k8s_info:
+    kind: Secret
+    name: tekton-results-postgres
+    namespace: tekton
+  register: flux_results_login
+  no_log: true
+
+- name: Run the first credential rotation
+  when: "'password' not in (flux_results_login.resources[0].data | default({}, true))"
+  block:
+    - name: Wait for Flux to apply cluster-config
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: cluster-config
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply gateway-api-crds
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: gateway-api-crds
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply namespaces
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: namespaces
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply cilium
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: cilium
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply spire
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: spire
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply cert-manager
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: cert-manager
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply trust-manager
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: trust-manager
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply openbao
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: openbao
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply cnpg-operator
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: cnpg-operator
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply barman-cloud
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: barman-cloud
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply gateway
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: gateway
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply seaweedfs
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: seaweedfs
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Wait for Flux to apply databases
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: databases
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+
+    - name: Read the rotate-credentials CronJob
+      kubernetes.core.k8s_info:
+        api_version: batch/v1
+        kind: CronJob
+        name: rotate-credentials
+        namespace: openbao
+      register: flux_rotate_credentials_cronjob
+
+    - name: Run rotate-credentials once
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: rotate-credentials-first
+            namespace: openbao
+          spec: "{{ flux_rotate_credentials_cronjob.resources[0].spec.jobTemplate.spec }}"
+
+    - name: Wait for rotate-credentials to complete
+      kubernetes.core.k8s_info:
+        api_version: batch/v1
+        kind: Job
+        name: rotate-credentials-first
+        namespace: openbao
+        wait: true
+        wait_condition:
+          type: Complete
+          status: "True"
+        wait_timeout: 600

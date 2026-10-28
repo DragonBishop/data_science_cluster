@@ -5,12 +5,12 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: openbao
     - name: barman-cloud
     - name: seaweedfs
     - name: gateway
-    - name: databases-secrets
     - name: cluster-config
   sourceRef:
     kind: GitRepository

@@ -5,9 +5,9 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 1m
   dependsOn:
     - name: cluster-config
-    - name: external-secrets
     - name: namespaces
     - name: openbao
   sourceRef:

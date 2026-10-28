@@ -4,8 +4,6 @@ variables {
   state_encryption_passphrase = "foo123"
   openbao_token               = "foo234"
   postgres_superuser_password = "foo345"
-  s3_access_key               = "foo456"
-  s3_secret_key               = "foo567"
   secrets_wo_version          = "1"
 }
 
@@ -43,9 +41,7 @@ run "auth_roles_bound_narrowly" {
     condition = alltrue([
       for role in [
         vault_kubernetes_auth_backend_role.databases,
-        vault_kubernetes_auth_backend_role.tekton_results,
         vault_kubernetes_auth_backend_role.cert_manager,
-        vault_kubernetes_auth_backend_role.seaweedfs,
         vault_kubernetes_auth_backend_role.spire_server,
       ] : length(role.bound_service_account_names) == 1 && length(role.bound_service_account_namespaces) == 1
     ])
@@ -60,10 +56,23 @@ run "policies_read_only" {
     condition = alltrue([
       for policy in [
         vault_policy.databases,
-        vault_policy.tekton_results,
-        vault_policy.seaweedfs,
+        vault_policy.rotate_credentials,
       ] : length(regexall("capabilities\\s*=\\s*\\[\"read\"\\]", policy.policy)) == length(regexall("capabilities", policy.policy))
     ])
     error_message = "A policy grants more than read."
+  }
+}
+
+run "cert_roles_bound_narrowly" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for role in [
+        vault_cert_auth_backend_role.core_test,
+        vault_cert_auth_backend_role.rotate_credentials,
+      ] : length(role.allowed_uri_sans) == 1
+    ])
+    error_message = "A cert auth role admits more than one SPIFFE ID."
   }
 }

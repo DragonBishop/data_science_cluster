@@ -89,13 +89,38 @@ jobs:
           done
           flux get kustomizations
 
-      - name: Show the cluster state
-        if: failure()
+      - name: Show the Flux objects
+        if: failure() || cancelled()
+        run: flux get all -A || true
+
+      - name: Show source-controller's logs
+        if: failure() || cancelled()
+        run: kubectl logs -n flux-system deploy/source-controller --tail=200 || true
+
+      - name: Show kustomize-controller's logs
+        if: failure() || cancelled()
+        run: kubectl logs -n flux-system deploy/kustomize-controller --tail=200 || true
+
+      - name: Show helm-controller's logs
+        if: failure() || cancelled()
+        run: kubectl logs -n flux-system deploy/helm-controller --tail=200 || true
+
+      - name: Show the pods
+        if: failure() || cancelled()
+        run: kubectl get pods -A || true
+
+      - name: Show the recent events
+        if: failure() || cancelled()
+        run: kubectl get events -A --sort-by=.lastTimestamp | tail -n 100
+
+      - name: Describe the pods that are not running
+        if: failure() || cancelled()
+        run: kubectl describe pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded || true
+
+      - name: Show the logs of the pods that are not running
+        if: failure() || cancelled()
         run: |
-          flux get all -A || true
-          for controller in source-controller kustomize-controller helm-controller; do
-            kubectl -n flux-system logs deploy/$controller --tail=200 || true
-          done
-          kubectl get pods -A || true
-          kubectl get clustersecretstores,secretstores,externalsecrets -A || true
-          kubectl get events -A --sort-by=.lastTimestamp | tail -n 100 || true
+          kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded --no-headers |
+            while read -r namespace pod_name _; do
+              kubectl logs -n "$namespace" "$pod_name" --all-containers --prefix --tail=100 || true
+            done

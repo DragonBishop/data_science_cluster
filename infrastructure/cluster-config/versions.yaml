@@ -13,8 +13,6 @@ data:
   CILIUM_VERSION: "1.20.2"
   # renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts
   CNPG_VERSION: "0.29.1"
-  # renovate: datasource=docker depName=ghcr.io/external-secrets/charts/external-secrets
-  ESO_VERSION: "2.12.0"
   # renovate: datasource=github-releases depName=k3s-io/k3s
   K3S_VERSION: "v1.37.1+k3s1"
   # renovate: datasource=docker depName=registry.k8s.io/kubectl
