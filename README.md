@@ -62,23 +62,23 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | OpenTofu | `1.13.1` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
 | uv | `astral-sh/uv` | Builds `.venv` from `uv.lock`, Python included; `just bootstrap` and the dev recipes run through it. |
 
-**GnuPG** protects the OpenBao keyfile, and `just preflight` checks for **OpenSSL**:
+**GnuPG** protects the OpenBao keyfile, and **Git** initializes a source download for `just setup`:
 
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
+| Git | `git` | `just setup` runs `git init` in a source download without `.git`; the GitHub CLI fallback reads the `origin` URL. |
 | GnuPG (`gpg`) | `gnupg` / `gnupg2` | Encrypts and decrypts the OpenBao unseal keyfile in `.local/openbao/`. |
-| OpenSSL | `openssl` | `just preflight` checks that it is installed. |
 
-**just** runs every recipe, and **kubectl**, the **kubectl cnpg plugin**, the **Hubble CLI**, **Headlamp** and **fzf** inspect and operate the running cluster:
+**just** runs every recipe, and **kubectl**, the **kubectl cnpg plugin**, the **Tekton CLI**, **Headlamp** and **fzf** inspect and operate the running cluster:
 
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
 | fzf | `fzf` | Interactive pod picker for `just fuzzypods`. |
 | Headlamp | `0.45.0` (desktop app) | Cluster GUI on the host, reading `~/.kube/config`. Its plugins assist with cluster management. |
-| Hubble CLI | `hubble` (`cilium/hubble` release) | Streams flows and policy verdicts from Hubble Relay (`just hubble`). |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
 | kubectl | `v1.37.1` <!-- renovate: datasource=github-releases depName=kubernetes/kubernetes --> (`KUBECTL_VERSION`, matching `K3S_VERSION`) | Kubernetes CLI for every cluster operation and recipe. |
 | kubectl cnpg plugin | `1.30.1` (the CNPG operator version) | CloudNativePG status, backups, restarts, and `psql` sessions inside the primary pod (`kubectl cnpg ...`), so the host needs no PostgreSQL client. |
+| Tekton CLI (`tkn`) | `tektoncd-cli` | Lists and follows PipelineRuns, TaskRuns and their logs. |
 
 **pgiscluster** reaches the database from the host:
 
@@ -106,7 +106,7 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with an `internal` zone via a `coredns-custom` ConfigMap (`infrastructure/cilium/coredns-custom.yaml`). Resolves `*.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
 | Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`) every tool attaches a `Route` to: an HTTPS listener (443, wildcard cert) for web UIs, a raw TCP listener (5432) for Postgres. |
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
-| Hubble | `v1.20.2` (Relay), `v0.13.6` (UI) | Cilium's network observability layer. Relay runs its own cert-manager mTLS trust domain; the `hubble` CLI reaches it at `localhost:4245` through a local redirect. |
+| Hubble | `v1.20.2` (Relay), `v0.13.6` (UI) | Cilium's network observability layer. Relay runs its own cert-manager mTLS trust domain. |
 
 **OpenBao** holds the cluster's secrets and issues its certificates and database logins through its **Database & PKI Engines**. **cert-manager** delivers the certificates into Kubernetes:
 
@@ -194,17 +194,17 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 
 | Component | Documentation Link |
 | --- | --- |
+| Git | [https://git-scm.com/doc](https://git-scm.com/doc) |
 | GnuPG (`gpg`) | [https://www.gnupg.org/documentation/](https://www.gnupg.org/documentation/) |
-| OpenSSL | [https://docs.openssl.org/](https://docs.openssl.org/) |
 
 | Component | Documentation Link |
 | --- | --- |
 | fzf | [https://junegunn.github.io/fzf/](https://junegunn.github.io/fzf/) |
 | Headlamp | [https://headlamp.dev/docs/latest/](https://headlamp.dev/docs/latest/) |
-| Hubble CLI | [https://docs.cilium.io/en/stable/observability/hubble/setup/](https://docs.cilium.io/en/stable/observability/hubble/setup/) |
 | just | [https://just.systems/man/en/](https://just.systems/man/en/) |
 | kubectl | [https://kubernetes.io/docs/reference/kubectl/](https://kubernetes.io/docs/reference/kubectl/) |
 | kubectl cnpg plugin | [https://cloudnative-pg.io/documentation/current/kubectl-plugin/](https://cloudnative-pg.io/documentation/current/kubectl-plugin/) |
+| Tekton CLI (`tkn`) | [https://tekton.dev/docs/cli/](https://tekton.dev/docs/cli/) |
 
 | Component | Documentation Link |
 | --- | --- |

@@ -39,11 +39,6 @@ clear_openbao_cache() {
     rm -rf "$REPO_ROOT/.local/openbao"
 }
 
-clear_hubble_cache() {
-    echo "🧹 Clearing local Hubble cache (~/.hubble)..."
-    rm -rf "$HOME/.hubble"
-}
-
 clear_terraform_state() {
     echo "🧹 Clearing orphaned terraform/openbao state..."
     rm -f "$REPO_ROOT/terraform/openbao/terraform.tfstate" "$REPO_ROOT/terraform/openbao/terraform.tfstate.backup"
@@ -61,7 +56,6 @@ main() {
     clear_cilium_host_files
 
     clear_openbao_cache
-    clear_hubble_cache
     clear_terraform_state
 
     report_summary

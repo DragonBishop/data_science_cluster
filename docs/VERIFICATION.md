@@ -130,7 +130,7 @@ Run it for any hostname with an HTTPRoute on the Gateway. Verify that the page r
 
 Verify network visibility with the Hubble CLI:
 
-* **CLI Flow Streaming**: `just hubble status` and `just hubble observe --follow` stream flows from Hubble Relay over mTLS (port 4245).
+* **CLI Flow Streaming**: `just hubble status` and `just hubble observe --follow` run the Hubble CLI inside the Cilium agent and stream its flows.
 
 ---
 

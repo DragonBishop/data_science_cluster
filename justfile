@@ -1,5 +1,3 @@
-module_name := "clusterpgis"
-
 # List available recipes
 default:
   @just --list
@@ -85,36 +83,14 @@ gateway-check DOMAIN HOST=`kubectl get gateway -n gateway internal-gateway -o js
     --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
     "https://{{DOMAIN}}/"
 
-# Run Hubble CLI command against hubble-relay (localhost:4245 through a local redirect)
+# Run a Hubble CLI command inside the Cilium agent (defaults to status)
+[positional-arguments]
 hubble *ARGS='status':
-  #!/usr/bin/env bash
-  set -uo pipefail
-  mkdir -p ~/.hubble/tls
-  for file in ca.crt tls.crt tls.key; do
-    kubectl get secret -n kube-system hubble-relay-client-certs -o jsonpath="{.data.${file//./\\.}}" | base64 -d > ~/.hubble/tls/$file
-  done
-  chmod 600 ~/.hubble/tls/*
-
-  hubble --server localhost:4245 --tls \
-    --tls-server-name relay.hubble-relay.cilium.io \
-    --tls-ca-cert-files ~/.hubble/tls/ca.crt \
-    --tls-client-cert-file ~/.hubble/tls/tls.crt \
-    --tls-client-key-file ~/.hubble/tls/tls.key \
-    {{ARGS}} 2> >(grep -v --line-buffered "Hubble CLI version is lower than Hubble Relay" >&2)
-
-bao_env := "unset BAO_TOKEN"
-
-# Export OpenBao's CA and print its local address
-bao-ca:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  mkdir -p .local/openbao/certs
-  kubectl get secret openbao-server-cert -n openbao -o jsonpath='{.data.ca\.crt}' | base64 -d > .local/openbao/certs/openbao-internal-ca.crt
-  echo "OpenBao API: https://127.0.0.1:8210  UI: https://127.0.0.1:8210/ui/  (CA: .local/openbao/certs/openbao-internal-ca.crt)"
+  kubectl exec -n kube-system ds/cilium -c cilium-agent --  hubble "$@"
 
 # Open interactive shell in openbao-0 pod
 bao-shell:
-  kubectl exec -it openbao-0 -n openbao -- sh -c '{{bao_env}}; exec sh'
+  kubectl exec -it openbao-0 -n openbao -- sh -c 'unset BAO_TOKEN; exec sh'
 
 # --- Database ------------------------------------------------------------
 

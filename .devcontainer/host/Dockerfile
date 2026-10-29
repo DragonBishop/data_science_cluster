@@ -77,14 +77,6 @@ RUN CILIUM_CLI_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/cil
  && rm /tmp/cilium-linux-amd64.tar.gz \
  && cilium version --client
 
-# Hubble CLI.
-RUN HUBBLE_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/hubble/master/stable.txt) \
- && curl -LsSfo /tmp/hubble-linux-amd64.tar.gz \
-      "https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-amd64.tar.gz" \
- && tar -xzf /tmp/hubble-linux-amd64.tar.gz -C /usr/local/bin \
- && rm /tmp/hubble-linux-amd64.tar.gz \
- && hubble version
-
 # Flux CLI, matching gotk-components.yaml.
 RUN curl -s https://fluxcd.io/install.sh | FLUX_VERSION=${FLUX_VERSION} bash \
  && flux version --client
