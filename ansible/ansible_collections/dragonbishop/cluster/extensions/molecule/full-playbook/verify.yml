@@ -316,3 +316,37 @@
         that:
           - openbao_release.resources | length == 1
         fail_msg: HelmRelease openbao is missing, so Flux did not adopt the release Ansible installed
+
+    - name: Wait for Postgres to archive WAL to SeaweedFS
+      kubernetes.core.k8s_info:
+        api_version: postgresql.cnpg.io/v1
+        kind: Cluster
+        name: postgres-cluster
+        namespace: databases
+        wait: true
+        wait_condition:
+          type: ContinuousArchiving
+          status: "True"
+        wait_timeout: 600
+      register: postgres_cluster
+      failed_when: false
+
+    - name: Read the Postgres cluster's conditions
+      ansible.builtin.set_fact:
+        postgres_cluster_conditions: "{{ postgres_cluster.resources[0].status.conditions }}"
+
+    - name: Pick the ContinuousArchiving condition
+      ansible.builtin.set_fact:
+        postgres_archiving_conditions: "{{ postgres_cluster_conditions | selectattr('type', 'equalto', 'ContinuousArchiving') | list }}"
+
+    - name: It should report whether Postgres archives WAL
+      ansible.builtin.assert:
+        that:
+          - postgres_archiving_conditions | length == 1
+        fail_msg: postgres-cluster has no ContinuousArchiving condition, so CNPG never tried to archive WAL
+
+    - name: It should archive Postgres WAL to SeaweedFS
+      ansible.builtin.assert:
+        that:
+          - postgres_archiving_conditions[0].status == 'True'
+        fail_msg: "Postgres is not archiving WAL to SeaweedFS: {{ postgres_archiving_conditions[0].message }}"

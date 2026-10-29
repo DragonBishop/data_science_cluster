@@ -34,7 +34,14 @@ spec:
     global:
       seaweedfs:
         enableSecurity: true
+        # HTTPS between master, filer, volume and S3, each client verifying against the chart's CA
+        extraEnvironmentVars:
+          WEED_HTTPS_CLIENT_ENABLED: "true"
+          WEED_HTTPS_CLIENT_CA: /usr/local/share/ca-certificates/ca/tls.crt
     certificates:
+      # Volume servers advertise <pod>.seaweedfs-volume.seaweedfs, which *.seaweedfs doesn't cover
+      dnsNames:
+        - "*.seaweedfs-volume.seaweedfs"
       keyAlgorithm: ${CERT_KEY_ALGORITHM}
       keySize: ${CERT_KEY_SIZE}
       duration: ${LOCAL_CA_CERT_DURATION}
@@ -71,6 +78,15 @@ spec:
                   port: ${SEAWEEDFS_S3_PORT}
     master:
       ipBind: "0.0.0.0"
+      extraEnvironmentVars:
+        WEED_HTTPS_MASTER_CERT: /usr/local/share/ca-certificates/master/tls.crt
+        WEED_HTTPS_MASTER_KEY: /usr/local/share/ca-certificates/master/tls.key
+      livenessProbe:
+        httpGet:
+          scheme: HTTPS
+      readinessProbe:
+        httpGet:
+          scheme: HTTPS
       data:
         type: "hostPath"
         hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
@@ -82,6 +98,16 @@ spec:
           memory: ${SEAWEEDFS_MASTER_MEM_LIMIT}
     filer:
       ipBind: "0.0.0.0"
+      extraEnvironmentVars:
+        WEED_HTTPS_FILER_CERT: /usr/local/share/ca-certificates/filer/tls.crt
+        WEED_HTTPS_FILER_KEY: /usr/local/share/ca-certificates/filer/tls.key
+        WEED_HTTPS_FILER_DISABLE_TLS_VERIFY_CLIENT_CERT: "true"
+      livenessProbe:
+        httpGet:
+          scheme: HTTPS
+      readinessProbe:
+        httpGet:
+          scheme: HTTPS
       data:
         type: "hostPath"
         hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"
@@ -92,6 +118,15 @@ spec:
         limits:
           memory: ${SEAWEEDFS_FILER_MEM_LIMIT}
     volume:
+      extraEnvironmentVars:
+        WEED_HTTPS_VOLUME_CERT: /usr/local/share/ca-certificates/volume/tls.crt
+        WEED_HTTPS_VOLUME_KEY: /usr/local/share/ca-certificates/volume/tls.key
+      livenessProbe:
+        httpGet:
+          scheme: HTTPS
+      readinessProbe:
+        httpGet:
+          scheme: HTTPS
       dataDirs:
         - name: data1
           type: "hostPath"
