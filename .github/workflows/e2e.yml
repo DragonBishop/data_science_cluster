@@ -109,18 +109,27 @@ jobs:
         if: failure() || cancelled()
         run: kubectl get pods -A || true
 
+      - name: Show Postgres Flux reconciliation
+        if: failure() || cancelled()
+        run: |
+          kubectl get kustomizations.kustomize.toolkit.fluxcd.io cnpg-operator databases -n flux-system -o wide || true
+          kubectl get clusters.postgresql.cnpg.io -A -o wide || true
+
       - name: Show the recent events
         if: failure() || cancelled()
         run: kubectl get events -A --sort-by=.lastTimestamp | tail -n 100
 
-      - name: Describe the pods that are not running
-        if: failure() || cancelled()
-        run: kubectl describe pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded || true
-
-      - name: Show the logs of the pods that are not running
+      - name: Describe pods that are not ready
         if: failure() || cancelled()
         run: |
-          kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded --no-headers |
-            while read -r namespace pod_name _; do
+          kubectl get pods -A -o json |
+            jq -r '
+              .items[]
+              | select(.status.phase != "Succeeded")
+              | select(.status.phase != "Running" or any(.status.conditions[]?; .type == "Ready" and .status != "True"))
+              | [.metadata.namespace, .metadata.name] | @tsv
+            ' |
+            while IFS=$'\t' read -r namespace pod_name; do
+              kubectl describe pod -n "$namespace" "$pod_name" || true
               kubectl logs -n "$namespace" "$pod_name" --all-containers --prefix --tail=100 || true
             done

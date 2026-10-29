@@ -47,7 +47,7 @@ server:
 
       plugin "secret" "aws" {
         image = "ghcr.io/openbao/openbao-plugin-secrets-aws:${OPENBAO_SECRETS_AWS_VERSION}"
-        env   = ["AWS_CA_BUNDLE=/openbao/userconfig/openbao-root-ca/ca.crt"]
+        env   = ["SSL_CERT_FILE=/openbao/userconfig/openbao-root-ca/ca.crt"]
       }
 
       listener "tcp" {

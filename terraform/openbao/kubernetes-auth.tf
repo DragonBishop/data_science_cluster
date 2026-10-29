@@ -37,6 +37,7 @@ resource "vault_kubernetes_auth_backend_role" "cert_manager" {
   role_name                        = "cert-manager-pki-role"
   bound_service_account_names      = ["cert-manager"]
   bound_service_account_namespaces = ["cert-manager"]
+  audience                         = "vault://openbao-pki-issuer"
   token_policies                   = [vault_policy.cert_manager_pki.name]
   token_ttl                        = 3600 # 1h
 }
