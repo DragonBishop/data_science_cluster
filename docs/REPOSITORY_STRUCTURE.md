@@ -372,11 +372,11 @@ The directory tree of this repository, then what each directory and file does.
   * **`trust-manager/`**: `kustomization.yaml`, `trust-manager-release.yaml`, `trust-manager-values.yaml` (the Helm values the `trust_manager` role and the HelmRelease share, through ConfigMap `trust-manager-values`). trust-manager in `cert-manager`, which copies CA certificates from Secrets there into ConfigMaps and Secrets in every namespace labelled `data-cluster/ca-bundles`.
 * **`src/`**
   * **`src/bash/`**:
-    * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions).
+    * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions). Prints install commands for missing or mismatched tools and fix commands for firewall rules.
     * **`setup-firewall.sh`**: Host firewall rules for Kubernetes and Cilium, for Fedora/RHEL (`firewalld`) or Ubuntu/Debian (`ufw`).
     * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, unsealing the in-cluster OpenBao, and reactivating hibernated workloads.
     * **`stop-cluster.sh`**: Graceful shutdown: declaratively hibernating the CNPG cluster, waiting for pod termination, and stopping the k3s systemd unit.
-    * **`uninstall-cluster.sh`**: Tears down k3s and clears stale local cluster state: Cilium's persistent host files, `.local/openbao`, the Hubble cache and `terraform/openbao` state. Asks for a reboot before reinstalling.
+    * **`uninstall-cluster.sh`**: Tears down k3s and clears stale local cluster state: Cilium's persistent host files, `.local/openbao` and `terraform/openbao` state. Asks for a reboot before reinstalling.
   * **`src/data_science_cluster/__init__.py`**: The project package and its `__version__`, which release-please bumps.
 * **`terraform/`** - OpenTofu module configuring OpenBao's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
   * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: the KV mount `secret/`, Kubernetes auth backend and roles (`databases-role`, `cert-manager-pki-role`, `spire-server-role`), cert auth backend and roles for SVID logins (`core-test`, `rotate-credentials`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic roles (`postgres-cluster`, `postgres-app-role`, `tekton-results-app-role`).

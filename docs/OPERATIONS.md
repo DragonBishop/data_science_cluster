@@ -23,7 +23,7 @@ One-time, first-install setup: see [Installation](INSTALLATION.md) for Requireme
 | Command | Operation | When |
 | --- | --- | --- |
 | `just setup-firewall` | Configure host firewall rules | Before install; opens what Kubernetes and Cilium need in firewalld (Fedora) or ufw (Ubuntu) |
-| `just preflight` | Run host readiness check | Verify host tooling, `gh` auth, firewall rules, and reserved IP range before install |
+| `just preflight` | Run host readiness check | Verify host tooling, `gh` auth, firewall rules, and reserved IP range before install; prints install commands for missing or mismatched tools and fix commands for firewall rules |
 | `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Install k3s, Cilium, cert-manager, trust-manager and OpenBao, apply `terraform/openbao`, then install SPIRE and Flux |
 
 ## Cluster Lifecycle
@@ -35,11 +35,10 @@ Start and stop the cluster each work session, check its health, and inspect or r
 | `just start` | Start the cluster | Each work session; starts k3s, unseals OpenBao, wakes `postgres-cluster` from hibernation and resumes its scheduled backups |
 | `just status` | Check overall cluster health | Post-install verification or periodic health check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
 | `just stop` (`just stop --force` if a stuck stop needs it) | Stop the cluster | Each work session; gracefully hibernates CNPG PostgreSQL before shutting down k3s |
-| `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears `.local/openbao`, the local Hubble cache, orphaned `terraform/openbao` state, and Cilium's persistent host files; reboot before the next `just bootstrap` |
+| `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears `.local/openbao`, orphaned `terraform/openbao` state, and Cilium's persistent host files; reboot before the next `just bootstrap` |
 | `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting; fuzzy-select a pod from all namespaces and describe it |
 | `just gateway-check` (`just gateway-check <DOMAIN> [HOST]`) | Verify Gateway routing | Post-install verification or testing Gateway HTTPRoute and TLS edge certificates |
-| `just hubble` (runs `hubble status`) / `just hubble observe --follow` | Run the Hubble CLI against Hubble Relay | Relay status, or real-time network and security flow inspection over mTLS |
-| `just bao-ca` | Export OpenBao CA and print its address | OpenBao API and UI are at `https://127.0.0.1:8210` through a local redirect; exports the internal CA to `.local/openbao/certs/` |
+| `just hubble` (runs `hubble status`) / `just hubble observe --follow` | Run the Hubble CLI inside the Cilium agent | Hubble status, or real-time network and security flow inspection |
 | `just bao-shell` | Open interactive OpenBao shell | Direct `bao` CLI access inside `openbao-0` pod with a sanitized environment |
 
 ## Database

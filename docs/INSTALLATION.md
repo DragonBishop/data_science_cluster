@@ -26,6 +26,8 @@ Once host-side prerequisites are met, running `just bootstrap` orchestrates the 
 
 ### Host Tooling
 
+`just preflight` checks for each tool below and prints its install command on Debian and Fedora when it is missing. A missing fzf or Tekton CLI is a warning, and the GitHub CLI is checked only when no GitHub App is configured.
+
 #### Flux CLI
 
 Install the version the committed `clusters/local/flux-system/gotk-components.yaml` pins:
@@ -51,6 +53,22 @@ Used by `just fuzzypods`.
   sudo dnf install -y fzf
   ```
 
+#### Git
+
+`just setup` initializes a repository in a source download that has none, and the GitHub CLI fallback reads the repository's `origin` URL.
+
+* **Ubuntu / Debian**:
+
+  ```bash
+  sudo apt update && sudo apt install -y git
+  ```
+
+* **Fedora / RHEL / Red Hat**:
+
+  ```bash
+  sudo dnf install -y git
+  ```
+
 #### GitHub CLI (`gh`)
 
 * **Ubuntu / Debian**:
@@ -69,20 +87,20 @@ Used by `just fuzzypods`.
   sudo dnf install -y gh
   ```
 
-#### GnuPG and OpenSSL
+#### GnuPG
 
-`gpg` encrypts the OpenBao unseal keyfile during `just bootstrap` and decrypts it on every `just start`. `just preflight` checks that both are installed.
+`gpg` encrypts the OpenBao unseal keyfile during `just bootstrap` and decrypts it on every `just start`.
 
 * **Ubuntu / Debian**:
 
   ```bash
-  sudo apt update && sudo apt install -y gnupg openssl
+  sudo apt update && sudo apt install -y gnupg
   ```
 
 * **Fedora / RHEL / Red Hat**:
 
   ```bash
-  sudo dnf install -y gnupg2 openssl
+  sudo dnf install -y gnupg2
   ```
 
 #### Helm
@@ -93,19 +111,6 @@ chmod +x get_helm.sh
 ./get_helm.sh
 rm get_helm.sh
 helm version
-```
-
-#### Hubble CLI
-
-```bash
-HUBBLE_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/hubble/main/stable.txt)
-HUBBLE_ARCH=amd64
-if [ "$(uname -m)" = "aarch64" ]; then HUBBLE_ARCH=arm64; fi
-curl -L --fail --remote-name-all https://github.com/cilium/hubble/releases/download/$HUBBLE_VERSION/hubble-linux-${HUBBLE_ARCH}.tar.gz{,.sha256sum}
-sha256sum --check hubble-linux-${HUBBLE_ARCH}.tar.gz.sha256sum
-sudo tar xzvfC hubble-linux-${HUBBLE_ARCH}.tar.gz /usr/local/bin
-rm hubble-linux-${HUBBLE_ARCH}.tar.gz{,.sha256sum}
-hubble version
 ```
 
 #### Just
@@ -171,6 +176,27 @@ rm install-opentofu.sh
 tofu version
 ```
 
+#### Tekton CLI (`tkn`)
+
+Lists and follows PipelineRuns, TaskRuns and their logs.
+
+* **Ubuntu / Debian**:
+
+  ```bash
+  sudo apt update && sudo apt install -y gnupg
+  sudo mkdir -p /etc/apt/keyrings/
+  sudo gpg --no-default-keyring --keyring /etc/apt/keyrings/tektoncd.gpg --keyserver keyserver.ubuntu.com --recv-keys 3EFE0E0A2F2F60AA
+  echo "deb [signed-by=/etc/apt/keyrings/tektoncd.gpg] http://ppa.launchpad.net/tektoncd/cli/ubuntu eoan main" | sudo tee /etc/apt/sources.list.d/tektoncd-ubuntu-cli.list
+  sudo apt update && sudo apt install -y tektoncd-cli
+  ```
+
+* **Fedora / RHEL / Red Hat**:
+
+  ```bash
+  sudo dnf copr enable -y krouma/kubernetes
+  sudo dnf install -y tektoncd-cli
+  ```
+
 #### uv
 
 `just bootstrap` runs Ansible through `uv run`, which builds `.venv` from `uv.lock` on first use, Python included.
@@ -182,23 +208,61 @@ uv --version
 
 ### GitHub Authentication
 
-The cluster requires read-only access to this repository to synchronize manifests. You can authenticate using either a **GitHub App** (Recommended) or your personal **GitHub CLI** token.
+Flux syncs the cluster from a GitHub repository you own. You install each GitHub App in this section on that repository.
 
-**Option 1: GitHub App (Recommended)**
-For secure, automated rotation of short-lived tokens, create a GitHub App in your account with **Read-only** access to `Contents`.
+#### Your Copy of the Repository
 
-1. Generate a Private Key (`.pem`) for the app and save it locally.
-2. Install the App on your repository.
-3. Export the following environment variables before running the bootstrap:
+Create your own copy of this repository on GitHub in one of two ways:
 
-   ```bash
-   export GITHUB_APP_ID="<your-app-id>"
-   export GITHUB_APP_INSTALLATION_ID="<your-installation-id>"
-   export GITHUB_APP_PRIVATE_KEY_PATH="/path/to/your/private-key.pem"
-   ```
+* **Fork** it from its GitHub page. A fork is public and can pull later changes from this repository. GitHub turns workflows off in a new fork; turn them on under your fork's **Actions** tab.
+* **Push a clone** to a new, empty repository you create. The new repository can be private.
 
-**Option 2: GitHub CLI (Fallback)**
-If you do not have a GitHub App configured, the bootstrap process will fall back to using your personal GitHub token.
+  ```bash
+  git clone https://github.com/DragonBishop/data_science_cluster.git
+  cd data_science_cluster
+  git remote set-url origin https://github.com/<your-account>/<your-repository>.git
+  git push -u origin main
+  ```
+
+Point Flux at your copy. Set `spec.url` in `clusters/local/flux-system/gotk-sync.yaml` to your copy's HTTPS URL, then commit and push it to `main`:
+
+```yaml
+spec:
+  url: https://github.com/<your-account>/<your-repository>
+```
+
+Flux syncs `main` by default, and `FLUX_GIT_BRANCH` sets another branch at bootstrap.
+
+#### Option 1: GitHub App (Recommended)
+
+A GitHub App is an identity your account owns, separate from your user. It has its own permissions and a private key. A tool signs a request with the private key and receives an installation token, which expires after one hour. Flux's source-controller keeps the private key in a Secret and exchanges it for installation tokens as it needs them.
+
+Your copy's workflows can use three more GitHub Apps: a release-please App you create, Mend's Renovate App and Semgrep's App. Each one is optional, and [Optional GitHub Apps for CI](#optional-github-apps-for-ci) covers them.
+
+Create the Flux App:
+
+1. Open **Settings → Developer settings → GitHub Apps → New GitHub App** (<https://github.com/settings/apps/new>).
+2. Enter a **GitHub App name**, which must be unique across GitHub, and set **Homepage URL** to your copy's URL.
+3. Under **Webhook**, clear **Active**. Flux polls the repository on an interval.
+4. Under **Repository permissions**, set **Contents** to **Read-only**. GitHub adds **Metadata: Read-only** itself.
+5. Under **Where can this GitHub App be installed?**, choose **Only on this account**.
+6. Select **Create GitHub App**. The App's page shows its **App ID**.
+7. Under **Private keys**, select **Generate a private key**. The browser downloads a `.pem` file. Move it outside the repository and run `chmod 600` on it.
+8. Select **Install App** in the sidebar, choose your account, then **Only select repositories** and your copy. The installation ID is the number at the end of the page's URL, `https://github.com/settings/installations/<installation-id>`.
+
+Export the three values before running `just preflight` and `just bootstrap`:
+
+```bash
+export GITHUB_APP_ID="<your-app-id>"
+export GITHUB_APP_INSTALLATION_ID="<your-installation-id>"
+export GITHUB_APP_PRIVATE_KEY_PATH="/path/to/your/private-key.pem"
+```
+
+`just preflight` reports the App ID it finds. The `flux` role passes the three values to `flux create secret githubapp`, which writes Secret `flux-system` in the `flux-system` namespace.
+
+#### Option 2: GitHub CLI (Fallback)
+
+When `GITHUB_APP_ID` is unset, the `flux` role authenticates Flux with your GitHub CLI token for the repository in your clone's `origin` remote.
 
 1. Authenticate the CLI:
 
@@ -211,6 +275,22 @@ If you do not have a GitHub App configured, the bootstrap process will fall back
    ```bash
    gh auth status
    ```
+
+#### Optional GitHub Apps for CI
+
+Your copy's GitHub Actions workflows use GitHub Apps too. Each workflow reads its App's values from your copy's repository secrets, under **Settings → Secrets and variables → Actions**. `gh secret set` stores a key file's contents directly, for example `gh secret set FLUX_GITHUB_APP_PRIVATE_KEY < /path/to/your/private-key.pem`. To skip an App, disable its workflow under **Actions**, then the workflow's **⋯** menu and **Disable workflow**.
+
+| Workflow | App | Repository permissions | Repository secrets |
+| --- | --- | --- | --- |
+| `e2e.yml` bootstraps a cluster on a runner | Your Flux App | Contents: Read-only | `FLUX_GITHUB_APP_ID`, `FLUX_GITHUB_APP_INSTALLATION_ID`, `FLUX_GITHUB_APP_PRIVATE_KEY` (the `.pem` contents) |
+| `release.yml` opens release-please's release pull requests | A second App you create the same way as the Flux App | Contents: Read and write, Issues: Read and write, Pull requests: Read and write | `RELEASE_PLEASE_APP_CLIENT_ID` (the **Client ID** on the App's page), `RELEASE_PLEASE_APP_PRIVATE_KEY` (the `.pem` contents) |
+| `semgrep.yml` runs `semgrep ci` | Semgrep's hosted App, installed when you add your copy at semgrep.dev | Set by Semgrep's onboarding | `SEMGREP_APP_TOKEN` (an API token from semgrep.dev) |
+
+[release-please](https://github.com/googleapis/release-please) runs through [`release-please-action`](https://github.com/googleapis/release-please-action) and opens its release pull requests with its App's installation token. GitHub runs the repository's pull request workflows, such as `lint.yml` and `tests.yml`, on pull requests opened with that token.
+
+Renovate runs as Mend's hosted Renovate App. Install it from <https://github.com/apps/renovate> on your copy. It reads `renovate.json`, and Mend holds the App's private key.
+
+[Semgrep](https://semgrep.dev/docs/) runs as Semgrep's hosted App. Sign in at <https://semgrep.dev> with GitHub and add your copy, which installs the App on it. The `semgrep ci` job in `semgrep.yml` sends its findings to Semgrep with `SEMGREP_APP_TOKEN`.
 
 ### Host Firewall Configuration
 
@@ -293,6 +373,8 @@ If you do not have a GitHub App configured, the bootstrap process will fall back
   ping -c 2 -W 1 192.0.2.242
   ```
 
+  If one answers, `ip neigh show <ip>` prints the MAC address of the device holding it.
+
 ### Clean Host State (if reinstalling)
 
 If reinstalling over an existing k3s instance, tear it down first, then reboot before bootstrapping. Cilium's BPF programs stay attached in the kernel after `k3s-uninstall.sh`, and the `k3s` role refuses to install while that state is present:
@@ -317,9 +399,11 @@ kubectl cnpg psql postgres-cluster -n databases --tty=false -- \
 
 ### Step 1: Clone Repository
 
+Clone your copy of the repository from [GitHub Authentication](#github-authentication):
+
 ```bash
-git clone https://github.com/DragonBishop/data_science_cluster.git
-cd data_science_cluster
+git clone https://github.com/<your-account>/<your-repository>.git
+cd <your-repository>
 ```
 
 ### Step 2: Execute Ansible Bootstrap
