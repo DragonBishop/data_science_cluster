@@ -105,6 +105,7 @@ The directory tree of this repository, then what each directory and file does.
 │   ├── databases/                       # PostgreSQL clusters and databases, one Flux Kustomization
 │   │   ├── kustomization.yaml
 │   │   ├── databases-cluster.yaml
+│   │   ├── databases-credentials.yaml
 │   │   ├── databases-issuers.yaml
 │   │   ├── databases-localhost.yaml
 │   │   ├── databases-networkpolicy.yaml
@@ -135,6 +136,7 @@ The directory tree of this repository, then what each directory and file does.
 │       ├── namespaces.yaml              # Kustomization → infrastructure/namespaces/
 │       ├── openbao.yaml                 # Kustomization → infrastructure/openbao/
 │       ├── seaweedfs.yaml               # Kustomization → apps/seaweedfs/
+│       ├── secrets-store-csi-driver.yaml # Kustomization → infrastructure/secrets-store-csi-driver/
 │       ├── spire.yaml                   # Kustomization → infrastructure/spire/
 │       ├── tekton-operator.yaml         # Kustomization → infrastructure/tekton-operator/
 │       ├── tekton-pipelines.yaml        # Kustomization → infrastructure/tekton-pipelines/
@@ -199,22 +201,23 @@ The directory tree of this repository, then what each directory and file does.
 │   │   ├── openbao-issuers.yaml
 │   │   ├── openbao-localhost.yaml
 │   │   ├── openbao-networkpolicy.yaml
-│   │   ├── openbao-rbac.yaml
 │   │   ├── openbao-release.yaml
-│   │   ├── openbao-secrets.yaml
 │   │   ├── openbao-tls.yaml
 │   │   └── openbao-values.yaml
+│   ├── secrets-store-csi-driver/        # Mounts OpenBao logins into pods and mirrors them into Secrets
+│   │   ├── kustomization.yaml
+│   │   └── secrets-store-csi-driver-release.yaml
 │   ├── spire/                           # SPIRE releases and identities
 │   │   ├── core-test-spiffeid.yaml
 │   │   ├── flux-controllers-spiffeid.yaml
 │   │   ├── kustomization.yaml
-│   │   ├── rotate-credentials-spiffeid.yaml
 │   │   ├── spire-release.yaml
 │   │   └── spire-values.yaml
-│   ├── tekton/                          # TektonConfig and the Results certificate
+│   ├── tekton/                          # TektonConfig and the Results certificate and login
 │   │   ├── kustomization.yaml
 │   │   ├── tekton-config.yaml
 │   │   ├── tekton-networkpolicy.yaml
+│   │   ├── tekton-results-credentials.yaml
 │   │   └── tekton-results-tls.yaml
 │   ├── tekton-pipelines/                # Pipelines and Tasks, and the runs they start
 │   │   ├── kustomization.yaml
@@ -248,7 +251,7 @@ The directory tree of this repository, then what each directory and file does.
 │   └── data_science_cluster/
 │       └── __init__.py                  # Package version, bumped by release-please
 ├── terraform/                           # OpenTofu module configuring OpenBao's internals
-│   └── openbao/                         # In-cluster OpenBao: KV mount, Kubernetes and cert auth, 2-tier PKI engine, DB secrets
+│   └── openbao/                         # In-cluster OpenBao: KV mount, Kubernetes and cert auth, 2-tier PKI engine, DB and SeaweedFS secrets
 │       ├── .gitignore
 │       ├── cert-auth.tf
 │       ├── database.tf
@@ -257,6 +260,7 @@ The directory tree of this repository, then what each directory and file does.
 │       ├── kv.tf
 │       ├── pki.tf
 │       ├── provider.tf
+│       ├── seaweedfs.tf
 │       ├── tests/
 │       │   └── openbao.tftest.hcl       # mocked plan tests
 │       ├── variables.tf
@@ -309,6 +313,7 @@ The directory tree of this repository, then what each directory and file does.
 * **`apps/databases/`** - The PostgreSQL clusters and their databases, credentials, networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`). Filenames describe the database group so additional PostgreSQL clusters can share the directory.
   * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
   * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster` (with `tekton_readwrite` as a managed role), its `ObjectStore` (configured with `https://seaweedfs-s3.seaweedfs.svc:9000`, verified against Secret `openbao-root-ca`), and `ScheduledBackup`.
+  * **`databases-credentials.yaml`**: Barman's S3 key pair. ServiceAccount and Deployment `barman-s3-credentials` and their `SecretProviderClass`. CNPG pods can't mount CSI volumes, so the Deployment's one `pause` container holds the mount, logging in as `barman-s3-role`. The CSI driver mirrors the key pair from `seaweedfs/creds/barman` into Secret `barman-s3-credentials`, which the `ObjectStore` reads.
   * **`databases.yaml`**: CNPG `Database` resources for `data_science` (with its schemas and PostGIS extensions) and `tekton_results`.
   * **`databases-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
   * **`databases-networkpolicy.yaml`**: Accepts replication between instances, the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
@@ -320,7 +325,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`barman-cloud-release.yaml`**: `HelmRelease` for the plugin in `cnpg-system`.
   * **`cnpg-system-networkpolicy.yaml`**: `cnpg-system`'s policy file; the CNPG operator reaches the plugin.
 * **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`) so `databases` is applied only after the `cnpg-backups` bucket exists.
-  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, `cnpg-backups` bucket created by the chart's post-install hook, and the chart's own network policies, which also admit Postgres backups to S3.
+  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, `cnpg-backups` bucket created by the chart's post-install hook, and the chart's own network policies, which also admit Postgres backups and OpenBao to S3. The gateway reads its one static identity, `openbao`, from Secret `seaweedfs-credentials`, which the `opentofu` role writes, and runs with `-iam.readOnly=false` so OpenBao can create and delete Barman's IAM users.
   * **`seaweedfs-tls.yaml`**: cert-manager `Certificate` requesting the SeaweedFS S3 server certificate from `openbao-pki-issuer`.
 * **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/` and `apps/` below.
   * **`barman-cloud.yaml`**: Kustomization → `apps/barman-cloud/`
@@ -336,6 +341,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`namespaces.yaml`**: Kustomization → `infrastructure/namespaces/`
   * **`openbao.yaml`**: Kustomization → `infrastructure/openbao/`
   * **`seaweedfs.yaml`**: Kustomization → `apps/seaweedfs/`
+  * **`secrets-store-csi-driver.yaml`**: Kustomization → `infrastructure/secrets-store-csi-driver/`
   * **`spire.yaml`**: Kustomization → `infrastructure/spire/`, labelled `data-cluster/core`; adopts the releases the `spire` role installed
   * **`tekton-operator.yaml`**: Kustomization → `infrastructure/tekton-operator/`
   * **`tekton-pipelines.yaml`**: Kustomization → `infrastructure/tekton-pipelines/`
@@ -360,11 +366,13 @@ The directory tree of this repository, then what each directory and file does.
   * **`gateway-api-crds/`**: `kustomization.yaml`, `standard-install.yaml` (vendored Gateway API CRDs)
   * **`hubble/`**: `hubble-localhost.yaml`, `hubble-values.yaml`, `kustomization.yaml`
   * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
-  * **`openbao/`**: `kustomization.yaml`, `openbao-issuers.yaml` (the OpenBao ClusterIssuers, their token RBAC and the local CA), `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-rbac.yaml`, `openbao-release.yaml`, `openbao-secrets.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`. `openbao-secrets.yaml` holds the `rotate-credentials` ServiceAccount and CronJob, which logs in to OpenBao with its SVID every `CREDENTIAL_ROTATION_SCHEDULE` and writes Results' new database login and Barman's new S3 key pair. `openbao-rbac.yaml` holds ClusterRole `rotate-credentials`, which names each Secret, Deployment and CronJob it reaches, and the RoleBindings that grant it in `tekton`, `databases` and `seaweedfs` to the CronJob and in `openbao` to `core-test`
-  * **`spire/`**: SPIRE in `spire`. `spire-release.yaml` holds the HelmRepository and the `spire-crds` and `spire` HelmReleases, which read `spire-values.yaml` through ConfigMap `spire-values`, the values the `spire` role also installs from. `flux-controllers-spiffeid.yaml`, `core-test-spiffeid.yaml` and `rotate-credentials-spiffeid.yaml` are the ClusterSPIFFEIDs that give the Flux controllers, `core-test`'s `openbao` and `postgres-login` pods and the `rotate-credentials` CronJob their identities.
+  * **`openbao/`**: `kustomization.yaml`, `openbao-issuers.yaml` (the OpenBao ClusterIssuers, their token RBAC and the local CA), `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`. `openbao-values.yaml` also has OpenBao download the secrets-aws plugin at startup and runs the OpenBao CSI Provider DaemonSet without its agent.
+  * **`secrets-store-csi-driver/`**: `kustomization.yaml`, `secrets-store-csi-driver-release.yaml`. The Secrets Store CSI Driver in `kube-system`. It mirrors each mounted login into the Secret its `SecretProviderClass` names, and reads it again every `CREDENTIAL_ROTATION_INTERVAL`.
+  * **`spire/`**: SPIRE in `spire`. `spire-release.yaml` holds the HelmRepository and the `spire-crds` and `spire` HelmReleases, which read `spire-values.yaml` through ConfigMap `spire-values`, the values the `spire` role also installs from. `flux-controllers-spiffeid.yaml` and `core-test-spiffeid.yaml` are the ClusterSPIFFEIDs that give the Flux controllers and `core-test`'s `openbao` and `postgres-login` pods their identities.
   * **`tekton/`**: The `TektonConfig` installs every Tekton component, Results included, into `tekton`. Tasks, Pipelines and their runs go in `tekton-pipelines`, apart from the controllers and Results' Secrets.
-    * **`tekton-config.yaml`**: The `TektonConfig`.
+    * **`tekton-config.yaml`**: The `TektonConfig`. The Results API mounts its login through the CSI driver.
     * **`tekton-networkpolicy.yaml`**: `tekton`'s policy file: the remote resolvers reach their source hosts, and the Results watcher reaches the Results API.
+    * **`tekton-results-credentials.yaml`**: `SecretProviderClass` `tekton-results-postgres`. The Results API logs in as `tekton-results-role`, and the CSI driver mirrors its login from `database/creds/tekton-results-app-role` into Secret `tekton-results-postgres`.
     * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`. Results verifies Postgres against ConfigMap `postgres-ca`.
   * **`tekton-pipelines/`**: `kustomization.yaml` and `tekton-pipelines-networkpolicy.yaml` (`tekton-pipelines`' policy file: TaskRun pods reach their source hosts), applied by the `tekton-pipelines` Kustomization. Pipeline folders in `pipelines/`, one per Pipeline with its ServiceAccount and RBAC, and reusable Task definitions in `tasks/`, applied by the `tekton-tasks` Kustomization: `ca-bundles.yaml` checks every labelled namespace's CA ConfigMaps and the OpenBao, SeaweedFS and Postgres certificates against them, one check per step. `flux-mtls.yaml` checks that source-controller and notification-controller refuse a client without an SVID. `fetch-source.yaml` is in progress, and `tasks/kustomization.yaml` leaves it out.
     * **`pipelines/core-test/`**: The `core-test` Pipeline, which checks the core. `core-test-pipeline.yaml` calls its tasks, so far `ca-bundles`, the inline `spire` task, which checks that a `tekton-pipelines` pod gets no SVID, and `flux-mtls`. `core-test-rbac.yaml` holds the `core-test` ServiceAccount and the access each task needs. `core-test-run.yaml` starts a run by hand with `kubectl create -f`.
@@ -378,8 +386,8 @@ The directory tree of this repository, then what each directory and file does.
     * **`stop-cluster.sh`**: Graceful shutdown: declaratively hibernating the CNPG cluster, waiting for pod termination, and stopping the k3s systemd unit.
     * **`uninstall-cluster.sh`**: Tears down k3s and clears stale local cluster state: Cilium's persistent host files, `.local/openbao` and `terraform/openbao` state. Asks for a reboot before reinstalling.
   * **`src/data_science_cluster/__init__.py`**: The project package and its `__version__`, which release-please bumps.
-* **`terraform/`** - OpenTofu module configuring OpenBao's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database secrets engine). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
-  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: the KV mount `secret/`, Kubernetes auth backend and roles (`databases-role`, `cert-manager-pki-role`, `spire-server-role`), cert auth backend and roles for SVID logins (`core-test`, `rotate-credentials`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), and database secrets engine connection and dynamic roles (`postgres-cluster`, `postgres-app-role`, `tekton-results-app-role`).
+* **`terraform/`** - OpenTofu module configuring OpenBao's internals (KV secrets, Kubernetes auth backend, 2-tier PKI engine, database and SeaweedFS secrets engines). State is local and gitignored; additionally encrypted at rest via OpenTofu's own `encryption` block. Applied during `just bootstrap`.
+  * **`openbao/`**: Module targeting the **in-cluster** OpenBao through the `hashicorp/vault` provider: the KV mount `secret/`, Kubernetes auth backend and roles (`databases-role`, `cert-manager-pki-role`, `spire-server-role`, `tekton-results-role`, `barman-s3-role`), cert auth backend and role for SVID logins (`core-test`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), database secrets engine connection and dynamic roles (`postgres-cluster`, `postgres-app-role`, `tekton-results-app-role`), and the secrets-aws mount `seaweedfs/` with its `barman` role (`seaweedfs.tf`).
     * **`tests/openbao.tftest.hcl`**: Mocked-provider plan tests of the roles, policies and TTLs, run by `tofu test` in the `opentofu-unit` job.
 * **`tests/`**
   * **`conftest.py`**: Stops the session before collection if `kubectl`, `flux`, `ansible` or `ansible-playbook` is missing.

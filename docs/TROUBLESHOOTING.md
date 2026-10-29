@@ -202,12 +202,8 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 * **OpenBao throws a "permission denied" error**
   * **How to fix it:** Check the policies and roles applied from `terraform/openbao/`. `kubectl exec -n openbao openbao-0 -- bao policy read databases-policy` and `... bao policy read cert-manager-pki-policy` show the paths granted; `... bao read auth/kubernetes/role/databases-role` and `... bao read auth/kubernetes/role/cert-manager-pki-role` show the service accounts and namespaces they are bound to.
 
-* **A freshly-typed or corrected value (e.g. fixing a mistyped superuser password) doesn't reach OpenBao after re-running bootstrap**
-  * **What's happening:** `postgres_superuser_password` reaches OpenBao's database connection as a write-only value with a version counter (`secrets_wo_version`). Terraform only pushes a new write-only value when its version changes, and an ordinary rerun leaves the version unchanged.
-  * **How to fix it:** Run `touch ~/.config/data_science_cluster/rotate-openbao-secrets`, then `just bootstrap`. The run bumps the version, rewrites the password in OpenBao, and deletes the marker. The bootstrap writes Secret `postgres-superuser-credentials` from the typed value on every run.
-
 * **Secrets or certificates are failing to issue/mount into Kubernetes**
-  * **How to fix it:** For a Secret `rotate-credentials` writes, run `kubectl get jobs -n openbao -l app.kubernetes.io/name=rotate-credentials` and `kubectl logs job/<name> -n openbao --all-containers` to see why the last run failed. For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why cert-manager could not mint the resource.
+  * **How to fix it:** For a Secret the CSI driver fills, run `kubectl describe pod <name> -n <namespace>` on the pod that mounts it. Its events name the failed mount, usually the OpenBao login or the secret path. `kubectl logs daemonset/openbao-csi-provider -n openbao` shows the provider's side. For certificates, run `kubectl describe certificate <name> -n <namespace>` and check associated `CertificateRequest` objects (`kubectl get certificaterequest -A`). Status conditions report why cert-manager could not mint the resource.
 
 * **Certificate issuance fails with a Name Constraint or permission error from OpenBao PKI**
   * **What's happening:** OpenBao's intermediate CA enforces RFC 5280 Name Constraints (`permitted_dns_domains`) and role-level domain allowlists (`allowed_domains` in `terraform/openbao/pki.tf`).
@@ -253,7 +249,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Barman Cloud Plugin backups start failing**
   * **What's happening:** The database cannot reach or authenticate to the object store, or S3 TLS handshake fails.
-  * **How to fix it:** Run `kubectl cnpg status postgres-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.seaweedfs.svc:9000`) with a valid certificate from `openbao-pki-issuer`. Confirm the `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY` fields in the `barman-s3-credentials` Secret in `databases` match the `barman` identity in the `config` field of the `seaweedfs-credentials` Secret in `seaweedfs`. Confirm the bucket exists:
+  * **How to fix it:** Run `kubectl cnpg status postgres-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.seaweedfs.svc:9000`) with a valid certificate from `openbao-pki-issuer`. Confirm the `barman-s3-credentials` pod in `databases` is running and Secret `barman-s3-credentials` holds `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY`. `kubectl describe pod -l app.kubernetes.io/name=barman-s3-credentials -n databases` shows a failed mount in its events. Confirm the bucket exists:
 
     ```bash
     kubectl exec -n seaweedfs seaweedfs-master-0 -- sh -c 'echo "fs.ls /buckets" | weed shell -master=localhost:9333'
@@ -263,19 +259,19 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
     If it is missing, re-reconcile `apps/seaweedfs/seaweedfs-release.yaml` (`flux reconcile helmrelease seaweedfs -n seaweedfs`); `createBuckets` in that chart's values creates it at install.
 
 > [!CAUTION]
-> A mismatch between the Secret's `ACCESS_KEY_ID`/`ACCESS_SECRET_KEY` fields and its `config` field produces no error until an archive is actually attempted — a "healthy" cluster can still be silently failing every backup.
+> Each key pair stops working when its 4-day lease ends. A holder pod that can't mount a new one produces no error until an archive is attempted, so a "healthy" cluster can still be silently failing every backup.
 
 * **`TektonResult` never becomes Ready and no Results pods exist**
   * **What's happening:** The operator holds Results back until `tekton-results-postgres` exists in `tekton`.
   * **How to fix it:** `kubectl get secret tekton-results-postgres -n tekton` shows whether it exists. The `opentofu` role creates it empty, so `just bootstrap --tags opentofu` restores it.
 
 * **A Results pod is stuck in `CreateContainerConfigError`**
-  * **What's happening:** The pod reads `username` and `password` from Secret `tekton-results-postgres`, which `rotate-credentials` fills from OpenBao. The bootstrap's `flux` role runs it once, and the kubelet starts the container once both keys exist.
-  * **How to fix it:** `kubectl create job --from=cronjob/rotate-credentials rotate-now -n openbao` fills the Secret, and `kubectl logs job/rotate-now -n openbao --all-containers` shows why a run failed, usually the SVID login or the `tekton-results-app-role` role.
+  * **What's happening:** The pod reads `username` and `password` from Secret `tekton-results-postgres`, which the CSI driver fills from the `tekton-results-api` pod's mount. The kubelet starts the container once both keys exist.
+  * **How to fix it:** `kubectl describe pod -l app.kubernetes.io/name=tekton-results-api -n tekton` shows a failed mount in its events, usually the `tekton-results-role` login or the `tekton-results-app-role` role. `kubectl logs daemonset/openbao-csi-provider -n openbao` shows the provider's side.
 
 * **The Results API crash-loops on its database connection**
-  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/postgres-ca/ca.crt` from ConfigMap `postgres-ca`, as a login that must still be within its 4-day lease. `rotate-credentials` writes a new login every day, and the pod reads it at its next start.
-  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `postgres-server-cert` was issued by `postgres-ca-issuer` (`kubectl describe certificate postgres-server-cert -n databases`) and that ConfigMap `postgres-ca` exists in `tekton`. For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, run `kubectl create job --from=cronjob/rotate-credentials rotate-now -n openbao`, then `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it with the new login.
+  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/postgres-ca/ca.crt` from ConfigMap `postgres-ca`, as a login that must still be within its 4-day lease. The CSI driver writes a new login every `CREDENTIAL_ROTATION_INTERVAL`, and the pod reads it at its next start.
+  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `postgres-server-cert` was issued by `postgres-ca-issuer` (`kubectl describe certificate postgres-server-cert -n databases`) and that ConfigMap `postgres-ca` exists in `tekton`. For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it, and the new pod's mount writes a new login.
 
 * **PipelineRuns finish but no records appear**
   * **What's happening:** The API serves the certificate it loaded at startup, so an API pod running past `tekton-results-tls` expiry fails the watcher's TLS handshake.

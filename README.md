@@ -9,7 +9,7 @@ Four tools roll out this cluster:
 * **OpenTofu:** Declares OpenBao's secrets engines, access policies, PKI and Kubernetes authentication (`terraform/openbao/`).
 * **Tekton:** Tests the core after every change Flux applies to it, including the paths into it that the workstation uses.
 
-Cluster secrets and security rely on an in-cluster OpenBao, unsealed at boot from a GPG-encrypted keyfile kept gitignored in this repo (`.local/openbao/`). Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, and its database engine issues the short-lived logins the `rotate-credentials` CronJob writes into Kubernetes `Secret`s every day.
+Cluster secrets and security rely on an in-cluster OpenBao, unsealed at boot from a GPG-encrypted keyfile kept gitignored in this repo (`.local/openbao/`). Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, and its database and secrets-aws engines issue the short-lived logins the Secrets Store CSI driver mirrors into Kubernetes `Secret`s every day.
 
 Workloads are structured modularly to maximize compute efficiency on local hardware. The cluster maintains an always-on core database architecture, powered by PostgreSQL/PostGIS (CloudNativePG), Cilium eBPF networking and Gateway routing, and SeaweedFS S3-compatible storage. Specialized modules for testing, cluster observability, ETL data pipelines, and machine learning workflows can be deployed dynamically when performing specific data science tasks and torn down afterward to conserve memory and CPU.
 
@@ -108,13 +108,16 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
 | Hubble | `v1.20.2` (Relay), `v0.13.6` (UI) | Cilium's network observability layer. Relay runs its own cert-manager mTLS trust domain. |
 
-**OpenBao** holds the cluster's secrets and issues its certificates and database logins through its **Database & PKI Engines**. **cert-manager** delivers the certificates into Kubernetes:
+**OpenBao** holds the cluster's secrets and issues its certificates and logins through its **Database & PKI Engines** and its **secrets-aws plugin**. **cert-manager** delivers the certificates into Kubernetes, and the **Secrets Store CSI Driver** with the **OpenBao CSI Provider** delivers the logins:
 
 | Component | Version | Description |
 | --- | --- | --- |
 | cert-manager | `v1.21.2` <!-- renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io --> | Manages local edge CA, provisions OpenBao TLS, and mints leaf certificates via `openbao-pki-issuer`. |
 | OpenBao (in-cluster) | `2.7.1` <!-- renovate: datasource=docker depName=openbao/openbao --> (chart `0.30.4` <!-- renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm -->) | Secrets backend on PebbleDB storage; `just start` unseals it from the GPG-encrypted keyfile in `.local/openbao/`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
 | OpenBao Database & PKI Engines | Same as OpenBao | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
+| OpenBao CSI Provider | `2.0.3` (via OpenBao chart `0.30.4` <!-- renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm -->) | DaemonSet in `openbao` that logs in to OpenBao with each mounting pod's ServiceAccount token and reads the logins its `SecretProviderClass` names. |
+| OpenBao secrets-aws plugin | `v0.3.2` <!-- renovate: datasource=docker depName=ghcr.io/openbao/openbao-plugin-secrets-aws --> | Mounted at `seaweedfs/`; creates a SeaweedFS IAM user with a key pair scoped to the backup bucket for each read, with a 4-day lease. OpenBao downloads it at startup. |
+| Secrets Store CSI Driver | `1.6.1` <!-- renovate: datasource=helm depName=secrets-store-csi-driver registryUrl=https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts --> | DaemonSet in `kube-system` that mounts provider-fetched logins into pods, mirrors them into Kubernetes `Secret`s and reads them again every `CREDENTIAL_ROTATION_INTERVAL`. |
 
 **CloudNativePG** runs the **PostgreSQL / PostGIS image**, and the **Barman Cloud Plugin** writes its backups to **SeaweedFS**:
 
@@ -123,7 +126,7 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | Barman Cloud Plugin | `0.8.1` <!-- renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts --> | WAL archiving and base backups for CNPG, via the `ObjectStore` resource rather than in-tree `spec.backup.barmanObjectStore`. |
 | CloudNativePG (CNPG) | `0.29.1` <!-- renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts --> | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
 | PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` | Image the CNPG `Cluster` runs (`18.6` PostgreSQL, `3.6.4` PostGIS). |
-| SeaweedFS | `4.51.0` <!-- renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm --> | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.seaweedfs.svc:9000`). |
+| SeaweedFS | `4.51.0` <!-- renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm --> | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.seaweedfs.svc:9000`). Its IAM API lets OpenBao create and delete Barman's key pairs. |
 
 The **Tekton Operator** installs **Tekton Pipelines**, **Tekton Triggers** and **Tekton Results**, which run **`core-test`** after every change Flux applies to the core. **Zot** holds the cluster's images. Tekton's controllers, Results and their Secrets live in `tekton`, the EventListener and Triggers in `tekton-triggers`, and Tasks, Pipelines and their runs in `tekton-pipelines`:
 
@@ -132,7 +135,7 @@ The **Tekton Operator** installs **Tekton Pipelines**, **Tekton Triggers** and *
 | `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, backups and Hubble drops. |
 | Tekton Operator | `v0.81.2` <!-- renovate: datasource=github-releases depName=tektoncd/operator --> | Installs Pipelines, Triggers, Results and the pruner from one `TektonConfig`. |
 | Tekton Pipelines | `v1.15.3` (via Tekton Operator `v0.81.2` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. |
-| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. Each pod reads its database login from Secret `tekton-results-postgres` at start. |
+| Tekton Results | `v0.20.0` (via Tekton Operator `v0.81.2` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | Keeps PipelineRun and TaskRun records in the PostGIS `tekton_results` database after the pruner removes the runs, for `TEKTON_RESULTS_RETENTION`. Each pod reads its database login from Secret `tekton-results-postgres` at start, which the Secrets Store CSI driver fills from the API pod's mount. |
 | Tekton Triggers | `v0.37.1` (via Tekton Operator `v0.81.2` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | The `flux-events` EventListener (planned for 3.0) turns events from Flux's notification-controller into PipelineRuns, so a merge to `main` starts `core-test`. |
 | Zot | `v2.1.22` (chart `0.1.128`; planned for 3.0) | In-cluster OCI registry and pull-through cache for every public registry the node pulls from, storing images in the `zot` SeaweedFS bucket. The Tekton module builds images into it, and containerd pulls through it. |
 
@@ -231,6 +234,9 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | OpenBao | [https://openbao.org/docs/](https://openbao.org/docs/) |
 | OpenBao Database Secrets Engine | [https://openbao.org/docs/secrets/databases/](https://openbao.org/docs/secrets/databases/) |
 | OpenBao PKI Secrets Engine | [https://openbao.org/docs/secrets/pki/](https://openbao.org/docs/secrets/pki/) |
+| OpenBao secrets-aws plugin | [https://github.com/openbao/openbao-plugins/tree/main/secrets/aws](https://github.com/openbao/openbao-plugins/tree/main/secrets/aws) |
+| OpenBao CSI Provider | [https://openbao.org/docs/platform/k8s/csi/](https://openbao.org/docs/platform/k8s/csi/) |
+| Secrets Store CSI Driver | [https://secrets-store-csi-driver.sigs.k8s.io/](https://secrets-store-csi-driver.sigs.k8s.io/) |
 
 | Component | Documentation Link |
 | --- | --- |

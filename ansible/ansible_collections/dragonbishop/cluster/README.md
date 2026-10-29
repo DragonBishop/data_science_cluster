@@ -20,13 +20,13 @@ The playbook runs them in this order.
 | Role | What it does |
 | --- | --- |
 | `k3s` | Installs k3s without its bundled Traefik, ServiceLB, network policy, kube-proxy and flannel, ready for Cilium. Refuses to install over a previous cluster's Cilium state. |
-| `cilium` | Applies the cluster's Namespaces, then installs Cilium with Helm, from the same values Flux later manages, before Flux exists. |
+| `cilium` | Applies the cluster's Namespaces, then installs Cilium with Helm, from the same values Flux later manages, before Flux exists. Applies the cluster's baseline network policy and `kube-system`'s policies. |
 | `cert_manager` | Installs cert-manager from `cert-manager-values.yaml`, the values Flux later manages. |
 | `trust_manager` | Installs trust-manager from `trust-manager-values.yaml`, the values Flux later manages. |
 | `openbao` | Installs OpenBao with its certificates, Bundles, network policy and local redirect, initializes and unseals it, and keeps its unseal keys in a GPG-encrypted keyfile. |
-| `opentofu` | Applies `terraform/openbao`, which sets up OpenBao's secrets engines, PKI and Kubernetes authentication. |
+| `opentofu` | Writes the Postgres superuser Secret, SeaweedFS's admin identity for OpenBao and Results' empty login Secret, then applies `terraform/openbao`, which sets up OpenBao's secrets engines, PKI and Kubernetes authentication. A changed credential gets a new write-only version, so OpenTofu sends it to OpenBao on the same run. |
 | `spire` | Installs SPIRE, whose CA OpenBao's PKI root signs, so the Flux controllers have identities when they start. |
-| `flux` | Installs Flux, its Git credentials and the network policies Flux needs to fetch its first source. |
+| `flux` | Installs Flux, its Git credentials and the network policy Flux needs to fetch its first source. |
 
 ## Requirements
 
@@ -97,7 +97,7 @@ The role defaults:
 * `/etc/rancher/k3s/config.yaml`: the k3s config
 * `.local/openbao/unseal-keys.gpg` in the repository: the unseal keys, mode 0600, written once when OpenBao is initialized. `just start` unseals OpenBao from it.
 * `terraform/openbao/terraform.tfstate`: the encrypted OpenTofu state
-* `~/.config/data_science_cluster/openbao-secrets-wo-version`: the version of the secrets OpenTofu writes. Create `rotate-openbao-secrets` beside it, and the next run writes all three secrets again and removes the marker.
+* `~/.config/data_science_cluster/openbao-secrets-wo-version`: the version of the secrets OpenTofu writes. A run that changes the Postgres password or SeaweedFS's admin key pair records a new version. Create `rotate-openbao-secrets` beside it, and the next run gives OpenBao a new SeaweedFS admin key pair and removes the marker.
 
 The run that initializes OpenBao prints the root token and the unseal keys once. Store them in a password manager.
 
