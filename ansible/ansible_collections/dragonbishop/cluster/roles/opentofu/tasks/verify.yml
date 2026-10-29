@@ -21,3 +21,21 @@
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   changed_when: false
+
+- name: Check terraform/openbao configured the core-test cert role
+  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read auth/cert/certs/core-test
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+
+- name: Check terraform/openbao configured the rotate-credentials cert role
+  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read auth/cert/certs/rotate-credentials
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+
+- name: Check terraform/openbao configured the SPIRE server auth role
+  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read auth/kubernetes/role/spire-server-role
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false

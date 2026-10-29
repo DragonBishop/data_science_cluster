@@ -76,3 +76,33 @@ run "cert_roles_bound_narrowly" {
     error_message = "A cert auth role admits more than one SPIFFE ID."
   }
 }
+
+run "cert_roles_trust_root_ca" {
+  command = plan
+
+  override_resource {
+    target = vault_pki_secret_backend_root_cert.root
+    values = {
+      certificate = "root-ca"
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      for role in [
+        vault_cert_auth_backend_role.core_test,
+        vault_cert_auth_backend_role.rotate_credentials,
+      ] : role.certificate == vault_pki_secret_backend_root_cert.root.certificate
+    ])
+    error_message = "A cert auth role does not trust the OpenBao root CA that signs SPIRE's CA."
+  }
+}
+
+run "rotate_credentials_reads_results_login" {
+  command = plan
+
+  assert {
+    condition     = contains(vault_cert_auth_backend_role.rotate_credentials.token_policies, vault_policy.rotate_credentials.name)
+    error_message = "The rotate-credentials cert role does not grant rotate-credentials-policy."
+  }
+}
