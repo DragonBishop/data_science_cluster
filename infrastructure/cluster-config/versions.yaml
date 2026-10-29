@@ -21,14 +21,18 @@ data:
   ALPINE_K8S_VERSION: "1.37.1"
   # renovate: datasource=docker depName=openbao/openbao
   OPENBAO_IMAGE_TAG: "2.7.1"
+  # renovate: datasource=docker depName=ghcr.io/openbao/openbao-plugin-secrets-aws
+  OPENBAO_SECRETS_AWS_VERSION: "v0.3.2@sha256:72139eaaaba92d4ff9835c9260fb37a5a9d2901e42e294ebe16ffda052bd3670"
   # renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm
   OPENBAO_VERSION: "0.30.4"
   POSTGIS_VERSION: "3.6.4"
   POSTGRES_VERSION: "18.6"
+  # renovate: datasource=docker depName=registry.k8s.io/pause
+  PAUSE_IMAGE_TAG: "3.10.1"
   # renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm
   SEAWEEDFS_VERSION: "4.51.0"
-  # renovate: datasource=github-releases depName=spiffe/spiffe-helper extractVersion=^v(?<version>.+)$
-  SPIFFE_HELPER_VERSION: "0.12.2"
+  # renovate: datasource=helm depName=secrets-store-csi-driver registryUrl=https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+  SECRETS_STORE_CSI_DRIVER_VERSION: "1.6.1"
   # renovate: datasource=github-releases depName=spiffe/spire extractVersion=^v(?<version>.+)$
   SPIRE_AGENT_IMAGE_TAG: "1.15.5"
   # renovate: datasource=helm depName=spire-crds registryUrl=https://spiffe.github.io/helm-charts-hardened

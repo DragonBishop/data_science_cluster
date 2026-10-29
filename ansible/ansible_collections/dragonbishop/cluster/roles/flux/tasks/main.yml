@@ -7,9 +7,3 @@
 
 - name: Point Flux at the Git repository
   ansible.builtin.import_tasks: sync.yml
-
-- name: Apply the network policies Flux needs
-  ansible.builtin.import_tasks: policies.yml
-
-- name: Write Results' first login
-  ansible.builtin.import_tasks: first_rotation.yml

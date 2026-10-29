@@ -4,7 +4,6 @@ resources:
   - spire-release.yaml
   - core-test-spiffeid.yaml
   - flux-controllers-spiffeid.yaml
-  - rotate-credentials-spiffeid.yaml
 configMapGenerator:
   - name: spire-values
     namespace: spire
