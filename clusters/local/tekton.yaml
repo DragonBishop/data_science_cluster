@@ -11,6 +11,7 @@ spec:
     - name: openbao
     # Dynamic logins join tekton_readwrite, which the databases Kustomization creates
     - name: databases
+    - name: secrets-store-csi-driver
     - name: cluster-config
   sourceRef:
     kind: GitRepository

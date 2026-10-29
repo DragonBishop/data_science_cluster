@@ -167,10 +167,20 @@ spec:
                       - name: postgres-ca
                         mountPath: /etc/postgres-ca
                         readOnly: true
+                      - name: tekton-results-postgres
+                        mountPath: /etc/tekton-results-postgres
+                        readOnly: true
                 volumes:
                   - name: postgres-ca
                     configMap:
                       name: postgres-ca
+                  # The CSI driver mirrors this mount into Secret tekton-results-postgres
+                  - name: tekton-results-postgres
+                    csi:
+                      driver: secrets-store.csi.k8s.io
+                      readOnly: true
+                      volumeAttributes:
+                        secretProviderClass: tekton-results-postgres
         tekton-results-retention-policy-agent:
           spec:
             template:
