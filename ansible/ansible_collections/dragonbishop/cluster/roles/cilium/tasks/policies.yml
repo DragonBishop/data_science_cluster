@@ -1,0 +1,29 @@
+---
+- name: Wait for Cilium CRDs to be established
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: ciliumclusterwidenetworkpolicies.cilium.io
+  register: cilium_crd_clusterwide_policy
+  until: cilium_crd_clusterwide_policy.resources | default([]) | length > 0
+  retries: 12
+  delay: 5
+
+- name: Substitute cluster-config values into the Cilium cluster-default network policy
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml') }}"
+  environment:
+    LAN_CIDR: "{{ lan_cidr }}"
+  register: cilium_clusterwide_policy_substituted
+  changed_when: false
+
+- name: Apply Cilium cluster-default network policy
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ cilium_clusterwide_policy_substituted.stdout | from_yaml }}"
+
+- name: Apply kube-system network policy
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/infrastructure/cilium/kube-system-networkpolicy.yaml"
