@@ -10,4 +10,8 @@
     TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_passphrase }}"
     TF_VAR_postgres_superuser_password: "{{ opentofu_postgres_superuser_password }}"
     TF_VAR_secrets_wo_version: "{{ opentofu_secrets_wo_version }}"
+    TF_VAR_seaweedfs_access_key: "{{ opentofu_seaweedfs_credential.accessKey }}"
+    TF_VAR_seaweedfs_secret_key: "{{ opentofu_seaweedfs_credential.secretKey }}"
+    TF_VAR_seaweedfs_s3_port: "{{ seaweedfs_s3_port }}"
+    TF_VAR_backup_bucket: "{{ cnpg_backup_bucket }}"
   no_log: true

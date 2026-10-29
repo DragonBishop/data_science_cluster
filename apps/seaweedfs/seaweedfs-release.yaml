@@ -65,6 +65,17 @@ spec:
               ports:
                 - protocol: TCP
                   port: ${SEAWEEDFS_S3_PORT}
+            # OpenBao's secrets-aws plugin creates and deletes Barman's IAM users
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: openbao
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: openbao
+              ports:
+                - protocol: TCP
+                  port: ${SEAWEEDFS_S3_PORT}
             # core-test checks the S3 certificate
             - from:
                 - namespaceSelector:
@@ -161,6 +172,8 @@ spec:
         - "-cert.file=/var/run/secrets/seaweedfs.io/tls.crt"
         - "-key.file=/var/run/secrets/seaweedfs.io/tls.key"
         - "-config=/var/run/secrets/seaweedfs-config/config"
+        # The static identity is fixed; OpenBao manages the rest through the IAM API
+        - "-iam.readOnly=false"
       extraVolumeMounts: |
         - name: seaweedfs-tls
           mountPath: /var/run/secrets/seaweedfs.io

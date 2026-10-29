@@ -85,6 +85,12 @@
           - "'vault_mount.db' in opentofu_state_list.stdout_lines"
         fail_msg: the terraform/openbao state has no vault_mount.db
 
+    - name: It should record the SeaweedFS mount in the OpenTofu state
+      ansible.builtin.assert:
+        that:
+          - "'vault_aws_secret_backend.seaweedfs' in opentofu_state_list.stdout_lines"
+        fail_msg: the terraform/openbao state has no vault_aws_secret_backend.seaweedfs
+
 - name: The cluster after bootstrap
   hosts: localhost
   gather_facts: false

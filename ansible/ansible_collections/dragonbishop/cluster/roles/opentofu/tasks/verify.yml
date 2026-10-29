@@ -28,14 +28,26 @@
     KUBECONFIG: "{{ kubeconfig_path }}"
   changed_when: false
 
-- name: Check terraform/openbao configured the rotate-credentials cert role
-  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read auth/cert/certs/rotate-credentials
+- name: Check terraform/openbao configured the SPIRE server auth role
+  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read auth/kubernetes/role/spire-server-role
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   changed_when: false
 
-- name: Check terraform/openbao configured the SPIRE server auth role
-  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read auth/kubernetes/role/spire-server-role
+- name: Check terraform/openbao configured the Tekton Results auth role
+  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read auth/kubernetes/role/tekton-results-role
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+
+- name: Check terraform/openbao configured the Barman S3 auth role
+  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read auth/kubernetes/role/barman-s3-role
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+
+- name: Check terraform/openbao configured the Barman SeaweedFS role
+  ansible.builtin.command: kubectl exec -n {{ openbao_namespace }} {{ openbao_pod }} -- bao read seaweedfs/roles/barman
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   changed_when: false

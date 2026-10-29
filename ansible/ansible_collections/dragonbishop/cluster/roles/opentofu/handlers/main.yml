@@ -1,0 +1,23 @@
+---
+- name: Read the S3 gateway Deployment
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: seaweedfs-s3
+    namespace: seaweedfs
+  register: opentofu_seaweedfs_s3_deployment
+  listen: Restart the S3 gateway
+
+- name: Restart the S3 gateway Deployment
+  when: opentofu_seaweedfs_s3_deployment.resources | length > 0
+  kubernetes.core.k8s:
+    state: patched
+    kind: Deployment
+    name: seaweedfs-s3
+    namespace: seaweedfs
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
+  listen: Restart the S3 gateway
