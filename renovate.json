@@ -32,6 +32,14 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?\\s+[A-Z0-9_]+: \"(?<currentValue>[^\"]+)\""
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "README versions that mirror a cluster-config pin, each followed by a <!-- renovate: --> comment",
+      "managerFilePatterns": ["/^README\\.md$/"],
+      "matchStrings": [
+        "`(?<currentValue>[^`]+)` <!-- renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))? -->"
+      ]
     }
   ]
 }
