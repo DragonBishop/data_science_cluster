@@ -23,6 +23,17 @@ server:
     - type: secret
       name: openbao-server-cert
 
+  # The secrets-aws plugin verifies SeaweedFS's S3 certificate against the OpenBao root CA
+  volumes:
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+        optional: true
+  volumeMounts:
+    - name: openbao-root-ca
+      mountPath: /openbao/userconfig/openbao-root-ca
+      readOnly: true
+
   dataStorage:
     size: ${OPENBAO_DATA_STORAGE_SIZE}
 
@@ -31,6 +42,13 @@ server:
     config: |
       disable_mlock = true
       ui = true
+      plugin_directory = "/openbao/data/plugins"
+      plugin_auto_download = true
+
+      plugin "secret" "aws" {
+        image = "ghcr.io/openbao/openbao-plugin-secrets-aws:${OPENBAO_SECRETS_AWS_VERSION}"
+        env   = ["AWS_CA_BUNDLE=/openbao/userconfig/openbao-root-ca/ca.crt"]
+      }
 
       listener "tcp" {
         address          = "[::]:8200"
@@ -42,3 +60,23 @@ server:
       storage "pebbledb" {
         path = "/openbao/data/pebbledb"
       }
+
+csi:
+  enabled: true
+  # The agent's cache would hand back a leased login instead of a new one at each rotation
+  agent:
+    enabled: false
+  resources:
+    requests:
+      cpu: ${OPENBAO_CSI_PROVIDER_CPU_REQUEST}
+      memory: ${OPENBAO_CSI_PROVIDER_MEM_REQUEST}
+    limits:
+      memory: ${OPENBAO_CSI_PROVIDER_MEM_LIMIT}
+  volumes:
+    - name: openbao-ca-bundle
+      configMap:
+        name: openbao-ca-bundle
+  volumeMounts:
+    - name: openbao-ca-bundle
+      mountPath: /openbao-ca
+      readOnly: true
