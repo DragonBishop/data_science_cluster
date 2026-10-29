@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - databases.yaml
   - databases-cluster.yaml
+  - databases-credentials.yaml
   - databases-issuers.yaml
   - databases-localhost.yaml
   - databases-networkpolicy.yaml

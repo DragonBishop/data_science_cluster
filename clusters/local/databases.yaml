@@ -11,6 +11,7 @@ spec:
     - name: barman-cloud
     - name: seaweedfs
     - name: gateway
+    - name: secrets-store-csi-driver
     - name: cluster-config
   sourceRef:
     kind: GitRepository
