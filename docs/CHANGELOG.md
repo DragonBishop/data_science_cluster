@@ -1,3 +1,13 @@
+## [2.3.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.2.0...v2.3.0) - 2026-10-29
+
+### 🚀 Features
+
+- *(seaweedfs)* Serve HTTPS between master, filer, volume and S3 ([4435fc5](https://github.com/DragonBishop/data_science_cluster/commit/4435fc59dd16a2fcb2732a072ff70c27c79cd5aa))
+
+### 🧪 Testing
+
+- *(opentofu)* Check the cert auth roles and the SPIRE server role ([ac1e54a](https://github.com/DragonBishop/data_science_cluster/commit/ac1e54a92e5b4a42908ee298e61394ee9ff00447))
+
 ## [2.2.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.1.0...v2.2.0) - 2026-10-28
 
 ### 🚀 Features
