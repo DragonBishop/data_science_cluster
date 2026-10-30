@@ -36,23 +36,26 @@ spec:
   ca:
     secretName: openbao-local-ca-secret
 ---
-# RBAC allowing cert-manager to request tokens for OpenBao Kubernetes authentication.
+# cert-manager requests only its own account's token for OpenBao authentication.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: cert-manager-tokenrequest
+  namespace: cert-manager
 rules:
   - apiGroups: [""]
     resources: ["serviceaccounts/token"]
+    resourceNames: ["cert-manager"]
     verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
   name: cert-manager-tokenrequest
+  namespace: cert-manager
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: Role
   name: cert-manager-tokenrequest
 subjects:
   - kind: ServiceAccount

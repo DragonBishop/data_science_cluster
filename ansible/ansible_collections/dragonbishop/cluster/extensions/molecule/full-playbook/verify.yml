@@ -93,7 +93,7 @@
 
 - name: The cluster after bootstrap
   hosts: localhost
-  gather_facts: false
+  gather_facts: true
   vars:
     group_vars_dir: "{{ playbook_dir + '/../../../playbooks/group_vars/all' }}"
     routed_variable_names: >-
@@ -293,6 +293,81 @@
         that:
           - cert_manager_release.resources | length == 1
         fail_msg: HelmRelease cert-manager is missing, so Flux did not adopt the release Ansible installed
+
+    - name: Check cert-manager requesting its own token
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig={{ kubeconfig_path }}
+          - auth
+          - can-i
+          - create
+          - serviceaccounts/cert-manager
+          - --subresource=token
+          - --namespace=cert-manager
+          - --as=system:serviceaccount:cert-manager:cert-manager
+          - --as-group=system:serviceaccounts
+          - --as-group=system:serviceaccounts:cert-manager
+          - --as-group=system:authenticated
+      register: cert_manager_own_token
+      changed_when: false
+      failed_when: false
+
+    - name: It should allow cert-manager to request its own token
+      ansible.builtin.assert:
+        that:
+          - cert_manager_own_token.rc == 0
+          - cert_manager_own_token.stdout | trim == 'yes'
+
+    - name: Check cert-manager requesting another account in its namespace
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig={{ kubeconfig_path }}
+          - auth
+          - can-i
+          - create
+          - serviceaccounts/default
+          - --subresource=token
+          - --namespace=cert-manager
+          - --as=system:serviceaccount:cert-manager:cert-manager
+          - --as-group=system:serviceaccounts
+          - --as-group=system:serviceaccounts:cert-manager
+          - --as-group=system:authenticated
+      register: cert_manager_other_token
+      changed_when: false
+      failed_when: false
+
+    - name: It should deny cert-manager a different account in its namespace
+      ansible.builtin.assert:
+        that:
+          - cert_manager_other_token.rc == 1
+          - cert_manager_other_token.stdout | trim == 'no'
+
+    - name: Check cert-manager requesting the Flux administrator token
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig={{ kubeconfig_path }}
+          - auth
+          - can-i
+          - create
+          - serviceaccounts/helm-controller
+          - --subresource=token
+          - --namespace=flux-system
+          - --as=system:serviceaccount:cert-manager:cert-manager
+          - --as-group=system:serviceaccounts
+          - --as-group=system:serviceaccounts:cert-manager
+          - --as-group=system:authenticated
+      register: cert_manager_flux_token
+      changed_when: false
+      failed_when: false
+
+    - name: It should deny cert-manager the Flux administrator token
+      ansible.builtin.assert:
+        that:
+          - cert_manager_flux_token.rc == 1
+          - cert_manager_flux_token.stdout | trim == 'no'
 
     - name: Wait for Flux to adopt trust-manager
       kubernetes.core.k8s_info:
