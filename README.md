@@ -17,6 +17,7 @@ Customizable VS Code DevContainer configurations are provided in `.devcontainer/
 
 ## Documentation
 
+* [Access Policy](docs/ACCESSPOLICY.md): resource grants and issuer authentication
 * [Backups and Restore](docs/BACKUPS_RESTORE.md): restoring the database from SeaweedFS
 * [Changelog](docs/CHANGELOG.md): release notes
 * [Cluster Operations](docs/OPERATIONS.md): every `just` recipe and the commands beside them
