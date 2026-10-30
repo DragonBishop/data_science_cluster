@@ -73,7 +73,8 @@ resource "vault_kubernetes_auth_backend_role" "tekton_results" {
   bound_service_account_namespaces = ["tekton"]
   audience                         = "openbao"
   token_policies                   = [vault_policy.tekton_results.name]
-  token_ttl                        = 600 # 10m
+  token_ttl                        = vault_database_secret_backend_role.tekton_results_app_role.default_ttl
+  token_max_ttl                    = vault_database_secret_backend_role.tekton_results_app_role.max_ttl
 }
 
 resource "vault_policy" "barman_s3" {
@@ -90,5 +91,6 @@ resource "vault_kubernetes_auth_backend_role" "barman_s3" {
   bound_service_account_namespaces = ["databases"]
   audience                         = "openbao"
   token_policies                   = [vault_policy.barman_s3.name]
-  token_ttl                        = 600 # 10m
+  token_ttl                        = vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds
+  token_max_ttl                    = vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
 }

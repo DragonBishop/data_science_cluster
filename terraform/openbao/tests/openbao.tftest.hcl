@@ -111,3 +111,23 @@ run "seaweedfs_lease_ttl" {
     error_message = "The seaweedfs mount's lease is not 4 days, so each daily rotation leaves a SeaweedFS IAM user alive for longer."
   }
 }
+
+run "csi_tokens_cover_secret_leases" {
+  command = plan
+
+  assert {
+    condition = (
+      vault_kubernetes_auth_backend_role.barman_s3.token_ttl >= vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds &&
+      vault_kubernetes_auth_backend_role.barman_s3.token_max_ttl >= vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
+    )
+    error_message = "Barman's CSI login token expires before its S3 lease, revoking the key before the next daily rotation."
+  }
+
+  assert {
+    condition = (
+      vault_kubernetes_auth_backend_role.tekton_results.token_ttl >= vault_database_secret_backend_role.tekton_results_app_role.default_ttl &&
+      vault_kubernetes_auth_backend_role.tekton_results.token_max_ttl >= vault_database_secret_backend_role.tekton_results_app_role.max_ttl
+    )
+    error_message = "Tekton Results' CSI login token expires before its database lease, revoking the login before the next daily rotation."
+  }
+}

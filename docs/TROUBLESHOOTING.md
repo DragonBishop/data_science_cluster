@@ -259,7 +259,21 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
     If it is missing, re-reconcile `apps/seaweedfs/seaweedfs-release.yaml` (`flux reconcile helmrelease seaweedfs -n seaweedfs`); `createBuckets` in that chart's values creates it at install.
 
 > [!CAUTION]
-> Each key pair stops working when its 4-day lease ends. A holder pod that can't mount a new one produces no error until an archive is attempted, so a "healthy" cluster can still be silently failing every backup.
+> Each key pair stops working when its 4-day lease ends or its issuing OpenBao token expires, whichever happens first. A Running holder pod and a healthy CNPG Cluster do not prove that WAL archiving is working.
+
+* **Retention fails with `InvalidAccessKeyId` about 10 minutes after startup**
+  * **What's happening:** The CSI login token expired and OpenBao revoked its S3 lease, deleting the key from SeaweedFS. A 4-day S3 lease cannot outlive its issuing token. The same deleted key also blocks WAL uploads. Correlate `kubectl logs -n openbao openbao-0` with the `plugin-barman-cloud` container in the primary database pod: token and `seaweedfs/creds/barman` revocations precede failed `ListObjectsV2` and `PutObject` calls.
+  * **How to fix it:** Apply the CSI auth-role TTLs in `terraform/openbao/kubernetes-auth.tf` and the provider's `-cache-size=0` setting in `infrastructure/openbao/openbao-values.yaml`. Both CSI roles use 4-day login tokens, and each daily rotation authenticates afresh so a new credential cannot inherit a nearly expired token. This also fixes the same token-lifetime mismatch for Tekton Results. Existing tokens and deleted keys are not repaired by changing a role: after applying the changes and waiting for the CSI provider rollout, refresh Barman's holder mount:
+
+    ```bash
+    kubectl rollout restart deployment/barman-s3-credentials -n databases
+    kubectl rollout status deployment/barman-s3-credentials -n databases
+    kubectl logs -n databases postgres-cluster-1 -c plugin-barman-cloud --since=10m
+    kubectl cnpg psql postgres-cluster -n databases -- postgres -c \
+      'SELECT archived_count, last_archived_wal, last_archived_time, failed_count, last_failed_time FROM pg_stat_archiver;'
+    ```
+
+    Use the current primary's pod name if it differs from `postgres-cluster-1`. Confirm successful WAL uploads resume and `last_archived_time` advances; the historical `failed_count` does not reset on recovery. Retention retries automatically every five minutes. Check that its next cycle has no new `RetentionPolicyFailed` event or authentication error. Changing the retention window does not restore a revoked key.
 
 * **`TektonResult` never becomes Ready and no Results pods exist**
   * **What's happening:** The operator holds Results back until `tekton-results-postgres` exists in `tekton`.

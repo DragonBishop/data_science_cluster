@@ -66,6 +66,8 @@ csi:
   # The agent's cache would hand back a leased login instead of a new one at each rotation
   agent:
     enabled: false
+  extraArgs:
+    - "-cache-size=0"
   resources:
     requests:
       cpu: ${OPENBAO_CSI_PROVIDER_CPU_REQUEST}
