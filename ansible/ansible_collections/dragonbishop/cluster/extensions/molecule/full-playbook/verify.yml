@@ -85,6 +85,12 @@
           - "'vault_mount.db' in opentofu_state_list.stdout_lines"
         fail_msg: the terraform/openbao state has no vault_mount.db
 
+    - name: It should record the SeaweedFS mount in the OpenTofu state
+      ansible.builtin.assert:
+        that:
+          - "'vault_aws_secret_backend.seaweedfs' in opentofu_state_list.stdout_lines"
+        fail_msg: the terraform/openbao state has no vault_aws_secret_backend.seaweedfs
+
 - name: The cluster after bootstrap
   hosts: localhost
   gather_facts: false
@@ -221,12 +227,21 @@
           - spire_spiffe_csi_driver.resources[0].status.numberReady | default(0) >= 1
         fail_msg: DaemonSet spire-spiffe-csi-driver has no ready pod
 
-    - name: Read OpenBao's root CA in spire
+    - name: Wait for OpenBao's root CA in spire
       kubernetes.core.k8s_info:
         kind: ConfigMap
         name: openbao-root-ca
         namespace: spire
       register: spire_openbao_root_ca
+      until: spire_openbao_root_ca.resources | default([]) | length == 1
+      retries: 60
+      delay: 5
+
+    - name: It should contain the OpenBao root CA
+      ansible.builtin.assert:
+        that:
+          - (spire_openbao_root_ca.resources[0].data.get('ca.crt', '') | length) > 0
+        fail_msg: ConfigMap spire/openbao-root-ca has no ca.crt
 
     - name: Read the SPIRE server Service
       kubernetes.core.k8s_info:
@@ -317,6 +332,33 @@
           - openbao_release.resources | length == 1
         fail_msg: HelmRelease openbao is missing, so Flux did not adopt the release Ansible installed
 
+    - name: Wait for Flux to reconcile Postgres prerequisites
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: "{{ item }}"
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 1200
+      register: postgres_kustomizations
+      loop:
+        - cnpg-operator
+        - databases
+      loop_control:
+        label: "{{ item }}"
+
+    - name: It should find the Postgres prerequisite Kustomizations
+      ansible.builtin.assert:
+        that:
+          - item.resources | length == 1
+        fail_msg: "Flux Kustomization {{ item.item }} is missing"
+      loop: "{{ postgres_kustomizations.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
     - name: Wait for Postgres to archive WAL to SeaweedFS
       kubernetes.core.k8s_info:
         api_version: postgresql.cnpg.io/v1
@@ -331,9 +373,15 @@
       register: postgres_cluster
       failed_when: false
 
+    - name: It should create the Postgres cluster
+      ansible.builtin.assert:
+        that:
+          - postgres_cluster.resources | default([]) | length == 1
+        fail_msg: The databases Kustomization is Ready, but postgres-cluster is missing from the databases namespace
+
     - name: Read the Postgres cluster's conditions
       ansible.builtin.set_fact:
-        postgres_cluster_conditions: "{{ postgres_cluster.resources[0].status.conditions }}"
+        postgres_cluster_conditions: "{{ postgres_cluster.resources[0].status.conditions | default([]) }}"
 
     - name: Pick the ContinuousArchiving condition
       ansible.builtin.set_fact:

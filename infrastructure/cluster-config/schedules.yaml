@@ -5,7 +5,7 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
-  CREDENTIAL_ROTATION_SCHEDULE: "0 12 * * *"
+  CREDENTIAL_ROTATION_INTERVAL: "24h"
   POSTGRES_BACKUP_SCHEDULE: "0 0 0 * * *"
   TEKTON_PRUNER_SCHEDULE: "0 8 * * *"
   TEKTON_RESULTS_RETENTION_INTERVAL: "1h"

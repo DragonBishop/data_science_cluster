@@ -13,7 +13,7 @@ spec:
             k8s:io.kubernetes.pod.namespace: cert-manager
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: openbao
-            app.kubernetes.io/name: rotate-credentials
+            app.kubernetes.io/name: openbao-csi-provider
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: tekton-pipelines
             tekton.dev/pipeline: core-test
@@ -23,4 +23,13 @@ spec:
       toPorts:
         - ports:
             - port: "8200"
+              protocol: TCP
+  egress:
+    # plugin_auto_download pulls the secrets-aws plugin image
+    - toFQDNs:
+        - matchName: "ghcr.io"
+        - matchName: "pkg-containers.githubusercontent.com"
+      toPorts:
+        - ports:
+            - port: "443"
               protocol: TCP

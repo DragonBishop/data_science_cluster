@@ -5,6 +5,10 @@ variables {
   openbao_token               = "foo234"
   postgres_superuser_password = "foo345"
   secrets_wo_version          = "1"
+  seaweedfs_access_key        = "foo456"
+  seaweedfs_secret_key        = "foo567"
+  seaweedfs_s3_port           = 9000
+  backup_bucket               = "foo-backups"
 }
 
 run "database_roles_allowed" {
@@ -43,6 +47,8 @@ run "auth_roles_bound_narrowly" {
         vault_kubernetes_auth_backend_role.databases,
         vault_kubernetes_auth_backend_role.cert_manager,
         vault_kubernetes_auth_backend_role.spire_server,
+        vault_kubernetes_auth_backend_role.tekton_results,
+        vault_kubernetes_auth_backend_role.barman_s3,
       ] : length(role.bound_service_account_names) == 1 && length(role.bound_service_account_namespaces) == 1
     ])
     error_message = "A Kubernetes auth role is bound to more than one ServiceAccount or namespace."
@@ -56,7 +62,8 @@ run "policies_read_only" {
     condition = alltrue([
       for policy in [
         vault_policy.databases,
-        vault_policy.rotate_credentials,
+        vault_policy.tekton_results,
+        vault_policy.barman_s3,
       ] : length(regexall("capabilities\\s*=\\s*\\[\"read\"\\]", policy.policy)) == length(regexall("capabilities", policy.policy))
     ])
     error_message = "A policy grants more than read."
@@ -70,7 +77,6 @@ run "cert_roles_bound_narrowly" {
     condition = alltrue([
       for role in [
         vault_cert_auth_backend_role.core_test,
-        vault_cert_auth_backend_role.rotate_credentials,
       ] : length(role.allowed_uri_sans) == 1
     ])
     error_message = "A cert auth role admits more than one SPIFFE ID."
@@ -91,18 +97,17 @@ run "cert_roles_trust_root_ca" {
     condition = alltrue([
       for role in [
         vault_cert_auth_backend_role.core_test,
-        vault_cert_auth_backend_role.rotate_credentials,
       ] : role.certificate == vault_pki_secret_backend_root_cert.root.certificate
     ])
     error_message = "A cert auth role does not trust the OpenBao root CA that signs SPIRE's CA."
   }
 }
 
-run "rotate_credentials_reads_results_login" {
+run "seaweedfs_lease_ttl" {
   command = plan
 
   assert {
-    condition     = contains(vault_cert_auth_backend_role.rotate_credentials.token_policies, vault_policy.rotate_credentials.name)
-    error_message = "The rotate-credentials cert role does not grant rotate-credentials-policy."
+    condition     = vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds == 345600 && vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds == 345600
+    error_message = "The seaweedfs mount's lease is not 4 days, so each daily rotation leaves a SeaweedFS IAM user alive for longer."
   }
 }

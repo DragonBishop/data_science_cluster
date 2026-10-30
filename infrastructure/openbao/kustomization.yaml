@@ -5,9 +5,7 @@ resources:
   - openbao-tls.yaml
   - openbao-release.yaml
   - openbao-networkpolicy.yaml
-  - openbao-rbac.yaml
   - openbao-localhost.yaml
-  - openbao-secrets.yaml
 configMapGenerator:
   - name: openbao-values
     namespace: openbao

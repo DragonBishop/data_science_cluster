@@ -36,3 +36,8 @@
                 path: /spec/ref/branch
                 value: {{ flux_git_branch }}
   when: flux_git_branch != 'main'
+
+- name: Apply the network policy Flux needs to fetch its source
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ repo_root }}/clusters/local/flux-system/flux-networkpolicy.yaml"

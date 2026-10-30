@@ -458,14 +458,17 @@ flowchart TD
 
     %% Applications
     openbao --> seaweedfs["seaweedfs"]
+    cc --> csidriver["secrets-store-csi-driver"]
     barman --> db["databases"]
     seaweedfs --> db
     gw --> db
+    csidriver --> db
 
     %% CI
     certmgr --> tektonop["tekton-operator"]
     tektonop --> tekton["tekton"]
     db --> tekton
+    csidriver --> tekton
     tekton --> tektonpipelines["tekton-pipelines"]
     tekton --> tektontasks["tekton-tasks"]
 ```
@@ -478,10 +481,11 @@ flowchart TD
 * `gateway` depends on `openbao` (for PKI).
 * `cnpg-operator` depends on `openbao`, and `barman-cloud` depends on `cnpg-operator`.
 * `hubble` depends on `gateway`.
+* `secrets-store-csi-driver` depends on `cluster-config`.
 * `seaweedfs` depends on `namespaces` and `openbao` and is Ready only after its install hook creates the `cnpg-backups` bucket.
-* `databases` depends on `openbao`, `barman-cloud`, `seaweedfs` and `gateway`, so the PostGIS cluster starts with its backup bucket and its CA Secrets already in place.
+* `databases` depends on `openbao`, `barman-cloud`, `seaweedfs`, `gateway` and `secrets-store-csi-driver`, so the PostGIS cluster starts with its backup bucket and its CA Secrets already in place, and Barman's key pair can mount.
 * `tekton-operator` depends on `cert-manager`.
-* `tekton` depends on `tekton-operator`, `openbao` and `databases`. Every Results login joins the `tekton_readwrite` role, which `databases` creates. The operator holds Results back until the login's Secret exists.
+* `tekton` depends on `tekton-operator`, `openbao`, `databases` and `secrets-store-csi-driver`. Every Results login joins the `tekton_readwrite` role, which `databases` creates. The operator holds Results back until the login's Secret exists, which the `opentofu` role creates empty for the CSI driver to fill.
 * `tekton-pipelines` and `tekton-tasks` depend on `tekton`, which installs the Pipeline and Task CRDs.
 
 Once Flux reports every Kustomization Ready, continue with [Verification](VERIFICATION.md).

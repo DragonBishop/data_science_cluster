@@ -180,7 +180,7 @@ Each line shows the source, the destination and the port of a dropped connection
 
 ## Bootstrap
 
-Flux needs network access before it can deliver any policy. Ansible applies three files first, one per scope: the cluster-wide file, `kube-system`'s file and `flux-system`'s file (`roles/flux/tasks/policies.yml`). Flux takes ownership of them on its first reconcile.
+Flux needs network access before it can deliver any policy, and so do the workloads Ansible installs before Flux. Ansible applies three files first, one per scope. The `cilium` role applies the cluster-wide file and `kube-system`'s file right after Cilium installs (`roles/cilium/tasks/policies.yml`). The `flux` role applies `flux-system`'s file (`roles/flux/tasks/sync.yml`). Flux takes ownership of them on its first reconcile.
 
 ## Policies
 
@@ -191,9 +191,9 @@ Flux needs network access before it can deliver any policy. Ansible applies thre
 | `metrics-server` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | metrics-server to the kubelet on 10250 |
 | `hubble-relay` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | Hubble Relay to the agent's Hubble server on 4244; Tekton runs to Relay on 4245 |
 | `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090; Flux to its source hosts on 443 |
-| `openbao` | [`infrastructure/openbao/openbao-networkpolicy.yaml`](../infrastructure/openbao/openbao-networkpolicy.yaml) | cert-manager, `rotate-credentials`, the SPIRE server and `core-test` to OpenBao on 8200 |
+| `openbao` | [`infrastructure/openbao/openbao-networkpolicy.yaml`](../infrastructure/openbao/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200; OpenBao to the secrets-aws plugin's registry on 443 |
 | `plugin-barman-cloud` | [`apps/barman-cloud/cnpg-system-networkpolicy.yaml`](../apps/barman-cloud/cnpg-system-networkpolicy.yaml) | The CNPG operator to the plugin on 9090 |
 | `postgres-cluster` | [`apps/databases/databases-networkpolicy.yaml`](../apps/databases/databases-networkpolicy.yaml) | Instances to each other, OpenBao, Tekton Results and `core-test` on 5432; the CNPG operator on 8000 |
-| SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other; Postgres and `core-test` to S3 on `SEAWEEDFS_S3_PORT` |
+| SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other; Postgres, OpenBao and `core-test` to S3 on `SEAWEEDFS_S3_PORT` |
 | `remote-resolvers`, `results-api` | [`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443; the Results watcher to the Results API on 8080 |
 | `taskrun` | [`infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443 |
