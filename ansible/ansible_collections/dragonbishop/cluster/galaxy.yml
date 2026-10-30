@@ -1,6 +1,6 @@
 namespace: dragonbishop
 name: cluster
-version: 2.3.0
+version: 2.4.0
 readme: README.md
 authors:
   - DragonBishop

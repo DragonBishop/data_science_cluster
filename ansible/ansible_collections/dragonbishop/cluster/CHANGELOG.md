@@ -1,3 +1,20 @@
+## [2.4.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.3.0...v2.4.0) - 2026-10-30
+
+### 🚀 Features
+
+- *(openbao)* Remove the rotate-credentials CronJob ([388a208](https://github.com/DragonBishop/data_science_cluster/commit/388a20813eb9ff0117010b3c33b16d41e23632a6))
+- *(openbao)* Run the CSI provider and download the secrets-aws plugin ([d5ea03c](https://github.com/DragonBishop/data_science_cluster/commit/d5ea03c75c3535642599c7aeba972f9bd9f6a10a))
+- *(openbao)* Manage Barman's SeaweedFS key pairs and the CSI logins ([a26df4a](https://github.com/DragonBishop/data_science_cluster/commit/a26df4a28088fdb9c9a0a8995cfafaabfbd0078d))
+
+### 🐛 Bug Fixes
+
+- *(ansible)* Apply the baseline network policy before the workloads installed ahead of Flux ([2672397](https://github.com/DragonBishop/data_science_cluster/commit/2672397415d03055679f02d239ef222d940c64a5))
+- *(e2e)* Stabilize OpenBao PKI and Postgres verification ([660d4f6](https://github.com/DragonBishop/data_science_cluster/commit/660d4f6a863a3fdfabbf66fc91fd8cd8f98c3a7b))
+
+### 📚 Documentation
+
+- Describe login delivery through the Secrets Store CSI driver ([f81d08d](https://github.com/DragonBishop/data_science_cluster/commit/f81d08d298d1237f957487cc71aa1ee47d1d4dfe))
+
 ## [2.3.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.2.0...v2.3.0) - 2026-10-29
 
 ### 🚀 Features

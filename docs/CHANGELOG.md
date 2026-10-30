@@ -1,3 +1,29 @@
+## [2.4.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.3.0...v2.4.0) - 2026-10-30
+
+### 🚀 Features
+
+- *(preflight)* Print install and fix commands for missing tools and rules ([30af5de](https://github.com/DragonBishop/data_science_cluster/commit/30af5de08e6cb4d99701c0c43d83c85ba6422445))
+- *(openbao)* Remove the rotate-credentials CronJob ([388a208](https://github.com/DragonBishop/data_science_cluster/commit/388a20813eb9ff0117010b3c33b16d41e23632a6))
+- *(openbao)* Run the CSI provider and download the secrets-aws plugin ([d5ea03c](https://github.com/DragonBishop/data_science_cluster/commit/d5ea03c75c3535642599c7aeba972f9bd9f6a10a))
+- *(secrets-store-csi-driver)* Install the Secrets Store CSI driver ([9cdf5d6](https://github.com/DragonBishop/data_science_cluster/commit/9cdf5d64704bc0b8c505c356b19d8920b5bbd7de))
+- *(openbao)* Manage Barman's SeaweedFS key pairs and the CSI logins ([a26df4a](https://github.com/DragonBishop/data_science_cluster/commit/a26df4a28088fdb9c9a0a8995cfafaabfbd0078d))
+- *(barman-cloud)* Read Barman's S3 key pair through the CSI driver ([62dbd3e](https://github.com/DragonBishop/data_science_cluster/commit/62dbd3e7c5548e11b8d9c670eb59709bf4e29855))
+- *(tekton)* Read Results' database login through the CSI driver ([0a6ed83](https://github.com/DragonBishop/data_science_cluster/commit/0a6ed83168ab70186bfea372e739d98a7df04b2d))
+
+### 🐛 Bug Fixes
+
+- *(ansible)* Apply the baseline network policy before the workloads installed ahead of Flux ([2672397](https://github.com/DragonBishop/data_science_cluster/commit/2672397415d03055679f02d239ef222d940c64a5))
+- *(e2e)* Stabilize OpenBao PKI and Postgres verification ([660d4f6](https://github.com/DragonBishop/data_science_cluster/commit/660d4f6a863a3fdfabbf66fc91fd8cd8f98c3a7b))
+
+### 📚 Documentation
+
+- Document the in-agent Hubble CLI, preflight's install commands and GitHub App setup ([e8964cd](https://github.com/DragonBishop/data_science_cluster/commit/e8964cd49ecb130c693b681822241d6bacc5785f))
+- Describe login delivery through the Secrets Store CSI driver ([f81d08d](https://github.com/DragonBishop/data_science_cluster/commit/f81d08d298d1237f957487cc71aa1ee47d1d4dfe))
+
+### ♻️ Refactor
+
+- *(hubble)* Run the Hubble CLI inside the Cilium agent ([480f58d](https://github.com/DragonBishop/data_science_cluster/commit/480f58d43d6e563b8500b5d0e808fbcd280bc26f))
+
 ## [2.3.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.2.0...v2.3.0) - 2026-10-29
 
 ### 🚀 Features
@@ -7,6 +33,10 @@
 ### 🧪 Testing
 
 - *(opentofu)* Check the cert auth roles and the SPIRE server role ([ac1e54a](https://github.com/DragonBishop/data_science_cluster/commit/ac1e54a92e5b4a42908ee298e61394ee9ff00447))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(renovate)* Update README versions alongside their cluster-config pins (#72) ([e443a09](https://github.com/DragonBishop/data_science_cluster/commit/e443a09de9599c029f555d37ca6c10bab42dcd10))
 
 ## [2.2.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.1.0...v2.2.0) - 2026-10-28
 
