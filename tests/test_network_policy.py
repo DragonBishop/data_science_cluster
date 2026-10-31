@@ -20,6 +20,15 @@ def built_resource(directory: str, kind: str, name: str) -> dict:
     return matches[0]
 
 
+def test_baseline_preserves_host_access_without_a_global_gateway_grant():
+    policy = built_resource(
+        "infrastructure/cilium", "CiliumClusterwideNetworkPolicy", "cluster-default"
+    )
+    pod_rules = [rule for rule in policy["specs"] if rule["endpointSelector"] == {}]
+    assert len(pod_rules) == 1
+    assert pod_rules[0]["ingress"] == [{"fromEntities": ["host"]}]
+
+
 def test_gateway_namespace_selectors_admit_the_database_namespace():
     gateway = built_resource("infrastructure/gateway", "Gateway", "internal-gateway")
     namespace = built_resource("infrastructure/namespaces", "Namespace", "databases")

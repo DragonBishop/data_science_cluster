@@ -7,7 +7,7 @@
 The cluster baseline, `cluster-default` in [`infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml):
 
 1. Every pod starts closed.
-2. The node and the Gateway reach any pod.
+2. The node reaches any pod.
 3. Any pod reaches any other pod; the receiver decides.
 4. Any pod reaches the Kubernetes API.
 5. Any pod reaches CoreDNS.
@@ -16,6 +16,7 @@ The cluster baseline, `cluster-default` in [`infrastructure/cilium/cilium-cluste
 Everything else is opened by the component that needs it:
 
 * A pod accepts a call when its own policy names the caller and the port.
+* The Gateway reaches a backend when the receiver's policy allows `ingress` on its listening port.
 * A pod reaches an internet site when its own policy names the domain.
 * A pod reaches a host port when its own policy names the port.
 * A service is reached from the LAN through a Gateway route.
@@ -53,7 +54,7 @@ Each numbered comment in `cilium-clusterwide-networkpolicy.yaml` marks the rule 
 
 **1. Every pod starts closed.** The first entry selects every pod (`endpointSelector: {}`) and has both an `ingress` and an `egress` section. Rules 2 to 5 are the traffic it lets through.
 
-**2. The node and the Gateway reach any pod.** The `host` entity is the node. It carries kubelet probes, and on k3s the apiserver's webhook calls also come from the host. The `ingress` entity is Cilium's Envoy, which carries Gateway traffic to the pods a route names. A pod that fails its probes or rejects its own webhook is broken, and every pod needs this rule.
+**2. The node reaches any pod.** The `host` entity is the node. It carries kubelet probes, and on k3s the apiserver's webhook calls also come from the host. Every pod needs those infrastructure calls. Gateway traffic has the separate `ingress` identity and needs a receiver rule on the backend's listening port.
 
 **3. Any pod reaches any other pod; the receiver decides.** The receiving pod's policy decides whether the call lands. Ownership stays in one place: the pod that listens on a port declares who may use it.
 
@@ -67,7 +68,7 @@ Each numbered comment in `cilium-clusterwide-networkpolicy.yaml` marks the rule 
 flowchart LR
   LAN[LAN client] -->|listener ports| GW[Gateway]
   Node[Node: kubelet, apiserver] --> A
-  GW --> A[Pod A]
+  GW -->|"receiver permits ingress on its backend port"| A[Pod A]
   A -->|"allowed if B's rule names A"| B[Pod B]
   A -->|53| DNS[CoreDNS]
   A -->|API port| API[Kubernetes API]
@@ -188,7 +189,7 @@ ingress:
 
 Baseline rule 6 admits the LAN into the Gateway. Do not add public-listener port restrictions to that rule: Envoy's internal listener ports differ. Restrict the backend port in the receiver's policy instead. [Cilium documents these two policy enforcement points](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/#ciliums-ingress-config-and-ciliumnetworkpolicy); [Gateway API documents namespace selectors for route attachment](https://gateway-api.sigs.k8s.io/guides/user-guides/multiple-ns/).
 
-**Rollout:** the baseline still grants Gateway access to all pods. This first step installs the explicit receiver rule and restricts route attachment. After Flux has reconciled those changes, the next step removes `ingress` from baseline rule 2. The receiver's backend permission becomes the enforcement boundary at that point.
+The namespace label permits route attachment. The receiver's policy permits the actual backend connection. Both are required; an accepted route does not open an undeclared backend port.
 
 ```mermaid
 flowchart LR
