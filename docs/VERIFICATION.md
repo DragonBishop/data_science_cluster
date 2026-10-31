@@ -14,6 +14,7 @@
 * [Verify Gateway Routing](#verify-gateway-routing)
 * [Hubble Observability Access](#hubble-observability-access)
 * [Host Firewall Network Checks](#host-firewall-network-checks)
+* [Verify Certificate Issuance](#verify-certificate-issuance)
 * [Verify Cluster Health](#verify-cluster-health)
 * [Verify Database Backups](#verify-database-backups)
   * [Verify Scheduled Backups](#verify-scheduled-backups)
@@ -189,6 +190,15 @@ nc -vz -w 3 <NODE_LAN_IP> 4244
 ```
 
 Also check the allocated NodePorts (`kubectl get svc -A`) from that client. Cilium handles these paths in eBPF, so removing a firewalld port range alone does not establish that NodePorts are closed. Confirm every reachable NodePort serves an intended published service. Checks from the node itself cannot establish LAN isolation.
+
+## Verify Certificate Issuance
+
+```bash
+kubectl get clusterissuer openbao-pki-issuer
+kubectl get certificates -A
+```
+
+The issuer and its certificates should report `Ready=True`. Services and Hubble use the same `openbao-pki-issuer`. See [Certificate Policy](CERTIFICATEPOLICY.md) for the profile and CA ownership of each consumer.
 
 ## Verify Cluster Health
 
