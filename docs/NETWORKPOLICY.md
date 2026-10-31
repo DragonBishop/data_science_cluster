@@ -2,6 +2,8 @@
 
 ## The Rules
 
+**Start closed, allow shared infrastructure in the baseline, and let each component declare its additional connections.**
+
 **One policy for the cluster, one per namespace.** `cluster-default` is the one policy for the whole cluster. Every other rule belongs to one namespace, and lives in the policy file of the component that deploys into that namespace, beside its resources. No component writes policy into another component's namespace. A caller from another namespace, or from a module, gets its rule in the receiver's file, where it stays while the module is off.
 
 The cluster baseline, `cluster-default` in [`infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml):
@@ -50,7 +52,7 @@ Policies add up. A pod selected by three policies accepts the traffic any of the
 
 ## The Baseline
 
-Each numbered comment in `cilium-clusterwide-networkpolicy.yaml` marks the rule below with the same number.
+Each numbered comment in the [baseline manifest](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml) marks the rule below with the same number.
 
 **1. Every pod starts closed.** The first entry selects every pod (`endpointSelector: {}`) and has both an `ingress` and an `egress` section. Rules 2 to 5 are the traffic it lets through.
 
@@ -280,7 +282,7 @@ Reuse `databases-route.yaml` as the TCPRoute pattern. A different raw TCP servic
 hubble observe --verdict DROPPED -f
 ```
 
-Each line shows the source, the destination and the port of a dropped connection. A drop between two pods means the receiver needs a rule naming that caller. A drop to `world` means the sender needs an FQDN rule. [Troubleshooting](TROUBLESHOOTING.md) covers `toPorts` rules that don't match.
+Each line shows the source, destination and port of a dropped connection. First confirm the connection is required. For a pod-to-pod call, inspect the receiver's caller/port rule; for an internet call, inspect the sender's domain rule. Add only the required permission in the owning component's file. [Troubleshooting](TROUBLESHOOTING.md) covers `toPorts` rules that don't match.
 
 ## Bootstrap
 

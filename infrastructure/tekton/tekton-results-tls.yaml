@@ -1,4 +1,4 @@
-# Results API serving certificate; its ca.crt is the OpenBao PKI root that also signs Postgres
+# Results API serving certificate from OpenBao's service PKI
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
