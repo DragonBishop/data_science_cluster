@@ -1,3 +1,18 @@
+## [2.4.1](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.0...v2.4.1) - 2026-10-31
+
+### 🐛 Bug Fixes
+
+- Prevent CSI token expiry from revoking backup credentials (#76) ([f5b4047](https://github.com/DragonBishop/data_science_cluster/commit/f5b404781d73e3c1b920595f743a3bfba065b236))
+- *(cert-manager)* Restrict issuer token requests (#78) ([3debe69](https://github.com/DragonBishop/data_science_cluster/commit/3debe69da1425e09f1bd51b3febd0fa5e215828a))
+- *(firewall)* Narrow Fedora host exposure ([cb58a2d](https://github.com/DragonBishop/data_science_cluster/commit/cb58a2d0f2c56f5ed347d7b53656e08b3d12f7c5))
+- *(gateway)* Use cluster.internal for shared TLS ([098b9d7](https://github.com/DragonBishop/data_science_cluster/commit/098b9d74962afc847e71825d16d9eb6622ab3b75))
+- *(gateway)* Require namespace approval for routes ([77c4076](https://github.com/DragonBishop/data_science_cluster/commit/77c4076068c13e95dc8693d3e1195424bb0003b0))
+- *(network)* Require receiver permission for Gateway traffic ([049583d](https://github.com/DragonBishop/data_science_cluster/commit/049583d8617add85e437474316bf0b74d45e48a4))
+
+### ♻️ Refactor
+
+- *(tests)* Simplify cluster integration verification ([4dfd2e4](https://github.com/DragonBishop/data_science_cluster/commit/4dfd2e41d7dafaa51dc215434ec169c4ddf5b96a))
+
 ## [2.4.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.3.0...v2.4.0) - 2026-10-30
 
 ### 🚀 Features
