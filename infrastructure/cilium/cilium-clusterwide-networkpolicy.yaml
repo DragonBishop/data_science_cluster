@@ -7,10 +7,9 @@ specs:
   # 1. Every pod starts closed
   - endpointSelector: {}
     ingress:
-      # 2. Node and Gateway in
+      # 2. Node in: kubelet probes and k3s API webhooks
       - fromEntities:
           - host
-          - ingress
     egress:
       # 3. Any pod out; the receiver decides
       - toEndpoints:

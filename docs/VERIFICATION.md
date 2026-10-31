@@ -125,7 +125,24 @@ Test Gateway listener routing and edge certificate termination:
 
 Run it for any hostname with an HTTPRoute on the Gateway. Verify that the page responds and the certificate chains to `openbao-pki-issuer`'s CA (`internal-edge-cert`).
 
-Full-playbook verification also checks the shared edge certificate chain and application hostname with OpenSSL.
+For Gateway publication, inspect the approved namespaces and database route:
+
+```bash
+kubectl get namespace -l data-cluster/gateway-access=true
+kubectl get tcproute -n databases postgres-external -o yaml
+pg_isready -h <GATEWAY_IP> -p 5432 -t 5
+```
+
+The namespace list should include each namespace intended to publish routes. The database route should report `Accepted=True` and `ResolvedRefs=True`, and PostgreSQL should accept connections through the Gateway.
+
+Inspect the permissions on both sides of that connection:
+
+```bash
+kubectl get ciliumclusterwidenetworkpolicy cluster-default -o yaml
+kubectl get ciliumnetworkpolicy -n databases postgres-cluster -o yaml
+```
+
+In `cluster-default`, the ingress rule selecting all pods should allow `host`. The database receiver policy should allow the Gateway's `ingress` identity on TCP 5432. For another service, inspect its namespace's receiver policy and confirm the rule names its actual pod port.
 
 ---
 
@@ -143,7 +160,7 @@ Run these checks before changing the firewall and repeat them afterward. Compare
 
 | Path | Service check | Expected result |
 | --- | --- | --- |
-| Host to LAN DNS address | `dig @<COREDNS_LAN_IP> postgres.<INTERNAL_DOMAIN> A +short`, then repeat with `+tcp` | Both return `GATEWAY_IP` |
+| Host to LAN DNS address | `dig @<COREDNS_LAN_IP> databases.<INTERNAL_DOMAIN> A +short`, then repeat with `+tcp` | Both return `GATEWAY_IP` |
 | Host through Gateway to PostgreSQL | `pg_isready -h <GATEWAY_IP> -p 5432 -t 5` | Accepting connections; also repeat a normal authenticated database query using the existing client |
 | Host through HTTPS Gateway to a workload | `just gateway-check <existing-route-hostname>` | Valid TLS and the workload's expected response; requires an actual HTTPRoute |
 | Metrics-server pod to host kubelet | `kubectl top nodes` | Current metrics for the node |
@@ -171,19 +188,7 @@ nc -vz -w 3 <NODE_LAN_IP> 10250
 nc -vz -w 3 <NODE_LAN_IP> 4244
 ```
 
-Also check the allocated NodePorts (`kubectl get svc -A`) from that client. Cilium handles these paths in eBPF, so removing a firewalld port range alone does not establish that NodePorts are closed. Record any remaining exposure for the network-publication phase. Checks from the node itself cannot establish LAN isolation.
-
-For Gateway publication, confirm the approved namespace and existing database route after Flux reconciles:
-
-```bash
-kubectl get namespace -l data-cluster/gateway-access=true
-kubectl get tcproute -n databases postgres-external -o yaml
-pg_isready -h <GATEWAY_IP> -p 5432 -t 5
-```
-
-Only `databases` is currently approved. Its route should report `Accepted=True` and `ResolvedRefs=True`, and PostgreSQL should accept connections through the Gateway. Full-playbook verification uses `pg_isready` already installed in the primary database pod; no host PostgreSQL client is installed. OpenSSL verifies the shared edge certificate's chain and application hostname. A temporary route in an unapproved namespace must report `Accepted=False` with reason `NotAllowedByListeners` and is removed afterward. No extra workload is needed.
-
-The first publication change retains the baseline Gateway grant until the database receiver rule is live. It verifies namespace attachment and service continuity; it does not yet prove that an unpermitted backend is unreachable. Test that boundary when the global grant is removed in the following change.
+Also check the allocated NodePorts (`kubectl get svc -A`) from that client. Cilium handles these paths in eBPF, so removing a firewalld port range alone does not establish that NodePorts are closed. Confirm every reachable NodePort serves an intended published service. Checks from the node itself cannot establish LAN isolation.
 
 ## Verify Cluster Health
 
