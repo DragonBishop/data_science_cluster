@@ -8,6 +8,15 @@ spec:
     matchLabels:
       k8s-app: kube-dns
   ingress:
+    # LAN clients use the CoreDNS LoadBalancer directly
+    - fromCIDR:
+        - "${LAN_CIDR}"
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
     # Every pod resolves through CoreDNS
     - fromEndpoints:
         - matchExpressions:

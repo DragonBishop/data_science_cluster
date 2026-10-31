@@ -8,6 +8,13 @@ spec:
     matchLabels:
       cnpg.io/cluster: postgres-cluster
   ingress:
+    # Gateway publishes PostgreSQL through postgres-external
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
     # Replication and join between instances
     - fromEndpoints:
         - matchLabels:

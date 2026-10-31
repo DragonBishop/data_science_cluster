@@ -19,6 +19,7 @@ Everything else is opened by the component that needs it:
 * A pod reaches an internet site when its own policy names the domain.
 * A pod reaches a host port when its own policy names the port.
 * A service is reached from the LAN through a Gateway route.
+* CoreDNS accepts LAN DNS directly on 53/TCP and UDP.
 
 The rest of this page explains how these rules work and how to add to them.
 
@@ -167,17 +168,99 @@ flowchart LR
 
 ### The LAN reaches a service
 
-Add a Gateway route (`HTTPRoute` or `TCPRoute`) in the service's namespace. Baseline rule 6 already admits the LAN into the Gateway, and rule 2 admits the Gateway into pods.
+Publishing a service has three declarations:
+
+1. **Once per namespace:** label it `data-cluster/gateway-access: "true"` in `infrastructure/namespaces/namespaces.yaml`. The Gateway's listeners only accept routes from namespaces with that label. Every service in an approved namespace reuses that approval.
+2. Add a Gateway route (`HTTPRoute` or `TCPRoute`) in that namespace.
+3. Allow `fromEntities: [ingress]` on the backend's listening port in the receiver's policy.
+
+PostgreSQL declares its backend permission in `apps/databases/databases-networkpolicy.yaml`:
+
+```yaml
+ingress:
+  - fromEntities:
+      - ingress
+    toPorts:
+      - ports:
+          - port: "5432"
+            protocol: TCP
+```
+
+Baseline rule 6 admits the LAN into the Gateway. Do not add public-listener port restrictions to that rule: Envoy's internal listener ports differ. Restrict the backend port in the receiver's policy instead. [Cilium documents these two policy enforcement points](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/#ciliums-ingress-config-and-ciliumnetworkpolicy); [Gateway API documents namespace selectors for route attachment](https://gateway-api.sigs.k8s.io/guides/user-guides/multiple-ns/).
+
+**Rollout:** the baseline still grants Gateway access to all pods. This first step installs the explicit receiver rule and restricts route attachment. After Flux has reconciled those changes, the next step removes `ingress` from baseline rule 2. The receiver's backend permission becomes the enforcement boundary at that point.
 
 ```mermaid
 flowchart LR
   lan[LAN client] -->|"listener port, rule 6"| gw[Gateway]
-  gw -->|"the route, rule 2"| pods[The service's pods]
+  ns[Labelled namespace] -->|route attachment| gw
+  gw -->|"receiver's backend port"| pods[The service's pods]
 ```
+
+CoreDNS is the direct LAN exception. Its policy in `kube-system-networkpolicy.yaml` allows `LAN_CIDR` on 53/TCP and UDP, alongside pod DNS queries. Keep the existing DNS proxy and upstream resolver rules. This step leaves the DNS Service's traffic policy unchanged.
 
 ### Adding an HTTPS service
 
 Reuse the shared `https` listener on 443, its wildcard DNS, and its wildcard certificate. The configured domain is `cluster.internal`, so applications use names such as `example.cluster.internal` and the certificate covers `*.cluster.internal`. Adding a hostname under that wildcard needs no per-service edit to the Gateway, DNS, certificate, or host firewall.
+
+Suppose namespace `tools` has a Service named `example` on port 80, targeting pods labelled `app.kubernetes.io/name: example` on port 8080. Approve `tools` once in the namespace file:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tools
+  labels:
+    data-cluster/gateway-access: "true"
+```
+
+Add the route beside the workload and include it in the component's existing `kustomization.yaml`, like any other resource:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example
+  namespace: tools
+spec:
+  parentRefs:
+    - name: internal-gateway
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - "example.${INTERNAL_DOMAIN}"
+  rules:
+    - backendRefs:
+        - name: example
+          port: 80
+```
+
+In the namespace's existing network-policy file, add this permission to the workload's policy. Select only the receiving pods:
+
+```yaml
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: example
+  namespace: tools
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: example
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+```
+
+The route names the **Service port** (80); the receiver rule names the **pod port** (8080). Keep the route and backend in the same namespace. The component's Flux Kustomization must substitute cluster-config for `${INTERNAL_DOMAIN}`, as the existing components do. After reconciliation, run `just gateway-check example.<INTERNAL_DOMAIN>` with the configured domain.
+
+### Adding a raw TCP service
+
+Reuse `databases-route.yaml` as the TCPRoute pattern. A different raw TCP service needs its own Gateway listener and port; raw TCP does not select backends by HTTP hostname. Add that port to the explicit allowances in `setup-firewall.sh` and the corresponding checks in `preflight.sh`. Then add the route and receiver permission as above. Adding another HTTPS application uses the existing 443 listener.
 
 ## Conventions
 
@@ -207,13 +290,13 @@ Flux needs network access before it can deliver any policy, and so do the worklo
 | Policy | File | Allows |
 | --- | --- | --- |
 | `cluster-default` | [`infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml) | Baseline rules 1 to 6 |
-| `coredns` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | Every pod on 53; CoreDNS to upstream resolvers on 53 |
+| `coredns` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | LAN and every pod on 53; CoreDNS to upstream resolvers on 53 |
 | `metrics-server` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | metrics-server to the kubelet on 10250 |
 | `hubble-relay` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | Hubble Relay to the agent's Hubble server on 4244; Tekton runs to Relay on 4245 |
 | `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090; Flux to its source hosts on 443 |
 | `openbao` | [`infrastructure/openbao/openbao-networkpolicy.yaml`](../infrastructure/openbao/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200; OpenBao to the secrets-aws plugin's registry on 443 |
 | `plugin-barman-cloud` | [`apps/barman-cloud/cnpg-system-networkpolicy.yaml`](../apps/barman-cloud/cnpg-system-networkpolicy.yaml) | The CNPG operator to the plugin on 9090 |
-| `postgres-cluster` | [`apps/databases/databases-networkpolicy.yaml`](../apps/databases/databases-networkpolicy.yaml) | Instances to each other, OpenBao, Tekton Results and `core-test` on 5432; the CNPG operator on 8000 |
+| `postgres-cluster` | [`apps/databases/databases-networkpolicy.yaml`](../apps/databases/databases-networkpolicy.yaml) | Gateway, instances, OpenBao, Tekton Results and `core-test` on 5432; the CNPG operator on 8000 |
 | SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other; Postgres, OpenBao and `core-test` to S3 on `SEAWEEDFS_S3_PORT` |
 | `remote-resolvers`, `results-api` | [`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443; the Results watcher to the Results API on 8080 |
 | `taskrun` | [`infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443 |

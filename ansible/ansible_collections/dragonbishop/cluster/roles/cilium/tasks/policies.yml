@@ -23,7 +23,16 @@
     state: present
     definition: "{{ cilium_clusterwide_policy_substituted.stdout | from_yaml }}"
 
+- name: Substitute cluster-config values into the kube-system network policy
+  ansible.builtin.command:
+    cmd: flux envsubst --strict
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/kube-system-networkpolicy.yaml') }}"
+  environment:
+    LAN_CIDR: "{{ lan_cidr }}"
+  register: cilium_kube_system_policy_substituted
+  changed_when: false
+
 - name: Apply kube-system network policy
   kubernetes.core.k8s:
     state: present
-    src: "{{ repo_root }}/infrastructure/cilium/kube-system-networkpolicy.yaml"
+    definition: "{{ cilium_kube_system_policy_substituted.stdout | from_yaml_all | list }}"
