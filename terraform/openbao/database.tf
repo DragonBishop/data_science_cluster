@@ -11,7 +11,7 @@ resource "vault_database_secret_backend_connection" "postgres_cluster" {
   verify_connection = false
 
   postgresql {
-    connection_url      = "postgresql://{{username}}:{{password}}@postgres-cluster-rw.databases.svc.cluster.local:5432/postgres?sslmode=require"
+    connection_url      = "postgresql://{{username}}:{{password}}@postgres-cluster-rw.databases.svc.cluster.local:5432/postgres?sslmode=verify-full&sslrootcert=/openbao/userconfig/postgres-ca/ca.crt"
     username            = "postgres"
     password_wo         = var.postgres_superuser_password
     password_wo_version = var.secrets_wo_version

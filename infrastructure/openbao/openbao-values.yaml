@@ -23,15 +23,22 @@ server:
     - type: secret
       name: openbao-server-cert
 
-  # The secrets-aws plugin verifies SeaweedFS's S3 certificate against the OpenBao root CA
+  # Public CA bundles for SeaweedFS S3 and PostgreSQL connections
   volumes:
     - name: openbao-root-ca
       configMap:
         name: openbao-root-ca
         optional: true
+    - name: postgres-ca
+      configMap:
+        name: postgres-ca
+        optional: true
   volumeMounts:
     - name: openbao-root-ca
       mountPath: /openbao/userconfig/openbao-root-ca
+      readOnly: true
+    - name: postgres-ca
+      mountPath: /openbao/userconfig/postgres-ca
       readOnly: true
 
   dataStorage:
