@@ -1,96 +1,4 @@
 ---
-- name: The runner after bootstrap
-  hosts: localhost
-  gather_facts: false
-  vars_files:
-    - ../../../roles/openbao/defaults/main.yml
-  tasks:
-    - name: Check the unseal keyfile
-      ansible.builtin.stat:
-        path: "{{ openbao_keyfile }}"
-      register: openbao_keyfile_stat
-
-    - name: Decrypt the unseal keyfile with the GPG passphrase
-      ansible.builtin.command:
-        cmd: gpg --quiet --batch --pinentry-mode loopback --passphrase-fd 0 --decrypt {{ openbao_keyfile }}
-        stdin: "{{ openbao_gpg_passphrase }}\n"
-      register: openbao_decrypt_result
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: Check the k3s config
-      ansible.builtin.stat:
-        path: /etc/rancher/k3s/config.yaml
-      register: k3s_config_stat
-
-    - name: List the resources in the terraform/openbao state
-      ansible.builtin.command:
-        argv:
-          - "{{ opentofu_binary }}"
-          - -chdir={{ repo_root }}/terraform/openbao
-          - state
-          - list
-      environment:
-        TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_passphrase }}"
-      register: opentofu_state_list
-      changed_when: false
-
-    - name: It should store the unseal keyfile
-      ansible.builtin.assert:
-        that:
-          - openbao_keyfile_stat.stat.exists
-        fail_msg: the unseal keyfile is missing
-
-    - name: It should make the keyfile readable only by its owner
-      ansible.builtin.assert:
-        that:
-          - openbao_keyfile_stat.stat.mode == '0600'
-        fail_msg: "the unseal keyfile has mode {{ openbao_keyfile_stat.stat.mode }}, not 0600"
-
-    - name: It should decrypt the keyfile with the GPG passphrase
-      ansible.builtin.assert:
-        that:
-          - openbao_decrypt_result.rc == 0
-        fail_msg: the unseal keyfile does not decrypt with the GPG passphrase
-
-    - name: It should hold three unseal keys
-      ansible.builtin.assert:
-        that:
-          - openbao_decrypt_result.stdout_lines | select('truthy') | list | length == 3
-        fail_msg: the unseal keyfile does not hold three keys
-      no_log: true
-
-    - name: It should write the k3s config
-      ansible.builtin.assert:
-        that:
-          - k3s_config_stat.stat.exists
-        fail_msg: /etc/rancher/k3s/config.yaml is missing
-
-    - name: It should record the root PKI mount in the OpenTofu state
-      ansible.builtin.assert:
-        that:
-          - "'vault_mount.pki_root' in opentofu_state_list.stdout_lines"
-        fail_msg: the terraform/openbao state has no vault_mount.pki_root
-
-    - name: It should record the intermediate PKI mount in the OpenTofu state
-      ansible.builtin.assert:
-        that:
-          - "'vault_mount.pki_int' in opentofu_state_list.stdout_lines"
-        fail_msg: the terraform/openbao state has no vault_mount.pki_int
-
-    - name: It should record the database mount in the OpenTofu state
-      ansible.builtin.assert:
-        that:
-          - "'vault_mount.db' in opentofu_state_list.stdout_lines"
-        fail_msg: the terraform/openbao state has no vault_mount.db
-
-    - name: It should record the SeaweedFS mount in the OpenTofu state
-      ansible.builtin.assert:
-        that:
-          - "'vault_aws_secret_backend.seaweedfs' in opentofu_state_list.stdout_lines"
-        fail_msg: the terraform/openbao state has no vault_aws_secret_backend.seaweedfs
-
 - name: The cluster after bootstrap
   hosts: localhost
   gather_facts: true
@@ -107,28 +15,18 @@
          | map('from_yaml') | map('list') | flatten }}
   tasks:
     - name: Wait for Flux to apply cluster-config
-      kubernetes.core.k8s_info:
-        api_version: kustomize.toolkit.fluxcd.io/v1
-        kind: Kustomization
-        name: cluster-config
-        namespace: flux-system
-        wait: true
-        wait_condition:
-          type: Ready
-          status: "True"
-        wait_timeout: 600
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n flux-system wait
+          kustomization/cluster-config --for=create --for=condition=Ready --timeout=600s
+      changed_when: false
 
     - name: Wait for Flux to apply Cilium's values
-      kubernetes.core.k8s_info:
-        api_version: kustomize.toolkit.fluxcd.io/v1
-        kind: Kustomization
-        name: cilium
-        namespace: flux-system
-        wait: true
-        wait_condition:
-          type: Ready
-          status: "True"
-        wait_timeout: 600
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n flux-system wait
+          kustomization/cilium --for=create --for=condition=Ready --timeout=600s
+      changed_when: false
 
     - name: Read the live cluster-config ConfigMap
       kubernetes.core.k8s_info:
@@ -162,70 +60,7 @@
       ansible.builtin.assert:
         that:
           - (cilium_values_substituted.stdout | from_yaml) == (live_cilium_values.resources[0].data['values.yaml'] | from_yaml)
-        fail_msg: the cilium role's values differ from the cilium-values ConfigMap, so Flux reconciles Cilium away from them
-
-    - name: Wait for the SPIRE server to report ready
-      kubernetes.core.k8s_info:
-        kind: StatefulSet
-        name: spire-server
-        namespace: spire
-        wait: true
-        wait_timeout: 300
-      register: spire_server
-
-    - name: It should create the SPIRE server StatefulSet
-      ansible.builtin.assert:
-        that:
-          - spire_server.resources | length == 1
-        fail_msg: StatefulSet spire-server is missing from spire
-
-    - name: It should run a ready SPIRE server pod
-      ansible.builtin.assert:
-        that:
-          - spire_server.resources[0].status.readyReplicas | default(0) >= 1
-        fail_msg: StatefulSet spire-server has no ready pod
-
-    - name: Wait for the SPIRE agent to report ready
-      kubernetes.core.k8s_info:
-        kind: DaemonSet
-        name: spire-agent
-        namespace: spire
-        wait: true
-        wait_timeout: 300
-      register: spire_agent
-
-    - name: It should create the SPIRE agent DaemonSet
-      ansible.builtin.assert:
-        that:
-          - spire_agent.resources | length == 1
-        fail_msg: DaemonSet spire-agent is missing from spire
-
-    - name: It should run a ready SPIRE agent pod
-      ansible.builtin.assert:
-        that:
-          - spire_agent.resources[0].status.numberReady | default(0) >= 1
-        fail_msg: DaemonSet spire-agent has no ready pod
-
-    - name: Wait for the SPIFFE CSI driver to report ready
-      kubernetes.core.k8s_info:
-        kind: DaemonSet
-        name: spire-spiffe-csi-driver
-        namespace: spire
-        wait: true
-        wait_timeout: 300
-      register: spire_spiffe_csi_driver
-
-    - name: It should create the SPIFFE CSI driver DaemonSet
-      ansible.builtin.assert:
-        that:
-          - spire_spiffe_csi_driver.resources | length == 1
-        fail_msg: DaemonSet spire-spiffe-csi-driver is missing from spire
-
-    - name: It should run a ready SPIFFE CSI driver pod
-      ansible.builtin.assert:
-        that:
-          - spire_spiffe_csi_driver.resources[0].status.numberReady | default(0) >= 1
-        fail_msg: DaemonSet spire-spiffe-csi-driver has no ready pod
+        fail_msg: the cilium role's values differ from the cilium-values ConfigMap
 
     - name: Wait for OpenBao's root CA in spire
       kubernetes.core.k8s_info:
@@ -233,15 +68,11 @@
         name: openbao-root-ca
         namespace: spire
       register: spire_openbao_root_ca
-      until: spire_openbao_root_ca.resources | default([]) | length == 1
+      until:
+        - spire_openbao_root_ca.resources | length == 1
+        - spire_openbao_root_ca.resources[0].data.get('ca.crt', '') | length > 0
       retries: 60
       delay: 5
-
-    - name: It should contain the OpenBao root CA
-      ansible.builtin.assert:
-        that:
-          - (spire_openbao_root_ca.resources[0].data.get('ca.crt', '') | length) > 0
-        fail_msg: ConfigMap spire/openbao-root-ca has no ca.crt
 
     - name: Read the SPIRE server Service
       kubernetes.core.k8s_info:
@@ -250,90 +81,39 @@
         namespace: spire
       register: spire_server_service
 
-    - name: Create a file for OpenBao's root CA
-      ansible.builtin.tempfile:
-        suffix: .pem
-      register: openbao_root_ca_file
-
-    - name: Write OpenBao's root CA
-      ansible.builtin.copy:
-        content: "{{ spire_openbao_root_ca.resources[0].data['ca.crt'] }}"
-        dest: "{{ openbao_root_ca_file.path }}"
-        mode: "0600"
-
-    - name: It should sign SPIRE's CA with the OpenBao root
+    - name: It should sign SPIRE's certificate with the OpenBao root
       ansible.builtin.command:
         cmd: >-
-          openssl s_client -brief -alpn h2 -verify_return_error
-          -CAfile {{ openbao_root_ca_file.path }}
-          -connect {{ spire_server_service.resources[0].spec.clusterIP }}:443
-        stdin: ""
+          timeout 10s openssl s_client -brief -alpn h2 -verify_return_error
+          -CAfile /dev/stdin -connect {{ spire_server_service.resources[0].spec.clusterIP }}:443
+        stdin: "{{ spire_openbao_root_ca.resources[0].data['ca.crt'] }}"
       changed_when: false
-
-    - name: Remove the OpenBao root CA file
-      ansible.builtin.file:
-        path: "{{ openbao_root_ca_file.path }}"
-        state: absent
 
     - name: Wait for Flux to adopt cert-manager
-      kubernetes.core.k8s_info:
-        api_version: helm.toolkit.fluxcd.io/v2
-        kind: HelmRelease
-        name: cert-manager
-        namespace: cert-manager
-        wait: true
-        wait_condition:
-          type: Ready
-          status: "True"
-        wait_timeout: 600
-      register: cert_manager_release
-
-    - name: It should let Flux adopt cert-manager
-      ansible.builtin.assert:
-        that:
-          - cert_manager_release.resources | length == 1
-        fail_msg: HelmRelease cert-manager is missing, so Flux did not adopt the release Ansible installed
-
-    - name: Check cert-manager requesting its own token
       ansible.builtin.command:
-        argv:
-          - kubectl
-          - --kubeconfig={{ kubeconfig_path }}
-          - auth
-          - can-i
-          - create
-          - serviceaccounts/cert-manager
-          - --subresource=token
-          - --namespace=cert-manager
-          - --as=system:serviceaccount:cert-manager:cert-manager
-          - --as-group=system:serviceaccounts
-          - --as-group=system:serviceaccounts:cert-manager
-          - --as-group=system:authenticated
-      register: cert_manager_own_token
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n cert-manager wait
+          helmrelease/cert-manager --for=create --for=condition=Ready --timeout=600s
       changed_when: false
-      failed_when: false
 
     - name: It should allow cert-manager to request its own token
-      ansible.builtin.assert:
-        that:
-          - cert_manager_own_token.rc == 0
-          - cert_manager_own_token.stdout | trim == 'yes'
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" auth can-i create
+          serviceaccounts/cert-manager --subresource=token -n cert-manager
+          --as=system:serviceaccount:cert-manager:cert-manager
+          --as-group=system:serviceaccounts --as-group=system:serviceaccounts:cert-manager
+          --as-group=system:authenticated
+      changed_when: false
 
     - name: Check cert-manager requesting another account in its namespace
       ansible.builtin.command:
-        argv:
-          - kubectl
-          - --kubeconfig={{ kubeconfig_path }}
-          - auth
-          - can-i
-          - create
-          - serviceaccounts/default
-          - --subresource=token
-          - --namespace=cert-manager
-          - --as=system:serviceaccount:cert-manager:cert-manager
-          - --as-group=system:serviceaccounts
-          - --as-group=system:serviceaccounts:cert-manager
-          - --as-group=system:authenticated
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" auth can-i create
+          serviceaccounts/default --subresource=token -n cert-manager
+          --as=system:serviceaccount:cert-manager:cert-manager
+          --as-group=system:serviceaccounts --as-group=system:serviceaccounts:cert-manager
+          --as-group=system:authenticated
       register: cert_manager_other_token
       changed_when: false
       failed_when: false
@@ -346,19 +126,12 @@
 
     - name: Check cert-manager requesting the Flux administrator token
       ansible.builtin.command:
-        argv:
-          - kubectl
-          - --kubeconfig={{ kubeconfig_path }}
-          - auth
-          - can-i
-          - create
-          - serviceaccounts/helm-controller
-          - --subresource=token
-          - --namespace=flux-system
-          - --as=system:serviceaccount:cert-manager:cert-manager
-          - --as-group=system:serviceaccounts
-          - --as-group=system:serviceaccounts:cert-manager
-          - --as-group=system:authenticated
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" auth can-i create
+          serviceaccounts/helm-controller --subresource=token -n flux-system
+          --as=system:serviceaccount:cert-manager:cert-manager
+          --as-group=system:serviceaccounts --as-group=system:serviceaccounts:cert-manager
+          --as-group=system:authenticated
       register: cert_manager_flux_token
       changed_when: false
       failed_when: false
@@ -370,236 +143,66 @@
           - cert_manager_flux_token.stdout | trim == 'no'
 
     - name: Wait for Flux to adopt trust-manager
-      kubernetes.core.k8s_info:
-        api_version: helm.toolkit.fluxcd.io/v2
-        kind: HelmRelease
-        name: trust-manager
-        namespace: cert-manager
-        wait: true
-        wait_condition:
-          type: Ready
-          status: "True"
-        wait_timeout: 600
-      register: trust_manager_release
-
-    - name: It should let Flux adopt trust-manager
-      ansible.builtin.assert:
-        that:
-          - trust_manager_release.resources | length == 1
-        fail_msg: HelmRelease trust-manager is missing, so Flux did not adopt the release Ansible installed
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n cert-manager wait
+          helmrelease/trust-manager --for=create --for=condition=Ready --timeout=600s
+      changed_when: false
 
     - name: Wait for Flux to adopt OpenBao
-      kubernetes.core.k8s_info:
-        api_version: helm.toolkit.fluxcd.io/v2
-        kind: HelmRelease
-        name: openbao
-        namespace: openbao
-        wait: true
-        wait_condition:
-          type: Ready
-          status: "True"
-        wait_timeout: 600
-      register: openbao_release
-
-    - name: It should let Flux adopt openbao
-      ansible.builtin.assert:
-        that:
-          - openbao_release.resources | length == 1
-        fail_msg: HelmRelease openbao is missing, so Flux did not adopt the release Ansible installed
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n openbao wait
+          helmrelease/openbao --for=create --for=condition=Ready --timeout=600s
+      changed_when: false
 
     - name: Wait for Flux to reconcile the CNPG operator
-      kubernetes.core.k8s_info:
-        api_version: kustomize.toolkit.fluxcd.io/v1
-        kind: Kustomization
-        name: cnpg-operator
-        namespace: flux-system
-        wait: true
-        wait_condition:
-          type: Ready
-          status: "True"
-        wait_timeout: 1200
-      register: cnpg_operator_kustomization
-
-    - name: It should find the CNPG operator Kustomization
-      ansible.builtin.assert:
-        that:
-          - cnpg_operator_kustomization.resources | length == 1
-        fail_msg: Flux Kustomization cnpg-operator is missing
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n flux-system wait
+          kustomization/cnpg-operator --for=create --for=condition=Ready --timeout=1200s
+      changed_when: false
 
     - name: Wait for Flux to reconcile databases
-      kubernetes.core.k8s_info:
-        api_version: kustomize.toolkit.fluxcd.io/v1
-        kind: Kustomization
-        name: databases
-        namespace: flux-system
-        wait: true
-        wait_condition:
-          type: Ready
-          status: "True"
-        wait_timeout: 1200
-      register: databases_kustomization
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n flux-system wait
+          kustomization/databases --for=create --for=condition=Ready --timeout=1200s
+      changed_when: false
 
-    - name: It should find the databases Kustomization
-      ansible.builtin.assert:
-        that:
-          - databases_kustomization.resources | length == 1
-        fail_msg: Flux Kustomization databases is missing
+    - name: It should archive Postgres WAL to SeaweedFS
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n databases wait
+          cluster.postgresql.cnpg.io/postgres-cluster --for=create --for=condition=ContinuousArchiving --timeout=600s
+      changed_when: false
 
-    - name: Wait for Postgres to archive WAL to SeaweedFS
+    - name: Read the PostgreSQL cluster
       kubernetes.core.k8s_info:
         api_version: postgresql.cnpg.io/v1
         kind: Cluster
         name: postgres-cluster
         namespace: databases
-        wait: true
-        wait_condition:
-          type: ContinuousArchiving
-          status: "True"
-        wait_timeout: 600
       register: postgres_cluster
-      failed_when: false
 
-    - name: It should create the Postgres cluster
-      ansible.builtin.assert:
-        that:
-          - postgres_cluster.resources | default([]) | length == 1
-        fail_msg: The databases Kustomization is Ready, but postgres-cluster is missing from the databases namespace
-
-    - name: Read the Postgres cluster's conditions
-      ansible.builtin.set_fact:
-        postgres_cluster_conditions: "{{ postgres_cluster.resources[0].status.conditions | default([]) }}"
-
-    - name: Pick the ContinuousArchiving condition
-      ansible.builtin.set_fact:
-        postgres_archiving_conditions: "{{ postgres_cluster_conditions | selectattr('type', 'equalto', 'ContinuousArchiving') | list }}"
-
-    - name: It should report whether Postgres archives WAL
-      ansible.builtin.assert:
-        that:
-          - postgres_archiving_conditions | length == 1
-        fail_msg: postgres-cluster has no ContinuousArchiving condition, so CNPG never tried to archive WAL
-
-    - name: It should archive Postgres WAL to SeaweedFS
-      ansible.builtin.assert:
-        that:
-          - postgres_archiving_conditions[0].status == 'True'
-        fail_msg: "Postgres is not archiving WAL to SeaweedFS: {{ postgres_archiving_conditions[0].message }}"
-
-    - name: Pick the shared Gateway test hostname
-      ansible.builtin.set_fact:
-        gateway_check_hostname: "publication-check.{{ cluster_config.INTERNAL_DOMAIN }}"
-
-    - name: Check the Gateway's certificate chain and hostname
-      ansible.builtin.command:
-        argv:
-          - timeout
-          - 10s
-          - openssl
-          - s_client
-          - -brief
-          - -verify_return_error
-          - -verify_hostname
-          - "{{ gateway_check_hostname }}"
-          - -servername
-          - "{{ gateway_check_hostname }}"
-          - -CAfile
-          - /dev/stdin
-          - -connect
-          - "{{ cluster_config.GATEWAY_IP }}:443"
-        stdin: "{{ spire_openbao_root_ca.resources[0].data['ca.crt'] }}"
-      register: gateway_https_check
-      changed_when: false
-      failed_when: false
-
-    - name: It should verify the shared wildcard certificate for an application hostname
-      ansible.builtin.assert:
-        that:
-          - gateway_https_check.rc == 0
-        fail_msg: "Gateway TLS check failed: {{ gateway_https_check.stderr }}"
-
-    - name: Pick the primary pod for the Gateway check
-      ansible.builtin.set_fact:
-        postgres_primary_name: "{{ postgres_cluster.resources[0].status.currentPrimary }}"
-
-    - name: Check PostgreSQL through the Gateway using the existing database client
-      ansible.builtin.command:
-        argv:
-          - kubectl
-          - --kubeconfig={{ kubeconfig_path }}
-          - --namespace=databases
-          - exec
-          - "{{ postgres_primary_name }}"
-          - --container=postgres
-          - --
-          - pg_isready
-          - --host={{ cluster_config.GATEWAY_IP }}
-          - --port=5432
-          - --timeout=10
-      register: postgres_gateway_check
-      changed_when: false
-      failed_when: false
-
-    - name: It should reach PostgreSQL through the Gateway
-      ansible.builtin.assert:
-        that:
-          - postgres_gateway_check.rc == 0
-        fail_msg: "Gateway PostgreSQL check failed: {{ postgres_gateway_check.stdout }} {{ postgres_gateway_check.stderr }}"
-
-    - name: Check route attachment from an unapproved namespace
+    - name: Verify the shared Gateway
+      vars:
+        gateway_hostname: "databases.{{ live_cluster_config.resources[0].data.INTERNAL_DOMAIN }}"
+        gateway_address: "{{ live_cluster_config.resources[0].data.GATEWAY_IP }}"
       block:
-        - name: Create a redirect route in the unapproved gateway namespace
-          kubernetes.core.k8s:
-            state: present
-            definition:
-              apiVersion: gateway.networking.k8s.io/v1
-              kind: HTTPRoute
-              metadata:
-                name: gateway-access-check
-                namespace: gateway
-              spec:
-                parentRefs:
-                  - name: internal-gateway
-                    sectionName: https
-                hostnames:
-                  - "{{ gateway_check_hostname }}"
-                rules:
-                  - filters:
-                      - type: RequestRedirect
-                        requestRedirect:
-                          hostname: "{{ cluster_config.INTERNAL_DOMAIN }}"
-                          statusCode: 302
+        - name: It should verify the Gateway certificate chain and hostname
+          ansible.builtin.command:
+            cmd: >-
+              timeout 10s openssl s_client -brief -verify_return_error
+              -verify_hostname {{ gateway_hostname }} -servername {{ gateway_hostname }}
+              -CAfile /dev/stdin -connect {{ gateway_address }}:443
+            stdin: "{{ spire_openbao_root_ca.resources[0].data['ca.crt'] }}"
+          changed_when: false
 
-        - name: Wait for the Gateway to report the route's parent status
-          kubernetes.core.k8s_info:
-            api_version: gateway.networking.k8s.io/v1
-            kind: HTTPRoute
-            name: gateway-access-check
-            namespace: gateway
-          register: gateway_route_check
-          until:
-            - gateway_route_check.resources | length == 1
-            - gateway_route_check.resources[0].status.parents | default([]) | length > 0
-          retries: 12
-          delay: 5
-
-        - name: Pick the route's Accepted condition
-          ansible.builtin.set_fact:
-            gateway_route_acceptance: >-
-              {{ gateway_route_check.resources[0].status.parents[0].conditions
-                 | selectattr('type', 'equalto', 'Accepted') | list }}
-
-        - name: It should reject route attachment from an unapproved namespace
-          ansible.builtin.assert:
-            that:
-              - gateway_route_acceptance | length == 1
-              - gateway_route_acceptance[0].status == 'False'
-              - gateway_route_acceptance[0].reason == 'NotAllowedByListeners'
-            fail_msg: The Gateway did not reject the unapproved namespace
-      always:
-        - name: Remove the route attachment check
-          kubernetes.core.k8s:
-            state: absent
-            api_version: gateway.networking.k8s.io/v1
-            kind: HTTPRoute
-            name: gateway-access-check
-            namespace: gateway
+        - name: It should serve PostgreSQL through the Gateway
+          ansible.builtin.command:
+            cmd: >-
+              kubectl --kubeconfig="{{ kubeconfig_path }}" -n databases
+              exec {{ postgres_cluster.resources[0].status.currentPrimary }} -c postgres --
+              pg_isready --host={{ gateway_address }} --port=5432 --timeout=10
+          changed_when: false

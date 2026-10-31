@@ -1,34 +1,51 @@
-"""Network policies follow the rules in docs/NETWORKPOLICY.md."""
+"""Rendered network configuration preserves the publication boundaries."""
 
-# Scaffold: pseudocode for each test, to be written. Reuse REPO_ROOT and the
-# yaml.safe_load_all pattern from test_cluster_config_drift.py.
-#
-# gather every network policy in infrastructure/ and apps/
-#   (kind CiliumNetworkPolicy or CiliumClusterwideNetworkPolicy)
-# for each policy, list its rules: each ingress and egress entry,
-#   with its "who" part (entities, endpoints, CIDRs, domain names) and its "which ports" part
-#
-# test: every rule outside the baseline names its ports                  (Opening a Path)
-#   baseline file = infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml
-#   for each policy in any other file, for each rule:
-#     expect it to list ports
-#
-# test: baseline rules that reach the host or the API server name their ports   (Baseline 4)
-#   for each outgoing rule in the baseline file whose "who" includes host or kube-apiserver:
-#     expect it to list ports (6443 for the API)
-#
-# test: no rule opens the whole cluster at once                          (Baseline 3)
-#   for each rule:
-#     expect its "who" not to include the cluster entity
-#
-# test: the internet opens by domain name                                (Opening a Path)
-#   for each outgoing rule whose "who" includes world:
-#     expect it to be the CoreDNS upstream rule (port 53)
-#   (domain-name lists are fine anywhere)
-#
-# test: pods accept outside traffic only through the Gateway             (Baseline 6)
-#   for each namespaced policy, for each incoming rule:
-#     expect it not to come from world or from a CIDR range
-#
-# Sanity check while writing: these fail against the manifests before the
-# network-policy rewrite and pass after it.
+import yaml
+
+from tests.test_cluster_config_drift import REPO_ROOT, run_command
+
+
+def built_resource(directory: str, kind: str, name: str) -> dict:
+    documents = yaml.safe_load_all(
+        run_command(["kubectl", "kustomize", str(REPO_ROOT / directory)])
+    )
+    matches = [
+        document
+        for document in documents
+        if document
+        and document["kind"] == kind
+        and document["metadata"]["name"] == name
+    ]
+    assert len(matches) == 1, f"expected one {kind}/{name} in {directory}"
+    return matches[0]
+
+
+def test_gateway_namespace_selectors_admit_the_database_namespace():
+    gateway = built_resource("infrastructure/gateway", "Gateway", "internal-gateway")
+    namespace = built_resource("infrastructure/namespaces", "Namespace", "databases")
+    for listener in gateway["spec"]["listeners"]:
+        namespace_rule = listener["allowedRoutes"]["namespaces"]
+        assert namespace_rule["from"] == "Selector"
+        required_labels = namespace_rule["selector"]["matchLabels"]
+        assert required_labels
+        for label_name, expected_setting in required_labels.items():
+            assert namespace["metadata"]["labels"].get(label_name) == expected_setting
+
+
+def test_database_gateway_permission_matches_the_published_port():
+    route = built_resource("apps/databases", "TCPRoute", "postgres-external")
+    policy = built_resource("apps/databases", "CiliumNetworkPolicy", "postgres-cluster")
+    backend_port = route["spec"]["rules"][0]["backendRefs"][0]["port"]
+    gateway_rules = [
+        rule
+        for rule in policy["spec"]["ingress"]
+        if "ingress" in rule.get("fromEntities", [])
+    ]
+    assert len(gateway_rules) == 1
+    assert gateway_rules[0]["fromEntities"] == ["ingress"]
+    permitted_ports = {
+        (port["port"], port["protocol"])
+        for port_group in gateway_rules[0]["toPorts"]
+        for port in port_group["ports"]
+    }
+    assert permitted_ports == {(str(backend_port), "TCP")}
