@@ -19,6 +19,8 @@ metadata:
   name: databases
   labels:
     data-cluster/ca-bundles: "true"
+    # Approve routes from this namespace once; each backend owns its port rule.
+    data-cluster/gateway-access: "true"
 ---
 apiVersion: v1
 kind: Namespace

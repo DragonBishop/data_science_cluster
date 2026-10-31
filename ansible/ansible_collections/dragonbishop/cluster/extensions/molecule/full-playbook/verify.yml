@@ -407,32 +407,43 @@
           - openbao_release.resources | length == 1
         fail_msg: HelmRelease openbao is missing, so Flux did not adopt the release Ansible installed
 
-    - name: Wait for Flux to reconcile Postgres prerequisites
+    - name: Wait for Flux to reconcile the CNPG operator
       kubernetes.core.k8s_info:
         api_version: kustomize.toolkit.fluxcd.io/v1
         kind: Kustomization
-        name: "{{ item }}"
+        name: cnpg-operator
         namespace: flux-system
         wait: true
         wait_condition:
           type: Ready
           status: "True"
         wait_timeout: 1200
-      register: postgres_kustomizations
-      loop:
-        - cnpg-operator
-        - databases
-      loop_control:
-        label: "{{ item }}"
+      register: cnpg_operator_kustomization
 
-    - name: It should find the Postgres prerequisite Kustomizations
+    - name: It should find the CNPG operator Kustomization
       ansible.builtin.assert:
         that:
-          - item.resources | length == 1
-        fail_msg: "Flux Kustomization {{ item.item }} is missing"
-      loop: "{{ postgres_kustomizations.results }}"
-      loop_control:
-        label: "{{ item.item }}"
+          - cnpg_operator_kustomization.resources | length == 1
+        fail_msg: Flux Kustomization cnpg-operator is missing
+
+    - name: Wait for Flux to reconcile databases
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        name: databases
+        namespace: flux-system
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 1200
+      register: databases_kustomization
+
+    - name: It should find the databases Kustomization
+      ansible.builtin.assert:
+        that:
+          - databases_kustomization.resources | length == 1
+        fail_msg: Flux Kustomization databases is missing
 
     - name: Wait for Postgres to archive WAL to SeaweedFS
       kubernetes.core.k8s_info:
@@ -505,3 +516,90 @@
         that:
           - gateway_https_check.rc == 0
         fail_msg: "Gateway TLS check failed: {{ gateway_https_check.stderr }}"
+
+    - name: Pick the primary pod for the Gateway check
+      ansible.builtin.set_fact:
+        postgres_primary_name: "{{ postgres_cluster.resources[0].status.currentPrimary }}"
+
+    - name: Check PostgreSQL through the Gateway using the existing database client
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig={{ kubeconfig_path }}
+          - --namespace=databases
+          - exec
+          - "{{ postgres_primary_name }}"
+          - --container=postgres
+          - --
+          - pg_isready
+          - --host={{ cluster_config.GATEWAY_IP }}
+          - --port=5432
+          - --timeout=10
+      register: postgres_gateway_check
+      changed_when: false
+      failed_when: false
+
+    - name: It should reach PostgreSQL through the Gateway
+      ansible.builtin.assert:
+        that:
+          - postgres_gateway_check.rc == 0
+        fail_msg: "Gateway PostgreSQL check failed: {{ postgres_gateway_check.stdout }} {{ postgres_gateway_check.stderr }}"
+
+    - name: Check route attachment from an unapproved namespace
+      block:
+        - name: Create a redirect route in the unapproved gateway namespace
+          kubernetes.core.k8s:
+            state: present
+            definition:
+              apiVersion: gateway.networking.k8s.io/v1
+              kind: HTTPRoute
+              metadata:
+                name: gateway-access-check
+                namespace: gateway
+              spec:
+                parentRefs:
+                  - name: internal-gateway
+                    sectionName: https
+                hostnames:
+                  - "{{ gateway_check_hostname }}"
+                rules:
+                  - filters:
+                      - type: RequestRedirect
+                        requestRedirect:
+                          hostname: "{{ cluster_config.INTERNAL_DOMAIN }}"
+                          statusCode: 302
+
+        - name: Wait for the Gateway to report the route's parent status
+          kubernetes.core.k8s_info:
+            api_version: gateway.networking.k8s.io/v1
+            kind: HTTPRoute
+            name: gateway-access-check
+            namespace: gateway
+          register: gateway_route_check
+          until:
+            - gateway_route_check.resources | length == 1
+            - gateway_route_check.resources[0].status.parents | default([]) | length > 0
+          retries: 12
+          delay: 5
+
+        - name: Pick the route's Accepted condition
+          ansible.builtin.set_fact:
+            gateway_route_acceptance: >-
+              {{ gateway_route_check.resources[0].status.parents[0].conditions
+                 | selectattr('type', 'equalto', 'Accepted') | list }}
+
+        - name: It should reject route attachment from an unapproved namespace
+          ansible.builtin.assert:
+            that:
+              - gateway_route_acceptance | length == 1
+              - gateway_route_acceptance[0].status == 'False'
+              - gateway_route_acceptance[0].reason == 'NotAllowedByListeners'
+            fail_msg: The Gateway did not reject the unapproved namespace
+      always:
+        - name: Remove the route attachment check
+          kubernetes.core.k8s:
+            state: absent
+            api_version: gateway.networking.k8s.io/v1
+            kind: HTTPRoute
+            name: gateway-access-check
+            namespace: gateway

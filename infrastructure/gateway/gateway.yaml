@@ -21,10 +21,16 @@ spec:
             name: internal-edge-cert
       allowedRoutes:
         namespaces:
-          from: All
+          from: Selector
+          selector:
+            matchLabels:
+              data-cluster/gateway-access: "true"
     - name: postgres
       protocol: TCP
       port: 5432
       allowedRoutes:
         namespaces:
-          from: All
+          from: Selector
+          selector:
+            matchLabels:
+              data-cluster/gateway-access: "true"

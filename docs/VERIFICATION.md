@@ -173,6 +173,18 @@ nc -vz -w 3 <NODE_LAN_IP> 4244
 
 Also check the allocated NodePorts (`kubectl get svc -A`) from that client. Cilium handles these paths in eBPF, so removing a firewalld port range alone does not establish that NodePorts are closed. Record any remaining exposure for the network-publication phase. Checks from the node itself cannot establish LAN isolation.
 
+For Gateway publication, confirm the approved namespace and existing database route after Flux reconciles:
+
+```bash
+kubectl get namespace -l data-cluster/gateway-access=true
+kubectl get tcproute -n databases postgres-external -o yaml
+pg_isready -h <GATEWAY_IP> -p 5432 -t 5
+```
+
+Only `databases` is currently approved. Its route should report `Accepted=True` and `ResolvedRefs=True`, and PostgreSQL should accept connections through the Gateway. Full-playbook verification uses `pg_isready` already installed in the primary database pod; no host PostgreSQL client is installed. OpenSSL verifies the shared edge certificate's chain and application hostname. A temporary route in an unapproved namespace must report `Accepted=False` with reason `NotAllowedByListeners` and is removed afterward. No extra workload is needed.
+
+The first publication change retains the baseline Gateway grant until the database receiver rule is live. It verifies namespace attachment and service continuity; it does not yet prove that an unpermitted backend is unreachable. Test that boundary when the global grant is removed in the following change.
+
 ## Verify Cluster Health
 
 Check the overall operational status and reconciliation health of all cluster components:
