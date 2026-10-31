@@ -1,6 +1,7 @@
 mock_provider "vault" {}
 
 variables {
+  internal_domain             = "cluster.internal"
   state_encryption_passphrase = "foo123"
   openbao_token               = "foo234"
   postgres_superuser_password = "foo345"
@@ -52,6 +53,25 @@ run "auth_roles_bound_narrowly" {
       ] : length(role.bound_service_account_names) == 1 && length(role.bound_service_account_namespaces) == 1
     ])
     error_message = "A Kubernetes auth role is bound to more than one ServiceAccount or namespace."
+  }
+}
+
+run "leaf_profile_is_scoped" {
+  command = plan
+
+  assert {
+    condition = (
+      vault_pki_secret_backend_role.internal_server.server_flag &&
+      vault_pki_secret_backend_role.internal_server.client_flag &&
+      !vault_pki_secret_backend_role.internal_server.allow_ip_sans &&
+      !vault_pki_secret_backend_role.internal_server.allow_glob_domains &&
+      contains(vault_pki_secret_backend_role.internal_server.allowed_domains, var.internal_domain) &&
+      contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-grpc.cilium.io") &&
+      contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-relay.cilium.io") &&
+      !contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "internal") &&
+      !contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "cilium.io")
+    )
+    error_message = "The shared profile must preserve Hubble mTLS while limiting names and rejecting IP SANs."
   }
 }
 

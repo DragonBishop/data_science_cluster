@@ -1,3 +1,8 @@
+variable "internal_domain" {
+  type        = string
+  description = "Domain for Gateway certificates (cluster-config INTERNAL_DOMAIN)."
+}
+
 variable "postgres_superuser_password" {
   type      = string
   sensitive = true

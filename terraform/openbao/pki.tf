@@ -1,9 +1,16 @@
 locals {
-  internal_pki_domains = [
+  ca_permitted_dns_domains = [
     "localhost",
     "seaweedfs-s3", "seaweedfs-s3.seaweedfs", "seaweedfs-s3.seaweedfs.svc",
     "seaweedfs-s3.seaweedfs.svc.cluster.local",
     "internal", "cilium.io", "cluster.local", "hubble-relay",
+  ]
+  leaf_pki_domains = [
+    var.internal_domain,
+    "svc.cluster.local",
+    "hubble-grpc.cilium.io", "hubble-relay.cilium.io",
+    "seaweedfs-s3", "seaweedfs-s3.seaweedfs", "seaweedfs-s3.seaweedfs.svc",
+    "localhost",
   ]
 }
 
@@ -46,7 +53,7 @@ resource "vault_pki_secret_backend_root_sign_intermediate" "int_signed" {
   csr                   = vault_pki_secret_backend_intermediate_cert_request.int.csr
   common_name           = "data-science-cluster Intermediate CA"
   ttl                   = "63072000"
-  permitted_dns_domains = local.internal_pki_domains
+  permitted_dns_domains = local.ca_permitted_dns_domains
 }
 
 resource "vault_pki_secret_backend_intermediate_set_signed" "int" {
@@ -57,11 +64,11 @@ resource "vault_pki_secret_backend_intermediate_set_signed" "int" {
 resource "vault_pki_secret_backend_role" "internal_server" {
   backend            = vault_mount.pki_int.path
   name               = "internal-server"
-  allowed_domains    = local.internal_pki_domains
+  allowed_domains    = local.leaf_pki_domains
   allow_bare_domains = true
   allow_subdomains   = true
-  allow_glob_domains = true
-  allow_ip_sans      = true
+  allow_glob_domains = false
+  allow_ip_sans      = false
   server_flag        = true
   client_flag        = true
   require_cn         = false

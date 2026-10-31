@@ -6,6 +6,7 @@
     state: present
     force_init: true
   environment:
+    TF_VAR_internal_domain: "{{ cluster_config.INTERNAL_DOMAIN }}"
     TF_VAR_openbao_token: "{{ openbao_root_token }}"
     TF_VAR_state_encryption_passphrase: "{{ opentofu_state_encryption_passphrase }}"
     TF_VAR_postgres_superuser_password: "{{ opentofu_postgres_superuser_password }}"
