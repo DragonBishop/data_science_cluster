@@ -15,6 +15,10 @@ This single-node cluster trusts its human administrator and the configured Flux,
 
 Access to namespaced Kubernetes resources uses a Role and RoleBinding in the resource's namespace. RBAC permissions add together: a narrow grant does not cancel access provided by another grant.
 
+### PostgreSQL Administration
+
+The human administrator uses the `postgres` superuser login with a password supplied during bootstrap. CNPG manages that password through Secret `postgres-superuser-credentials`. OpenBao uses the same login to create temporary database users.
+
 ### Issuer Authentication
 
 cert-manager authenticates `openbao-pki-issuer` to OpenBao using a short-lived Kubernetes token for ServiceAccount `cert-manager` in namespace `cert-manager`.
@@ -45,6 +49,8 @@ Ansible installs trust-manager and OpenBao's listener certificates and Bundle be
 
 A CSI issuing token must cover the lease of the credential it creates. Keep the provider's `cache-size=0`, issuing-token lifetimes and child leases aligned. Shortening a parent token independently can revoke credentials still in use. Daily rotation and consumer reload deliver replacement credentials.
 
+OpenBao connects to `postgres-cluster-rw.databases.svc.cluster.local` with `sslmode=verify-full`, verifying the server's CA and hostname against the public `postgres-ca` Bundle mounted at `/openbao/userconfig/postgres-ca`. Provisioning registers the connection before PostgreSQL exists; Flux supplies the database and its CA before credentials can be issued.
+
 Keep secret values out of Git, ordinary task output, command arguments and reports. Use private prompts, protected files and workload delivery mechanisms. Secret-bearing Ansible tasks suppress their results; public CA data does not require secret handling.
 
 ## Certificate Trust
@@ -55,7 +61,7 @@ Trust a certificate only when it identifies the service or workload you expected
 | --- | --- |
 | OpenTofu, cert-manager and SPIRE connecting to OpenBao | `openbao-local-ca-secret`, distributed as `openbao-ca-bundle` |
 | Gateway, SeaweedFS S3, Results API and Hubble clients | OpenBao's service-PKI root, distributed as `openbao-root-ca` or carried in their TLS Secret |
-| PostgreSQL server verification and replication | Dedicated `postgres-ca` |
+| OpenBao and application clients verifying PostgreSQL; PostgreSQL replication | Dedicated `postgres-ca` |
 | PostgreSQL SVID login | `postgres-client-ca`, containing the SPIRE signing root and PostgreSQL replication CA |
 | Flux controller mTLS and workload identity consumers | SPIRE's workload API trust bundle |
 | SeaweedFS internal HTTPS/gRPC | SeaweedFS's chart-owned CA |

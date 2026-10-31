@@ -12,6 +12,19 @@ variables {
   backup_bucket               = "foo-backups"
 }
 
+run "postgres_tls_is_verified" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(vault_database_secret_backend_connection.postgres_cluster.postgresql[0].connection_url, "sslmode=verify-full&") &&
+      strcontains(vault_database_secret_backend_connection.postgres_cluster.postgresql[0].connection_url, "sslrootcert=/openbao/userconfig/postgres-ca/ca.crt") &&
+      !vault_database_secret_backend_connection.postgres_cluster.verify_connection
+    )
+    error_message = "PostgreSQL must use verified TLS with its mounted CA and defer connection checks until after bootstrap."
+  }
+}
+
 run "database_roles_allowed" {
   command = plan
 
