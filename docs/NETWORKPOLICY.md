@@ -22,6 +22,22 @@ Everything else is opened by the component that needs it:
 
 The rest of this page explains how these rules work and how to add to them.
 
+## Host and LAN Access
+
+The host firewall and Cilium have different jobs. The host firewall filters connections into the node. Cilium controls pod traffic and Gateway routing.
+
+On Fedora/RHEL, the host firewall follows these rules:
+
+1. The LAN interface uses a filtering zone, not an `ACCEPT` zone. Read `LAN_INTERFACE` from cluster-config; do not assume the default zone owns it.
+2. Declare each host service explicitly. Keep named workstation services and individual port allowances; remove FedoraWorkstation's blanket TCP/UDP `1025-65535` allowances. Add a narrow exception before using a workstation application that previously relied on that range.
+3. Keep DNS (53/TCP and UDP), Gateway HTTPS (443/TCP), and Gateway PostgreSQL (5432/TCP) available in the LAN zone. CoreDNS is the explicit exception to publishing services through Gateway.
+4. Pods in the trusted Cilium zone may reach the host. `k8s-containers-to-host` accepts `trusted -> HOST`, never `ANY -> HOST`. The pod's Cilium egress policy still names the host ports it needs, including API 6443, kubelet 10250, and Hubble 4244.
+5. Keep Cilium interfaces and pod CIDR trusted, existing forwarding policies intact, and masquerading owned by Cilium.
+
+[`setup-firewall.sh`](../src/bash/setup-firewall.sh) applies these rules; [`preflight.sh`](../src/bash/preflight.sh) checks the LAN zone, port ranges, and policy directions. Neither changes k3s's listen addresses. The Ubuntu/Debian branch retains its existing UFW setup for Cilium; this Fedora correction does not establish equivalent UFW perimeter enforcement.
+
+A local firewall configuration check does not prove LAN isolation. Cilium's eBPF service and NodePort paths can bypass ordinary host input filtering. Check service continuity and unwanted exposure from a separate LAN client as described in [Verification](VERIFICATION.md#host-firewall-network-checks). Adding a listener requires reviewing both the host firewall and the receiving Cilium policy.
+
 ## How Cilium Decides
 
 Cilium treats each pod as open until a policy selects it. Once a policy with an `ingress` section selects a pod, that pod accepts the traffic the policy lists and drops the rest. An `egress` section does the same for outgoing traffic.

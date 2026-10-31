@@ -4,6 +4,71 @@
 #
 set -euo pipefail
 
+detect_distro() {
+    local distro_id=unknown distro_family=unknown
+
+    if [ ! -f /etc/os-release ]; then
+        echo "$distro_family $distro_id"
+        return 0
+    fi
+
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    distro_id="${ID:-unknown}"
+    case " ${ID:-} ${ID_LIKE:-} " in
+        *" ubuntu "*|*" debian "*) distro_family=debian ;;
+        *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) distro_family=fedora ;;
+    esac
+
+    echo "$distro_family $distro_id"
+}
+
+# Read the configuration Flux will use, before the cluster exists.
+get_cluster_config_value() {
+    local config_key="$1" script_directory config_value
+    script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    config_value=$(kubectl kustomize "$script_directory/../../infrastructure/cluster-config" 2>/dev/null \
+        | awk -v config_prefix="  $config_key: " 'index($0, config_prefix) == 1 { config_value = substr($0, length(config_prefix) + 1); gsub(/"/, "", config_value); print config_value; exit }') || return 1
+
+    if [ -z "$config_value" ]; then
+        echo "❌ $config_key not found in infrastructure/cluster-config (kubectl kustomize)" >&2
+        return 1
+    fi
+
+    printf '%s\n' "$config_value"
+}
+
+require_firewalld() {
+    if ! command -v firewall-cmd >/dev/null 2>&1; then
+        echo "❌ firewall-cmd is not installed. Install and enable firewalld first." >&2
+        return 1
+    fi
+
+    if ! firewall-cmd --state >/dev/null 2>&1; then
+        echo "❌ firewalld is inactive. Enable it before configuring the firewall." >&2
+        return 1
+    fi
+}
+
+get_firewalld_lan_zone() {
+    local lan_interface lan_zone zone_config
+    lan_interface=$(get_cluster_config_value LAN_INTERFACE) || return 1
+    ip link show dev "$lan_interface" >/dev/null || return 1
+    lan_zone=$(firewall-cmd --get-zone-of-interface="$lan_interface" 2>/dev/null || true)
+
+    if [ -z "$lan_zone" ] || [ "$lan_zone" = "no zone" ]; then
+        lan_zone=$(firewall-cmd --get-default-zone) || return 1
+    fi
+
+    zone_config=$(firewall-cmd --zone="$lan_zone" --list-all) || return 1
+    if echo "$zone_config" | grep -qx '  target: ACCEPT'; then
+        echo "❌ LAN interface $lan_interface uses an ACCEPT zone ($lan_zone). Assign it a filtering zone first." >&2
+        return 1
+    fi
+
+    printf '%s\n' "$lan_zone"
+}
+
 get_project_name() {
     case "$1" in
         tofu) echo "OpenTofu" ;;
@@ -20,19 +85,19 @@ get_project_name() {
 
 # The install commands from docs/INSTALLATION.md Requirements, for the detected distro family
 print_install_command() {
-    local bin="$1"
+    local tool="$1"
     local distro_info distro_family distro_id
     distro_info=$(detect_distro)
     distro_family="${distro_info%% *}"
     distro_id="${distro_info#* }"
 
     if [ "$distro_family" = unknown ]; then
-        echo "   Preflight has no install command for '$distro_id'. Install $(get_project_name "$bin") following its documentation for your distribution."
+        echo "   Preflight has no install command for '$distro_id'. Install $(get_project_name "$tool") following its documentation for your distribution."
         return 0
     fi
 
     echo "   Install it with:"
-    case "$bin:$distro_family" in
+    case "$tool:$distro_family" in
         tofu:*)
             cat <<'EOF'
    curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
@@ -128,14 +193,14 @@ check_host_tooling() {
     echo ""
     echo "== Host tooling =="
     local has_errors=false
-    local bin
+    local tool
 
-    for bin in tofu helm flux gpg git uv just; do
-        if command -v "$bin" >/dev/null 2>&1; then
-            echo "✅ $bin"
+    for tool in tofu helm flux gpg git uv just; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            echo "✅ $tool"
         else
-            echo "❌ $bin not found."
-            print_install_command "$bin"
+            echo "❌ $tool not found."
+            print_install_command "$tool"
             has_errors=true
         fi
     done
@@ -147,33 +212,19 @@ check_host_tooling() {
 check_optional_tooling() {
     echo "== Optional tooling =="
     local has_warnings=false
-    local bin
+    local tool
 
-    for bin in fzf tkn; do
-        if command -v "$bin" >/dev/null 2>&1; then
-            echo "✅ $bin"
+    for tool in fzf tkn; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            echo "✅ $tool"
         else
-            echo "⚠️  $bin not found."
-            print_install_command "$bin"
+            echo "⚠️  $tool not found."
+            print_install_command "$tool"
             has_warnings=true
         fi
     done
 
     [ "$has_warnings" = false ]
-}
-
-# Reads the cluster-config ConfigMap Flux will build; preflight runs before the cluster exists
-get_cluster_config_value() {
-    local key="$1"
-    local script_dir value
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    value=$(kubectl kustomize "$script_dir/../../infrastructure/cluster-config" 2>/dev/null \
-        | awk -v prefix="  $key: " 'index($0, prefix) == 1 { value = substr($0, length(prefix) + 1); gsub(/"/, "", value); print value; exit }')
-    if [ -z "$value" ]; then
-        echo "❌ $key not found in infrastructure/cluster-config (kubectl kustomize)" >&2
-        return 1
-    fi
-    printf '%s\n' "$value"
 }
 
 get_minor_version() {
@@ -238,42 +289,23 @@ check_github_auth() {
     echo "== GitHub Authentication =="
     if [ -n "${GITHUB_APP_ID:-}" ]; then
         echo "✅ GitHub App (ID: $GITHUB_APP_ID) configured"
-        echo ""
         return 0
-    elif ! command -v gh >/dev/null 2>&1; then
+    fi
+
+    if ! command -v gh >/dev/null 2>&1; then
         echo "❌ No GitHub App provided and gh not found."
         print_install_command gh
-        echo "   Then authenticate gh with:"
-        echo "   gh auth login"
-        echo ""
+        echo "   Then authenticate gh with: gh auth login"
         return 1
-    elif gh auth status >/dev/null 2>&1; then
-        echo "✅ gh authenticated (fallback)"
-        echo ""
-        return 0
-    else
+    fi
+
+    if ! gh auth status >/dev/null 2>&1; then
         echo "❌ No GitHub App provided and gh not authenticated. Authenticate gh with:"
         echo "   gh auth login"
-        echo ""
         return 1
     fi
-}
 
-detect_distro() {
-    local distro_id="unknown"
-    local distro_family="unknown"
-
-    if [ -f /etc/os-release ]; then
-        # shellcheck disable=SC1091
-        . /etc/os-release
-        distro_id="${ID:-unknown}"
-        case " ${ID:-} ${ID_LIKE:-} " in
-            *" ubuntu "*|*" debian "*) distro_family="debian" ;;
-            *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) distro_family="fedora" ;;
-        esac
-    fi
-
-    printf '%s %s\n' "$distro_family" "$distro_id"
+    echo "✅ gh authenticated (fallback)"
 }
 
 check_debian_firewall() {
@@ -288,18 +320,18 @@ check_debian_firewall() {
         return 0
     fi
 
-    local fwd_policy ufw_rules missing=() iface
-    fwd_policy=$(grep -E '^DEFAULT_FORWARD_POLICY' /etc/default/ufw 2>/dev/null | cut -d'"' -f2)
+    local forward_policy ufw_rules missing_interfaces=() interface
+    forward_policy=$(grep -E '^DEFAULT_FORWARD_POLICY' /etc/default/ufw 2>/dev/null | cut -d'"' -f2)
     ufw_rules=$(sudo ufw status verbose 2>/dev/null)
 
-    for iface in cilium_host cilium_net cilium_vxlan "lxc+"; do
-        echo "$ufw_rules" | grep -q "ALLOW IN.*on $iface" || missing+=("$iface")
+    for interface in cilium_host cilium_net cilium_vxlan "lxc+"; do
+        echo "$ufw_rules" | grep -q "ALLOW IN.*on $interface" || missing_interfaces+=("$interface")
     done
 
-    if [ "$fwd_policy" != "ACCEPT" ] || [ ${#missing[@]} -gt 0 ]; then
+    if [ "$forward_policy" != "ACCEPT" ] || [ ${#missing_interfaces[@]} -gt 0 ]; then
         echo "⚠️  ufw is active but not configured for Cilium:"
-        [ "$fwd_policy" != "ACCEPT" ] && echo "   - DEFAULT_FORWARD_POLICY is '${fwd_policy:-unset}', expected ACCEPT"
-        [ ${#missing[@]} -gt 0 ] && echo "   - missing ALLOW IN rules for: ${missing[*]}"
+        [ "$forward_policy" != "ACCEPT" ] && echo "   - DEFAULT_FORWARD_POLICY is '${forward_policy:-unset}', expected ACCEPT"
+        [ ${#missing_interfaces[@]} -gt 0 ] && echo "   - missing ALLOW IN rules for: ${missing_interfaces[*]}"
         echo "   Apply the rules with:"
         echo "   just setup-firewall"
         return 1
@@ -309,95 +341,105 @@ check_debian_firewall() {
     return 0
 }
 
-check_fedora_firewall() {
-    if ! command -v firewall-cmd >/dev/null 2>&1; then
-        echo "⚠️  firewall-cmd not found on a Fedora/RHEL host (expected on this distro family). Inspect the firewall's INPUT policy with:"
-        echo "   sudo iptables -L INPUT -n -v"
+firewalld_policy_matches() {
+    local policy_name="$1" ingress_zone="$2" egress_zone="$3" policy_config
+    policy_config=$(firewall-cmd --policy="$policy_name" --list-all 2>/dev/null) || return 1
+    echo "$policy_config" | grep -qx "  ingress-zones: $ingress_zone" || return 1
+    echo "$policy_config" | grep -qx "  egress-zones: $egress_zone" || return 1
+    echo "$policy_config" | grep -qx "  target: ACCEPT" || return 1
+    echo "$policy_config" | grep -qx "  priority: -1"
+}
+
+report_missing_firewalld_rules() {
+    [ "$#" -gt 0 ] || return 0
+    local missing_rule
+    echo "⚠️  firewalld is missing required rules for Kubernetes/Cilium:"
+    for missing_rule in "$@"; do
+        echo "   - $missing_rule"
+    done
+    echo "   Apply them with: just setup-firewall"
+    return 1
+}
+
+check_firewalld_lan_rules() {
+    local lan_zone="$1" zone_config missing_rules=()
+    zone_config=$(firewall-cmd --zone="$lan_zone" --list-all) || return 1
+
+    if echo "$zone_config" | grep -qE '1025-65535/(tcp|udp)'; then
+        echo "❌ LAN zone '$lan_zone' still allows unrestricted high ports; run just setup-firewall"
         return 1
     fi
 
-    if ! firewall-cmd --state >/dev/null 2>&1; then
-        echo "✅ firewalld present and inactive: no rules to check"
-        return 0
-    fi
+    echo "$zone_config" | grep -q 'forward: yes' || missing_rules+=("forwarding in LAN zone '$lan_zone'")
+    firewall-cmd --zone="$lan_zone" --query-port=443/tcp >/dev/null || missing_rules+=("443/tcp in LAN zone '$lan_zone'")
+    firewall-cmd --zone="$lan_zone" --query-port=5432/tcp >/dev/null || missing_rules+=("5432/tcp in LAN zone '$lan_zone'")
+    firewall-cmd --zone="$lan_zone" --query-service=dns >/dev/null || missing_rules+=("DNS in LAN zone '$lan_zone'")
+    report_missing_firewalld_rules "${missing_rules[@]}"
+}
 
-    local zone zone_info trusted_info pod_cidr missing=()
-    zone=$(firewall-cmd --get-default-zone 2>/dev/null || echo "FedoraWorkstation")
-    zone_info=$(firewall-cmd --zone="$zone" --list-all 2>/dev/null)
-    trusted_info=$(firewall-cmd --zone=trusted --list-all 2>/dev/null)
+check_firewalld_trusted_rules() {
+    local pod_cidr="$1" interface missing_rules=()
+    firewall-cmd --zone=trusted --query-source="$pod_cidr" >/dev/null || missing_rules+=("$pod_cidr source in trusted zone")
+    firewall-cmd --zone=trusted --query-service=dns >/dev/null || missing_rules+=("DNS in trusted zone")
+    for interface in cilium_host cilium_net cilium_vxlan; do
+        firewall-cmd --zone=trusted --query-interface="$interface" >/dev/null || missing_rules+=("$interface in trusted zone")
+    done
+    report_missing_firewalld_rules "${missing_rules[@]}"
+}
+
+check_firewalld_policies() {
+    local missing_rules=()
+    firewalld_policy_matches k8s-forwarding-in ANY trusted || missing_rules+=("ANY -> trusted forwarding policy")
+    firewalld_policy_matches k8s-forwarding-out trusted ANY || missing_rules+=("trusted -> ANY forwarding policy")
+    firewalld_policy_matches k8s-forwarding-host HOST ANY || missing_rules+=("HOST -> ANY forwarding policy")
+    firewalld_policy_matches k8s-containers-to-host trusted HOST || missing_rules+=("trusted -> HOST input policy")
+    report_missing_firewalld_rules "${missing_rules[@]}"
+}
+
+check_fedora_firewall() {
+    local lan_zone pod_cidr
+    require_firewalld || return 1
+    lan_zone=$(get_firewalld_lan_zone) || return 1
     pod_cidr=$(get_cluster_config_value POD_CIDR) || return 1
 
-    echo "$zone_info" | grep -q "forward: yes" || missing+=("forward: yes in zone '$zone'")
-    echo "$zone_info" | grep -q "443/tcp" || missing+=("443/tcp port in zone '$zone'")
-
-    if ! echo "$zone_info" | grep -qE "(services:.*\bdns\b|53/(tcp|udp))" && ! echo "$trusted_info" | grep -qE "(services:.*\bdns\b|53/(tcp|udp))"; then
-        missing+=("dns service in zone '$zone' or 'trusted'")
-    fi
-
-    if ! echo "$trusted_info" | grep -q "$pod_cidr"; then
-        missing+=("$pod_cidr source in 'trusted' zone")
-    fi
-
-    local policies
-    policies=$(firewall-cmd --get-policies 2>/dev/null || true)
-    echo "$policies" | grep -q "k8s-forwarding-in" || missing+=("policy 'k8s-forwarding-in'")
-    echo "$policies" | grep -q "k8s-forwarding-out" || missing+=("policy 'k8s-forwarding-out'")
-    echo "$policies" | grep -q "k8s-forwarding-host" || missing+=("policy 'k8s-forwarding-host'")
-
-    if [ ${#missing[@]} -gt 0 ]; then
-        echo "⚠️  firewalld is active but missing required rules/policies for Kubernetes/Cilium:"
-        for item in "${missing[@]}"; do
-            echo "   - missing $item"
-        done
-        echo "   Apply them with:"
-        echo "   just setup-firewall"
-        return 1
-    fi
-
-    echo "✅ firewalld active and configured for Cilium (zone: $zone, trusted zone and k8s policies configured)"
-    return 0
+    check_firewalld_lan_rules "$lan_zone" || return 1
+    check_firewalld_trusted_rules "$pod_cidr" || return 1
+    check_firewalld_policies || return 1
+    echo "✅ firewalld active and configured for Cilium (LAN zone: $lan_zone)"
 }
 
 check_host_firewall() {
+    local distro_info distro_family distro_id check_function
     echo "== Host firewall =="
-    local distro_info distro_family distro_id rc=0
     distro_info=$(detect_distro)
     distro_family="${distro_info%% *}"
     distro_id="${distro_info#* }"
+    check_function="check_${distro_family}_firewall"
 
-    case "$distro_family" in
-        debian)
-            check_debian_firewall || rc=$?
-            ;;
-        fedora)
-            check_fedora_firewall || rc=$?
-            ;;
-        *)
-            echo "⚠️  Unrecognized distro ('$distro_id'): firewall check is only verified for Ubuntu/Debian and Fedora/RHEL. Skipping automated check; inspect the firewall's INPUT policy with:"
-            echo "   sudo iptables -L INPUT -n -v"
-            rc=1
-            ;;
-    esac
-    echo ""
-    return "$rc"
+    if ! declare -f "$check_function" >/dev/null 2>&1; then
+        echo "⚠️  Unrecognized distro '$distro_id'; inspect the host firewall manually."
+        return 1
+    fi
+
+    "$check_function"
 }
 
 check_reserved_ips() {
     local has_warnings=false
-    local gateway_ip coredns_lan_ip pool_stop ip
+    local gateway_ip coredns_lan_ip loadbalancer_pool_stop reserved_ip
     gateway_ip=$(get_cluster_config_value GATEWAY_IP) || return 1
     coredns_lan_ip=$(get_cluster_config_value COREDNS_LAN_IP) || return 1
-    pool_stop=$(get_cluster_config_value LAN_LB_POOL_STOP) || return 1
-    echo "== Reserved IP range ($gateway_ip-$pool_stop) =="
+    loadbalancer_pool_stop=$(get_cluster_config_value LAN_LB_POOL_STOP) || return 1
+    echo "== Reserved IP range ($gateway_ip-$loadbalancer_pool_stop) =="
 
-    for ip in "$gateway_ip" "$coredns_lan_ip"; do
-        if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
-            echo "⚠️  $ip already answers on the LAN. Find the device holding it with:"
-            echo "   ip neigh show $ip"
+    for reserved_ip in "$gateway_ip" "$coredns_lan_ip"; do
+        if ping -c 1 -W 1 "$reserved_ip" >/dev/null 2>&1; then
+            echo "⚠️  $reserved_ip already answers on the LAN. Find the device holding it with:"
+            echo "   ip neigh show $reserved_ip"
             echo "   Then exclude the reserved range from your router's DHCP pool."
             has_warnings=true
         else
-            echo "✅ $ip free"
+            echo "✅ $reserved_ip free"
         fi
     done
     echo ""
@@ -406,43 +448,46 @@ check_reserved_ips() {
 }
 
 report_summary() {
-    local had_errors="$1"
-    local had_warnings="$2"
-
+    local had_errors="$1" had_warnings="$2"
     if [ "$had_errors" = true ]; then
         echo "❌ Preflight failed: resolve the errors above before bootstrapping."
-        exit 1
-    elif [ "$had_warnings" = true ]; then
-        echo "⚠️  Preflight passed with warnings: review above."
-        exit 0
-    else
-        echo "✅ Preflight passed."
-        exit 0
+        return 1
     fi
+    if [ "$had_warnings" = true ]; then
+        echo "⚠️  Preflight passed with warnings: review above."
+        return 0
+    fi
+    echo "✅ Preflight passed."
+}
+
+check_kubectl_versions() {
+    # Missing tools are reported as errors by check_kubectl_tooling.
+    command -v kubectl >/dev/null 2>&1 || return 0
+    kubectl cnpg version >/dev/null 2>&1 || return 0
+    local had_warnings=false
+    check_kubectl_skew || had_warnings=true
+    check_cnpg_plugin_version || had_warnings=true
+    [ "$had_warnings" = false ]
 }
 
 main() {
-    local had_errors=false
-    local had_warnings=false
+    local had_errors=false had_warnings=false
 
     check_host_tooling || had_errors=true
     echo ""
     check_optional_tooling || had_warnings=true
     echo ""
-    if check_kubectl_tooling; then
-        check_kubectl_skew || had_warnings=true
-        check_cnpg_plugin_version || had_warnings=true
-    else
-        had_errors=true
-    fi
+    check_kubectl_tooling || had_errors=true
+    check_kubectl_versions || had_warnings=true
     echo ""
     check_github_auth || had_errors=true
-
+    echo ""
     check_host_firewall || had_warnings=true
-
+    echo ""
     check_reserved_ips || had_warnings=true
-
     report_summary "$had_errors" "$had_warnings"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
