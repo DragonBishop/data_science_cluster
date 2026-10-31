@@ -5,6 +5,71 @@
 #
 set -euo pipefail
 
+detect_distro() {
+    local distro_id=unknown distro_family=unknown
+
+    if [ ! -f /etc/os-release ]; then
+        echo "$distro_family $distro_id"
+        return 0
+    fi
+
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    distro_id="${ID:-unknown}"
+    case " ${ID:-} ${ID_LIKE:-} " in
+        *" ubuntu "*|*" debian "*) distro_family=debian ;;
+        *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) distro_family=fedora ;;
+    esac
+
+    echo "$distro_family $distro_id"
+}
+
+# Read the configuration Flux will use, before the cluster exists.
+get_cluster_config_value() {
+    local config_key="$1" script_directory config_value
+    script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    config_value=$(kubectl kustomize "$script_directory/../../infrastructure/cluster-config" 2>/dev/null \
+        | awk -v config_prefix="  $config_key: " 'index($0, config_prefix) == 1 { config_value = substr($0, length(config_prefix) + 1); gsub(/"/, "", config_value); print config_value; exit }') || return 1
+
+    if [ -z "$config_value" ]; then
+        echo "❌ $config_key not found in infrastructure/cluster-config (kubectl kustomize)" >&2
+        return 1
+    fi
+
+    printf '%s\n' "$config_value"
+}
+
+require_firewalld() {
+    if ! command -v firewall-cmd >/dev/null 2>&1; then
+        echo "❌ firewall-cmd is not installed. Install and enable firewalld first." >&2
+        return 1
+    fi
+
+    if ! firewall-cmd --state >/dev/null 2>&1; then
+        echo "❌ firewalld is inactive. Enable it before configuring the firewall." >&2
+        return 1
+    fi
+}
+
+get_firewalld_lan_zone() {
+    local lan_interface lan_zone zone_config
+    lan_interface=$(get_cluster_config_value LAN_INTERFACE) || return 1
+    ip link show dev "$lan_interface" >/dev/null || return 1
+    lan_zone=$(firewall-cmd --get-zone-of-interface="$lan_interface" 2>/dev/null || true)
+
+    if [ -z "$lan_zone" ] || [ "$lan_zone" = "no zone" ]; then
+        lan_zone=$(firewall-cmd --get-default-zone) || return 1
+    fi
+
+    zone_config=$(firewall-cmd --zone="$lan_zone" --list-all) || return 1
+    if echo "$zone_config" | grep -qx '  target: ACCEPT'; then
+        echo "❌ LAN interface $lan_interface uses an ACCEPT zone ($lan_zone). Assign it a filtering zone first." >&2
+        return 1
+    fi
+
+    printf '%s\n' "$lan_zone"
+}
+
 # CLI options
 parse_args() {
     local argument
@@ -34,39 +99,6 @@ acquire_sudo() {
         echo "❌ ERROR: sudo authentication failed. Cannot configure host firewall."
         exit 1
     fi
-}
-
-detect_distro() {
-    local distro_id="unknown"
-    local distro_family="unknown"
-
-    if [ ! -f /etc/os-release ]; then
-        echo "$distro_family $distro_id"
-        return 0
-    fi
-
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    distro_id="${ID:-unknown}"
-    case " ${ID:-} ${ID_LIKE:-} " in
-        *" ubuntu "*|*" debian "*) distro_family="debian" ;;
-        *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) distro_family="fedora" ;;
-    esac
-
-    echo "$distro_family $distro_id"
-}
-
-# Reads POD_CIDR from the cluster-config ConfigMap Flux will build; the firewall is set up before the cluster exists
-get_cluster_pod_cidr() {
-    local script_dir pod_cidr
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    pod_cidr=$(kubectl kustomize "$script_dir/../../infrastructure/cluster-config" 2>/dev/null \
-        | awk -v prefix="  POD_CIDR: " 'index($0, prefix) == 1 { value = substr($0, length(prefix) + 1); gsub(/"/, "", value); print value; exit }')
-    if [ -z "$pod_cidr" ]; then
-        echo "❌ POD_CIDR not found in infrastructure/cluster-config (kubectl kustomize)" >&2
-        return 1
-    fi
-    printf '%s\n' "$pod_cidr"
 }
 
 print_header() {
@@ -164,29 +196,60 @@ setup_debian_firewall() {
 }
 
 # Fedora / RHEL (firewalld)
-firewalld_is_active() {
-    systemctl is-active --quiet firewalld 2>/dev/null
-}
-
 configure_networkmanager_unmanaged() {
-    local nm_conf="/etc/NetworkManager/conf.d/99-cilium.conf"
-    if [ -d "/etc/NetworkManager/conf.d" ]; then
-        echo "   -> Setting unmanaged-devices for cilium and lxc interfaces in NetworkManager..."
-        sudo tee "$nm_conf" >/dev/null << 'CONF'
+    local networkmanager_config=/etc/NetworkManager/conf.d/99-cilium.conf
+    [ -d /etc/NetworkManager/conf.d ] || return 0
+
+    echo "   -> Setting unmanaged-devices for cilium and lxc interfaces in NetworkManager..."
+    sudo tee "$networkmanager_config" >/dev/null << 'CONF'
 [keyfile]
 unmanaged-devices=interface-name:cilium*;interface-name:lxc*
 CONF
-        sudo systemctl reload NetworkManager 2>/dev/null || true
-    fi
+    sudo systemctl reload NetworkManager 2>/dev/null || true
 }
 
 configure_firewalld_base_zone() {
-    local active_zone="$1"
-    echo "   -> Configuring base zone '$active_zone' (DNS, 443/tcp, forward)..."
+    local lan_zone="$1"
+    echo "   -> Configuring LAN zone '$lan_zone' (DNS, Gateway HTTPS/PostgreSQL, forward)..."
     # Masquerade is Cilium's job, not firewalld's.
-    sudo firewall-cmd --zone="$active_zone" --add-service=dns --permanent >/dev/null
-    sudo firewall-cmd --zone="$active_zone" --add-port=443/tcp --permanent >/dev/null
-    sudo firewall-cmd --zone="$active_zone" --add-forward --permanent >/dev/null
+    sudo firewall-cmd --zone="$lan_zone" --add-service=dns --permanent >/dev/null
+    sudo firewall-cmd --zone="$lan_zone" --add-port=443/tcp --permanent >/dev/null
+    sudo firewall-cmd --zone="$lan_zone" --add-port=5432/tcp --permanent >/dev/null
+    sudo firewall-cmd --zone="$lan_zone" --add-forward --permanent >/dev/null
+}
+
+remove_firewalld_high_ports() {
+    local lan_zone="$1"
+    echo "   -> Removing unrestricted high ports from LAN zone '$lan_zone'..."
+    sudo firewall-cmd --zone="$lan_zone" --remove-port=1025-65535/tcp --permanent >/dev/null
+    sudo firewall-cmd --zone="$lan_zone" --remove-port=1025-65535/udp --permanent >/dev/null
+}
+
+firewalld_policy_exists() {
+    local policy_name="$1"
+    firewall-cmd --permanent --get-policies | tr ' ' '\n' | grep -qx "$policy_name"
+}
+
+configure_firewalld_policy() {
+    local policy_name="$1" ingress_zone="$2" egress_zone="$3"
+
+    if ! firewalld_policy_exists "$policy_name"; then
+        sudo firewall-cmd --permanent --new-policy="$policy_name" >/dev/null
+    fi
+    # ANY cannot be combined with a specific zone. Narrow the old host-input grant.
+    if [ "$ingress_zone" != ANY ]; then
+        sudo firewall-cmd --permanent --policy="$policy_name" --remove-ingress-zone=ANY >/dev/null
+    fi
+
+    sudo firewall-cmd --permanent --policy="$policy_name" --add-ingress-zone="$ingress_zone" >/dev/null
+    sudo firewall-cmd --permanent --policy="$policy_name" --add-egress-zone="$egress_zone" >/dev/null
+    sudo firewall-cmd --permanent --policy="$policy_name" --set-priority=-1 >/dev/null
+    sudo firewall-cmd --permanent --policy="$policy_name" --set-target=ACCEPT >/dev/null
+}
+
+configure_firewalld_pod_to_host() {
+    echo "   -> Restricting pod-to-host access to the trusted Cilium zone..."
+    configure_firewalld_policy k8s-containers-to-host trusted HOST
 }
 
 configure_firewalld_trusted_zone() {
@@ -211,27 +274,9 @@ cleanup_legacy_firewalld_policies() {
 
 configure_firewalld_forwarding_policies() {
     echo "   -> Configuring container forwarding policies (priority -1: ANY <-> trusted, HOST -> ANY)..."
-
-    # Ingress policy: ANY -> trusted
-    sudo firewall-cmd --permanent --new-policy=k8s-forwarding-in 2>/dev/null || true
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-in --set-priority=-1 >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-in --add-ingress-zone=ANY >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-in --add-egress-zone=trusted >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-in --set-target=ACCEPT >/dev/null
-
-    # Egress policy: trusted -> ANY
-    sudo firewall-cmd --permanent --new-policy=k8s-forwarding-out 2>/dev/null || true
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-out --set-priority=-1 >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-out --add-ingress-zone=trusted >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-out --add-egress-zone=ANY >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-out --set-target=ACCEPT >/dev/null
-
-    # Host-to-pod policy: HOST -> ANY
-    sudo firewall-cmd --permanent --new-policy=k8s-forwarding-host 2>/dev/null || true
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-host --set-priority=-1 >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-host --add-ingress-zone=HOST >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-host --add-egress-zone=ANY >/dev/null
-    sudo firewall-cmd --permanent --policy=k8s-forwarding-host --set-target=ACCEPT >/dev/null
+    configure_firewalld_policy k8s-forwarding-in ANY trusted
+    configure_firewalld_policy k8s-forwarding-out trusted ANY
+    configure_firewalld_policy k8s-forwarding-host HOST ANY
 }
 
 reload_firewalld() {
@@ -240,25 +285,16 @@ reload_firewalld() {
 }
 
 setup_fedora_firewall() {
-    local pod_cidr="$1"
-
-    if ! command -v firewall-cmd >/dev/null 2>&1; then
-        echo "ℹ️  firewall-cmd is not installed on this system. Skipping."
-        return 0
-    fi
-
-    if ! firewalld_is_active; then
-        echo "ℹ️  firewalld is inactive. No firewall rules required."
-        return 0
-    fi
-
-    local active_zone
-    active_zone=$(firewall-cmd --get-default-zone 2>/dev/null || echo "FedoraWorkstation")
+    local pod_cidr="$1" lan_zone
+    require_firewalld || return 1
+    lan_zone=$(get_firewalld_lan_zone) || return 1
 
     echo "🔥 Configuring firewalld for Kubernetes & Cilium..."
     configure_networkmanager_unmanaged
-    configure_firewalld_base_zone "$active_zone"
+    remove_firewalld_high_ports "$lan_zone"
+    configure_firewalld_base_zone "$lan_zone"
     configure_firewalld_trusted_zone "$pod_cidr"
+    configure_firewalld_pod_to_host
     cleanup_legacy_firewalld_policies
     configure_firewalld_forwarding_policies
     reload_firewalld
@@ -267,17 +303,15 @@ setup_fedora_firewall() {
 
 # Dynamic dispatch
 dispatch_firewall_setup() {
-    local distro_family="$1"
-    local distro_id="$2"
-    local pod_cidr="$3"
-    local target_handler="setup_${distro_family}_firewall"
+    local distro_family="$1" distro_id="$2" pod_cidr="$3"
+    local setup_function="setup_${distro_family}_firewall"
 
-    if declare -f "$target_handler" >/dev/null 2>&1; then
-        "$target_handler" "$pod_cidr"
+    if ! declare -f "$setup_function" >/dev/null 2>&1; then
+        print_unsupported_os "$distro_family" "$distro_id"
         return 0
     fi
 
-    print_unsupported_os "$distro_family" "$distro_id"
+    "$setup_function" "$pod_cidr"
 }
 
 # Main entrypoint
@@ -292,11 +326,13 @@ main() {
     distro_info=$(detect_distro)
     distro_family="${distro_info%% *}"
     distro_id="${distro_info#* }"
-    pod_cidr=$(get_cluster_pod_cidr)
+    pod_cidr=$(get_cluster_config_value POD_CIDR)
     print_detected_os "$distro_family" "$distro_id"
     acquire_sudo
     dispatch_firewall_setup "$distro_family" "$distro_id" "$pod_cidr"
     print_next_steps
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

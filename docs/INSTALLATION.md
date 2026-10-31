@@ -294,77 +294,29 @@ Renovate runs as Mend's hosted Renovate App. Install it from <https://github.com
 
 ### Host Firewall Configuration
 
-* [ ] **Host firewall configured for Cilium** — you can configure your host firewall automatically using the `just setup-firewall` recipe, or apply the manual commands below for your distribution:
+* [ ] **Host firewall configured for Cilium** — run from a local terminal on the node:
 
   ```bash
   just setup-firewall
+  just preflight
   ```
 
-* **Ubuntu / Debian (`ufw`)**:
-  If `ufw` is active, allow Cilium's network interfaces and set default forward policy to `ACCEPT`:
+  On Fedora/RHEL, firewalld must already be active. Setup finds the zone of `LAN_INTERFACE` from cluster-config. It retains named workstation services and explicit ports, opens DNS and the Gateway's 443/5432 listeners, removes the unrestricted `1025-65535` TCP/UDP ranges, and restricts `k8s-containers-to-host` to the trusted Cilium zone. Preflight checks the same restrictions and required forwarding directions.
+
+  Before applying this change to an existing host, inspect its configuration and save a copy:
 
   ```bash
-  sudo ufw allow in on cilium_host
-  sudo ufw allow in on cilium_net
-  sudo ufw allow in on cilium_vxlan
-  sudo ufw allow in on lxc+
-  sudo sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
-  sudo ufw reload
+  sudo firewall-cmd --get-active-zones
+  sudo firewall-cmd --list-all-zones
+  sudo firewall-cmd --list-all-policies
+  sudo cp -a /etc/firewalld /etc/firewalld.before-cluster-hardening
   ```
 
-  Verify rule status:
+  Use a new backup path if that copy already exists. Add explicit narrow allowances for any workstation applications that relied on the high-port ranges. Setup writes permanent configuration and reloads firewalld, so retain a local terminal during the change. It preserves Cilium's forwarding policies and trusted interfaces; masquerading stays with Cilium.
 
-  ```bash
-  sudo ufw status verbose
-  # Ensure DEFAULT_FORWARD_POLICY is accept (routed)
-  # Ensure cilium_host, cilium_net, cilium_vxlan, and lxc+ are ALLOW IN
-  ```
+  On Ubuntu/Debian, the existing UFW setup permits Cilium interfaces and pod routing and sets `DEFAULT_FORWARD_POLICY=ACCEPT`. The Fedora host-input correction does not change that branch.
 
-* **Fedora / RHEL (`firewalld`)**:
-  `ufw` is not present on Fedora and RHEL; `firewalld` serves the same role. Allow forwarding, masquerading, DNS, and add Cilium interfaces/subnets to `trusted`:
-
-  ```bash
-  # 1. Base zone configuration (DNS, Gateway port, forward)
-  # Masquerade is Cilium's job, not firewalld's.
-  sudo firewall-cmd --zone=FedoraWorkstation --add-service=dns --permanent
-  sudo firewall-cmd --zone=FedoraWorkstation --add-port=443/tcp --permanent
-  sudo firewall-cmd --zone=FedoraWorkstation --add-forward --permanent
-  sudo firewall-cmd --zone=trusted --add-service=dns --permanent
-  sudo firewall-cmd --zone=trusted --add-source=10.42.0.0/16 --permanent
-  sudo firewall-cmd --zone=trusted --add-source=10.43.0.0/16 --permanent
-  sudo firewall-cmd --zone=trusted --add-interface=cilium_host --permanent
-  sudo firewall-cmd --zone=trusted --add-interface=cilium_net --permanent
-  sudo firewall-cmd --zone=trusted --add-interface=cilium_vxlan --permanent
-
-  # 2. Container forwarding policies (priority -1: ANY <-> trusted, HOST -> ANY)
-  sudo firewall-cmd --permanent --new-policy=k8s-forwarding-in 2>/dev/null || true
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-in --set-priority=-1
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-in --add-ingress-zone=ANY
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-in --add-egress-zone=trusted
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-in --set-target=ACCEPT
-
-  sudo firewall-cmd --permanent --new-policy=k8s-forwarding-out 2>/dev/null || true
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-out --set-priority=-1
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-out --add-ingress-zone=trusted
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-out --add-egress-zone=ANY
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-out --set-target=ACCEPT
-
-  sudo firewall-cmd --permanent --new-policy=k8s-forwarding-host 2>/dev/null || true
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-host --set-priority=-1
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-host --add-ingress-zone=HOST
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-host --add-egress-zone=ANY
-  sudo firewall-cmd --permanent --policy=k8s-forwarding-host --set-target=ACCEPT
-
-  sudo firewall-cmd --reload
-  ```
-
-  Verify rule and policy status:
-
-  ```bash
-  sudo firewall-cmd --list-all
-  sudo firewall-cmd --zone=trusted --list-all
-  sudo firewall-cmd --get-policies
-  ```
+  See [Host and LAN Access](NETWORKPOLICY.md#host-and-lan-access) for the rules and [Host Firewall Network Checks](VERIFICATION.md#host-firewall-network-checks) for before/after service checks and LAN validation. If the Fedora change interrupts a required path, restore the saved `/etc/firewalld` directory from the local terminal and run `sudo firewall-cmd --reload`; do not stop the firewall or reopen all ports as the permanent fix.
 
 * [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (`GATEWAY_IP` through `LAN_LB_POOL_STOP`, plus `COREDNS_LAN_IP`, in `infrastructure/cluster-config/networking.yaml`; `just preflight` checks them). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
 
