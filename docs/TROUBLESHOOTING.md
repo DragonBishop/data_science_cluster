@@ -112,9 +112,9 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > [!IMPORTANT]
 > A firewall fix alone does not retry an already-failed HelmRelease — see the `RetriesExceeded` / `Stalled` entry below to clear the retry lock afterward.
 
-* **Gateway routing or TLS fails (`*.internal` domain unreachable)**
+* **Gateway routing or TLS fails (`*.cluster.internal` domain unreachable)**
   * **What's happening:** The client cannot resolve the domain or route traffic to the Gateway IP.
-  * **How to fix it:** Run `just gateway-check` to verify listener routing and TLS termination. Confirm CoreDNS custom zone is responding (`dig @192.0.2.242 <name>.internal`) and verify that Gateway listeners are programmed (`kubectl get gateway -n gateway internal-gateway`).
+  * **How to fix it:** Run `just gateway-check` to verify listener routing and TLS termination. Confirm CoreDNS custom zone is responding (`dig @192.0.2.242 <name>.cluster.internal`) and verify that Gateway listeners are programmed (`kubectl get gateway -n gateway internal-gateway`).
 
 * **A `CiliumNetworkPolicy`/`CiliumClusterwideNetworkPolicy` `toPorts` rule doesn't allow traffic it should cover**
   * **What's happening:** Cilium enforces `toPorts` against the destination pod's actual container port, not a Service's externally-exposed `port`. Traffic to a `ClusterIP` gets DNAT'd to its backend port at the client's socket level before a packet exists on the wire, so a request to `some-service:80` is policy-checked as traffic to the pod's real listening port (e.g. `:9090`), not `:80`.
@@ -242,7 +242,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
-  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/databases-tls.yaml`. `postgres-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `postgres.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `openbao-pki-issuer`.
+  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/databases-tls.yaml`. `postgres-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `databases.cluster.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `postgres-ca-issuer`.
 
 > [!NOTE]
 > Any new name added to `databases-tls.yaml` must also be permitted in `terraform/openbao/pki.tf` (`permitted_dns_domains` and `allowed_domains`), or OpenBao PKI rejects the CSR before cert-manager can reissue.
