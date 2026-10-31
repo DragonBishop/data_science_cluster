@@ -1,12 +1,19 @@
 ---
-- name: Fetch in-cluster OpenBao CA certificate
+- name: Wait for OpenBao's public listener CA
+  ansible.builtin.command:
+    cmd: >-
+      kubectl --kubeconfig="{{ kubeconfig_path }}" -n {{ openbao_namespace }} wait
+      configmap/openbao-ca-bundle --for=create --for=jsonpath='{.data.ca\.crt}' --timeout=120s
+  changed_when: false
+
+- name: Read OpenBao's public listener CA
   kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig_path }}"
     api_version: v1
-    kind: Secret
-    name: openbao-server-cert
+    kind: ConfigMap
+    name: openbao-ca-bundle
     namespace: "{{ openbao_namespace }}"
-  register: opentofu_openbao_cert_secret
-  failed_when: opentofu_openbao_cert_secret.resources | default([]) | length == 0
+  register: opentofu_openbao_ca
 
 - name: Ensure local OpenBao cert directory exists
   ansible.builtin.file:
@@ -17,7 +24,7 @@
 - name: Write in-cluster OpenBao CA certificate locally
   ansible.builtin.copy:
     dest: "{{ openbao_local_dir }}/certs/openbao-internal-ca.crt"
-    content: "{{ opentofu_openbao_cert_secret.resources[0].data['ca.crt'] | b64decode }}"
+    content: "{{ opentofu_openbao_ca.resources[0].data['ca.crt'] }}"
     mode: "0600"
 
 - name: Wait for OpenBao on its local redirect

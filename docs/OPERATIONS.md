@@ -26,6 +26,8 @@ One-time, first-install setup: see [Installation](INSTALLATION.md) for Requireme
 | `just preflight` | Run host readiness check | Verify host tooling, `gh` auth, firewall rules, and reserved IP range before install; prints install commands for missing or mismatched tools and fix commands for firewall rules |
 | `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Install k3s, Cilium, cert-manager, trust-manager and OpenBao, apply `terraform/openbao`, then install SPIRE and Flux |
 
+`just bootstrap` prompts for the OpenBao root token, state-encryption passphrase and PostgreSQL superuser password. See [Access Policy](ACCESSPOLICY.md#provisioning-credentials) for credential handling.
+
 ## Cluster Lifecycle
 
 Start and stop the cluster each work session, check its health, and inspect or reach into it while it runs.
@@ -39,7 +41,7 @@ Start and stop the cluster each work session, check its health, and inspect or r
 | `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting; fuzzy-select a pod from all namespaces and describe it |
 | `just gateway-check` (`just gateway-check <DOMAIN> [HOST]`) | Verify Gateway routing | Post-install verification or testing Gateway HTTPRoute and TLS edge certificates |
 | `just hubble` (runs `hubble status`) / `just hubble observe --follow` | Run the Hubble CLI inside the Cilium agent | Hubble status, or real-time network and security flow inspection |
-| `just bao-shell` | Open interactive OpenBao shell | Direct `bao` CLI access inside `openbao-0` pod with a sanitized environment |
+| `just bao-shell` | Open interactive OpenBao shell | Direct `bao` CLI access inside `openbao-0` for interactive OpenBao administration |
 
 ## Database
 

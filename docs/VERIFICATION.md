@@ -198,7 +198,7 @@ kubectl get clusterissuer openbao-pki-issuer
 kubectl get certificates -A
 ```
 
-The issuer and its certificates should report `Ready=True`. Services and Hubble use the same `openbao-pki-issuer`. See [Certificate Policy](CERTIFICATEPOLICY.md) for the profile and CA ownership of each consumer.
+The issuer and its certificates should report `Ready=True`. Services and Hubble use the same `openbao-pki-issuer`. See [Access Policy](ACCESSPOLICY.md#certificate-trust) for CA ownership and signing profiles.
 
 ## Verify Cluster Health
 
