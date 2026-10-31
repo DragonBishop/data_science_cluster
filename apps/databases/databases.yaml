@@ -10,7 +10,9 @@ spec:
     name: postgres-cluster
   schemas:
     - name: topology
+      owner: app_readwrite
     - name: tiger
+      owner: app_readwrite
   extensions:
     - name: fuzzystrmatch
       schema: public

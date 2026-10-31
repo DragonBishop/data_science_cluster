@@ -19,6 +19,8 @@ Access to namespaced Kubernetes resources uses a Role and RoleBinding in the res
 
 The human administrator uses the `postgres` superuser login with a password supplied during bootstrap. CNPG manages that password through Secret `postgres-superuser-credentials`. OpenBao uses the same login to create temporary database users.
 
+Workload logins use stable database-owner roles: `app_readwrite` for the data-science database and `tekton_readwrite` for Results. These owners have no login or global data-role memberships. CNPG initializes the data-science database with default table and sequence privileges for `app_readwrite` before installing PostGIS. Objects created by `postgres` in that database inherit these privileges; other databases do not. OpenBao's temporary logins select their owner role by default, so objects they create retain a stable owner after a login expires.
+
 ### Issuer Authentication
 
 cert-manager authenticates `openbao-pki-issuer` to OpenBao using a short-lived Kubernetes token for ServiceAccount `cert-manager` in namespace `cert-manager`.
