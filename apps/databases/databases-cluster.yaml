@@ -24,7 +24,7 @@ spec:
     name: postgres-superuser-credentials
   bootstrap:
     initdb:
-      database: postgres
+      database: ${DATA_SCIENCE_DB_NAME}
       owner: postgres
       secret:
         name: postgres-superuser-credentials
@@ -32,7 +32,9 @@ spec:
       # Runs once at initdb to establish the shared read/write role
       postInitSQL:
         - CREATE ROLE app_readwrite NOLOGIN
-        - GRANT pg_read_all_data, pg_write_all_data TO app_readwrite
+      postInitApplicationSQL:
+        - ALTER DEFAULT PRIVILEGES FOR ROLE postgres GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_readwrite
+        - ALTER DEFAULT PRIVILEGES FOR ROLE postgres GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app_readwrite
 
   managed:
     roles:
