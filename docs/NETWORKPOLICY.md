@@ -175,6 +175,10 @@ flowchart LR
   gw -->|"the route, rule 2"| pods[The service's pods]
 ```
 
+### Adding an HTTPS service
+
+Reuse the shared `https` listener on 443, its wildcard DNS, and its wildcard certificate. The configured domain is `cluster.internal`, so applications use names such as `example.cluster.internal` and the certificate covers `*.cluster.internal`. Adding a hostname under that wildcard needs no per-service edit to the Gateway, DNS, certificate, or host firewall.
+
 ## Conventions
 
 * The cluster has one policy file, `infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`.

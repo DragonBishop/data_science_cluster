@@ -7,7 +7,7 @@ metadata:
 data:
   COREDNS_LAN_IP: "192.0.2.242"
   GATEWAY_IP: "192.0.2.240"
-  INTERNAL_DOMAIN: "internal"
+  INTERNAL_DOMAIN: "cluster.internal"
   K3S_API_HOST: "127.0.0.1"
   K3S_API_PORT: "6443"
   LAN_CIDR: "192.168.1.0/24"

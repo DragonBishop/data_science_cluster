@@ -473,3 +473,35 @@
         that:
           - postgres_archiving_conditions[0].status == 'True'
         fail_msg: "Postgres is not archiving WAL to SeaweedFS: {{ postgres_archiving_conditions[0].message }}"
+
+    - name: Pick the shared Gateway test hostname
+      ansible.builtin.set_fact:
+        gateway_check_hostname: "publication-check.{{ cluster_config.INTERNAL_DOMAIN }}"
+
+    - name: Check the Gateway's certificate chain and hostname
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 10s
+          - openssl
+          - s_client
+          - -brief
+          - -verify_return_error
+          - -verify_hostname
+          - "{{ gateway_check_hostname }}"
+          - -servername
+          - "{{ gateway_check_hostname }}"
+          - -CAfile
+          - /dev/stdin
+          - -connect
+          - "{{ cluster_config.GATEWAY_IP }}:443"
+        stdin: "{{ spire_openbao_root_ca.resources[0].data['ca.crt'] }}"
+      register: gateway_https_check
+      changed_when: false
+      failed_when: false
+
+    - name: It should verify the shared wildcard certificate for an application hostname
+      ansible.builtin.assert:
+        that:
+          - gateway_https_check.rc == 0
+        fail_msg: "Gateway TLS check failed: {{ gateway_https_check.stderr }}"

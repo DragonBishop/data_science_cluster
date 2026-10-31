@@ -111,19 +111,21 @@ Test Gateway listener routing and edge certificate termination:
 > **Just Recipe:**
 >
 > ```bash
-> just gateway-check <name>.internal
+> just gateway-check <name>.cluster.internal
 > ```
 
 > [!NOTE]
 > **Manual Shell Command:**
 >
 > ```bash
-> curl -v --resolve <name>.internal:443:192.0.2.240 \
+> curl -v --resolve <name>.cluster.internal:443:192.0.2.240 \
 >   --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
->   https://<name>.internal/
+>   https://<name>.cluster.internal/
 > ```
 
 Run it for any hostname with an HTTPRoute on the Gateway. Verify that the page responds and the certificate chains to `openbao-pki-issuer`'s CA (`internal-edge-cert`).
+
+Full-playbook verification also checks the shared edge certificate chain and application hostname with OpenSSL.
 
 ---
 
