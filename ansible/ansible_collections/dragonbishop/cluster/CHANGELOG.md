@@ -1,3 +1,15 @@
+## [2.4.1](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.0...v2.4.1) - 2026-10-31
+
+### 🐛 Bug Fixes
+
+- *(cert-manager)* Restrict issuer token requests (#78) ([3debe69](https://github.com/DragonBishop/data_science_cluster/commit/3debe69da1425e09f1bd51b3febd0fa5e215828a))
+- *(gateway)* Use cluster.internal for shared TLS ([098b9d7](https://github.com/DragonBishop/data_science_cluster/commit/098b9d74962afc847e71825d16d9eb6622ab3b75))
+- *(gateway)* Require namespace approval for routes ([77c4076](https://github.com/DragonBishop/data_science_cluster/commit/77c4076068c13e95dc8693d3e1195424bb0003b0))
+
+### ♻️ Refactor
+
+- *(tests)* Simplify cluster integration verification ([4dfd2e4](https://github.com/DragonBishop/data_science_cluster/commit/4dfd2e41d7dafaa51dc215434ec169c4ddf5b96a))
+
 ## [2.4.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.3.0...v2.4.0) - 2026-10-30
 
 ### 🚀 Features
