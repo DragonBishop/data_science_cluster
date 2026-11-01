@@ -1,3 +1,9 @@
+## [2.5.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.1...v2.5.0) - 2026-11-01
+
+### 🚀 Features
+
+- *(cluster)* Track PostGIS image updates and document recovery ([19a52f0](https://github.com/DragonBishop/data_science_cluster/commit/19a52f0f00323fa4979496060af74f5ef48db8b8))
+
 ## [2.4.1](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.0...v2.4.1) - 2026-11-01
 
 ### 🐛 Bug Fixes
