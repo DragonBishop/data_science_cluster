@@ -34,6 +34,8 @@ spec:
     global:
       seaweedfs:
         enableSecurity: true
+        createClusterRole: false
+        automountServiceAccountToken: false
         # HTTPS between master, filer, volume and S3, each client verifying against the chart's CA
         extraEnvironmentVars:
           WEED_HTTPS_CLIENT_ENABLED: "true"
@@ -151,6 +153,7 @@ spec:
           memory: ${SEAWEEDFS_VOLUME_MEM_LIMIT}
     s3:
       enabled: true
+      serviceAccountName: seaweedfs
       resources:
         requests:
           cpu: ${SEAWEEDFS_S3_CPU_REQUEST}
