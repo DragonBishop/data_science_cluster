@@ -16,7 +16,7 @@ data:
   # renovate: datasource=github-releases depName=k3s-io/k3s
   K3S_VERSION: "v1.37.1+k3s1"
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
-  KUBECTL_VERSION: "v1.37.1"
+  KUBECTL_VERSION: "v1.37.2"
   # renovate: datasource=docker depName=alpine/k8s
   ALPINE_K8S_VERSION: "1.37.1"
   # renovate: datasource=docker depName=openbao/openbao
