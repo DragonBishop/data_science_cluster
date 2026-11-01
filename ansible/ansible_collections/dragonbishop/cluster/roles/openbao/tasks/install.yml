@@ -6,12 +6,14 @@
   register: openbao_release
 
 # A sealed OpenBao never turns Ready; Helm doesn't wait for it
-- name: Install OpenBao
+- name: Install the OpenBao server
   kubernetes.core.helm:
     name: openbao
     chart_ref: oci://ghcr.io/openbao/charts/openbao
     chart_version: "{{ openbao_version }}"
     release_namespace: "{{ openbao_namespace }}"
     values: "{{ openbao_values_substituted.stdout | from_yaml }}"
+    set_values:
+      - value: csi.enabled=false
     wait: false
   when: openbao_release.status is not defined

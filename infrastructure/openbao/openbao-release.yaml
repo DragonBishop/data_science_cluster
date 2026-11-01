@@ -27,3 +27,13 @@ spec:
     - kind: ConfigMap
       name: openbao-values
       valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: ClusterRole
+              name: openbao-csi-provider-clusterrole
+            patch: |
+              - op: replace
+                path: /rules
+                value: []

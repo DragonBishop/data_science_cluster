@@ -177,6 +177,13 @@
           cluster.postgresql.cnpg.io/postgres-cluster --for=create --for=condition=ContinuousArchiving --timeout=600s
       changed_when: false
 
+    - name: It should start Results with its mounted database login
+      ansible.builtin.command:
+        cmd: >-
+          kubectl --kubeconfig="{{ kubeconfig_path }}" -n tekton wait
+          deployment/tekton-results-api --for=create --for=condition=Available --timeout=1200s
+      changed_when: false
+
     - name: Read the PostgreSQL cluster
       kubernetes.core.k8s_info:
         api_version: postgresql.cnpg.io/v1
