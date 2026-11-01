@@ -10,7 +10,7 @@ spec:
   instances: ${POSTGRES_INSTANCES}
   smartShutdownTimeout: ${POSTGRES_SMART_SHUTDOWN_TIMEOUT}
   stopDelay: ${POSTGRES_STOP_DELAY}
-  imageName: ghcr.io/cloudnative-pg/postgis:${POSTGRES_VERSION}-${POSTGIS_VERSION}-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgis:${POSTGIS_IMAGE_TAG}
 
   resources:
     requests:

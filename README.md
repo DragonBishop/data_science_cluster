@@ -126,7 +126,7 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | --- | --- | --- |
 | Barman Cloud Plugin | `0.8.1` <!-- renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts --> | WAL archiving and base backups for CNPG, via the `ObjectStore` resource rather than in-tree `spec.backup.barmanObjectStore`. |
 | CloudNativePG (CNPG) | `0.29.1` <!-- renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts --> | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
-| PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` | Image the CNPG `Cluster` runs (`18.6` PostgreSQL, `3.6.4` PostGIS). |
+| PostgreSQL / PostGIS image | `18.6-3.6.4-system-trixie` <!-- renovate: datasource=docker depName=ghcr.io/cloudnative-pg/postgis --> | PostgreSQL/PostGIS operand image. |
 | SeaweedFS | `4.51.0` <!-- renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm --> | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.seaweedfs.svc:9000`). Its IAM API lets OpenBao create and delete Barman's key pairs. |
 
 The **Tekton Operator** installs **Tekton Pipelines**, **Tekton Triggers** and **Tekton Results**, which run **`core-test`** after every change Flux applies to the core. **Zot** holds the cluster's images. Tekton's controllers, Results and their Secrets live in `tekton`, the EventListener and Triggers in `tekton-triggers`, and Tasks, Pipelines and their runs in `tekton-pipelines`:
