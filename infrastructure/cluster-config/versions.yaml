@@ -8,9 +8,9 @@ data:
   # renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts
   BARMAN_CLOUD_VERSION: "0.8.1"
   # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io
-  CERT_MANAGER_VERSION: "v1.21.2"
+  CERT_MANAGER_VERSION: "v1.21.3"
   # renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io
-  CILIUM_VERSION: "1.20.3"
+  CILIUM_VERSION: "1.20.4"
   # renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts
   CNPG_VERSION: "0.29.1"
   # renovate: datasource=github-releases depName=k3s-io/k3s
