@@ -1,3 +1,18 @@
+## [2.4.1](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.0...v2.4.1) - 2026-11-01
+
+### 🐛 Bug Fixes
+
+- *(cert-manager)* Restrict issuer token requests (#78) ([3debe69](https://github.com/DragonBishop/data_science_cluster/commit/3debe69da1425e09f1bd51b3febd0fa5e215828a))
+- *(gateway)* Use cluster.internal for shared TLS ([098b9d7](https://github.com/DragonBishop/data_science_cluster/commit/098b9d74962afc847e71825d16d9eb6622ab3b75))
+- *(gateway)* Require namespace approval for routes ([77c4076](https://github.com/DragonBishop/data_science_cluster/commit/77c4076068c13e95dc8693d3e1195424bb0003b0))
+- *(pki)* Constrain the shared certificate signing profile ([d0ba4ac](https://github.com/DragonBishop/data_science_cluster/commit/d0ba4acacabd5c750f2c33df8c51c6b17eee8b50))
+- *(security)* Remove cached OpenBao login and consolidate access policy ([2ffc29d](https://github.com/DragonBishop/data_science_cluster/commit/2ffc29df795e3138cc5f5255d13376c344459221))
+- *(csi)* Use kubelet tokens for OpenBao mounts ([d4cc242](https://github.com/DragonBishop/data_science_cluster/commit/d4cc242e353eeed0413d645a3bdd5cc77c438594))
+
+### ♻️ Refactor
+
+- *(tests)* Simplify cluster integration verification ([4dfd2e4](https://github.com/DragonBishop/data_science_cluster/commit/4dfd2e41d7dafaa51dc215434ec169c4ddf5b96a))
+
 ## [2.4.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.3.0...v2.4.0) - 2026-10-30
 
 ### 🚀 Features
