@@ -103,7 +103,7 @@ The core is always on and holds every piece of the cluster's state. It relies on
 
 | Component | Version | Description |
 | --- | --- | --- |
-| Cilium | `1.20.3` <!-- renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io --> | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
+| Cilium | `1.20.4` <!-- renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io --> | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
 | DNS (CoreDNS) | `v1.14.6` | k3s's own in-cluster CoreDNS (`kube-system`), extended with a `cluster.internal` zone via a `coredns-custom` ConfigMap (`infrastructure/cilium/coredns-custom.yaml`). Resolves `*.cluster.internal` to the shared Gateway's IP for LAN clients, alongside its existing `*.svc.cluster.local` role for pods. |
 | Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`): HTTPS (443, wildcard cert) for web UIs and raw TCP (5432) for Postgres. [Adding an HTTPS service](docs/NETWORKPOLICY.md#adding-an-https-service) needs a route and a receiver rule; approve its namespace once. |
 | Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
@@ -113,7 +113,7 @@ The core is always on and holds every piece of the cluster's state. It relies on
 
 | Component | Version | Description |
 | --- | --- | --- |
-| cert-manager | `v1.21.2` <!-- renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io --> | Manages local edge CA, provisions OpenBao TLS, and mints leaf certificates via `openbao-pki-issuer`. |
+| cert-manager | `v1.21.3` <!-- renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io --> | Manages local edge CA, provisions OpenBao TLS, and mints leaf certificates via `openbao-pki-issuer`. |
 | OpenBao (in-cluster) | `2.7.1` <!-- renovate: datasource=docker depName=openbao/openbao --> (chart `0.30.4` <!-- renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm -->) | Secrets backend on PebbleDB storage; `just start` unseals it from the GPG-encrypted keyfile in `.local/openbao/`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
 | OpenBao Database & PKI Engines | Same as OpenBao | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
 | OpenBao CSI Provider | `2.0.3` (via OpenBao chart `0.30.4` <!-- renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm -->) | DaemonSet in `openbao` that logs in to OpenBao with each mounting pod's ServiceAccount token and reads the logins its `SecretProviderClass` names. |
