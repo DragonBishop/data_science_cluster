@@ -22,6 +22,12 @@
       "description": "k3s and kubectl move together",
       "matchDepNames": ["k3s-io/k3s", "kubernetes/kubernetes"],
       "groupName": "kubernetes"
+    },
+    {
+      "description": "PostGIS operand: track both component versions; keep system-trixie",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/cloudnative-pg/postgis"],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-(?<patch>\\d+)\\.(?<build>\\d+)\\.(?<revision>\\d+)-system-trixie$"
     }
   ],
   "customManagers": [
@@ -40,6 +46,15 @@
       "matchStrings": [
         "`(?<currentValue>[^`]+)` <!-- renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))? -->"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "PostGIS image in the documented physical-recovery manifest",
+      "managerFilePatterns": ["/^docs/BACKUPS_RESTORE\\.md$/"],
+      "matchStrings": [
+        "imageName: (?<depName>ghcr\\.io/cloudnative-pg/postgis):(?<currentValue>\\d+\\.\\d+-\\d+\\.\\d+\\.\\d+-system-trixie)"
+      ],
+      "datasourceTemplate": "docker"
     }
   ]
 }
