@@ -5,6 +5,23 @@
   changed_when: false
   failed_when: false
 
+- name: Read the installed k3s version
+  ansible.builtin.set_fact:
+    k3s_installed_version: "{{ k3s_installed.stdout.split()[2] if k3s_installed.rc == 0 else '' }}"
+
+- name: Refuse to downgrade k3s
+  ansible.builtin.assert:
+    that:
+      - not (k3s_installed_version is version(k3s_version, '>'))
+    fail_msg: >-
+      Installed k3s {{ k3s_installed_version }} is newer than the pinned {{ k3s_version }}.
+      k3s does not support downgrades. Raise K3S_VERSION, or run just uninstall, reboot and re-run just bootstrap.
+  when: k3s_installed.rc == 0
+
+- name: Determine whether k3s needs installation or an upgrade
+  ansible.builtin.set_fact:
+    k3s_install_required: "{{ k3s_installed_version != k3s_version }}"
+
 - name: Check for Cilium runtime state left by a previous cluster
   ansible.builtin.stat:
     path: "{{ item }}"
@@ -31,14 +48,14 @@
     url: "{{ k3s_install_script_url }}"
     dest: /tmp/k3s-install.sh
     mode: "0700"
-  when: k3s_installed.rc != 0
+  when: k3s_install_required
   become: true
 
 - name: Execute k3s installation script
   ansible.builtin.command: /tmp/k3s-install.sh
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
-  when: k3s_installed.rc != 0
+  when: k3s_install_required
   become: true
   changed_when: true
 
@@ -46,5 +63,5 @@
   ansible.builtin.file:
     path: /tmp/k3s-install.sh
     state: absent
-  when: k3s_installed.rc != 0
+  when: k3s_install_required
   become: true

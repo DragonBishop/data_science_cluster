@@ -109,6 +109,7 @@ The run that initializes OpenBao prints the root token and the unseal keys once.
 | --- | --- |
 | `unit-cert-manager-values` | The pinned cert-manager chart renders with the values the role renders, and its schema accepts them |
 | `unit-k3s-config` | `config.yaml` disables flannel, kube-proxy, network policy, Traefik and ServiceLB, enables secrets encryption, and sets `write-kubeconfig` |
+| `unit-k3s-newer-version` | With a k3s newer than `K3S_VERSION` installed, the install refuses the downgrade and leaves that k3s in place |
 | `unit-k3s-stale-cilium-dir` | With `/run/cilium` present and no k3s installed, the install refuses, naming `/run/cilium` |
 | `unit-k3s-stale-cilium-interface` | With a `cilium_host` interface and no `/run/cilium`, the install refuses, naming `/sys/class/net/cilium_host` |
 | `unit-openbao-keyfile` | The unseal keys are written once to a mode-0600 GPG file that decrypts to exactly those keys, and a second run skips the write |

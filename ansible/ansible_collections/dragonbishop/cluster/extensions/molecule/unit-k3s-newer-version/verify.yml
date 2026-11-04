@@ -1,0 +1,26 @@
+---
+- name: The k3s install over a newer installed k3s
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Check for the k3s installer script
+      ansible.builtin.stat:
+        path: /tmp/k3s-install.sh
+      register: k3s_installer_script
+
+    - name: Read the installed k3s version
+      ansible.builtin.command: k3s -v
+      register: k3s_version_check
+      changed_when: false
+
+    - name: It should not download the k3s installer
+      ansible.builtin.assert:
+        that:
+          - not k3s_installer_script.stat.exists
+        fail_msg: the k3s installer was downloaded despite the newer installed k3s
+
+    - name: It should leave the newer k3s in place
+      ansible.builtin.assert:
+        that:
+          - "'v99.0.0+k3s1' in k3s_version_check.stdout"
+        fail_msg: "the installed k3s changed: {{ k3s_version_check.stdout }}"
