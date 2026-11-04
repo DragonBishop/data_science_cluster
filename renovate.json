@@ -13,6 +13,20 @@
   },
   "packageRules": [
     {
+      "description": "One weekly PR for all GitHub Actions updates, including majors and digests",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "groupSlug": "github-actions",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "One weekly PR for all cluster component updates from the regex managers, including majors",
+      "matchManagers": ["custom.regex"],
+      "groupName": "cluster components",
+      "groupSlug": "cluster-components",
+      "separateMajorMinor": false
+    },
+    {
       "description": "Python patch releases only; move to a new 3.x by hand once deps support it",
       "matchDepNames": ["python"],
       "matchUpdateTypes": ["minor", "major"],

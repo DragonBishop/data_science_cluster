@@ -2,7 +2,7 @@
 #
 # uninstall-cluster.sh: Tears down k3s and clears stale local cluster state.
 #
-set -uo pipefail
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -16,6 +16,11 @@ acquire_sudo() {
 uninstall_k3s() {
     local uninstaller="/usr/local/bin/k3s-uninstall.sh"
     if [ ! -x "$uninstaller" ]; then
+        if [ -e "$uninstaller" ] || command -v k3s >/dev/null 2>&1 || systemctl cat k3s.service &>/dev/null; then
+            echo "❌ ERROR: k3s appears installed but $uninstaller is missing or not executable."
+            echo "   Repair the uninstaller before clearing local recovery material."
+            return 1
+        fi
         echo "ℹ️  k3s-uninstall.sh not found; k3s is not installed."
         return 0
     fi
@@ -28,7 +33,9 @@ clear_cilium_host_files() {
     echo "🧹 Clearing Cilium files that persist across reboots..."
     sudo rm -f /etc/cni/net.d/05-cilium.conflist
     # Restore CNI configs Cilium set aside, as its own post-uninstall-cleanup does
-    sudo find /etc/cni/net.d -name '*.cilium_bak' -exec sh -c 'mv "$1" "${1%.cilium_bak}"' _ {} \;
+    if [ -d /etc/cni/net.d ]; then
+        sudo find /etc/cni/net.d -name '*.cilium_bak' -exec sh -c 'mv "$1" "${1%.cilium_bak}"' _ {} \;
+    fi
     sudo rm -f /opt/cni/bin/cilium-cni
     sudo rm -f /etc/sysctl.d/99-zzz-override_cilium.conf
     sudo rm -rf /var/lib/cilium

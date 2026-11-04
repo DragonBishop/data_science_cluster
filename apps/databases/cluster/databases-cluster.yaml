@@ -1,0 +1,64 @@
+# CloudNativePG PostgreSQL cluster; postgres-bootstrap adds its bootstrap section at creation
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-cluster
+  namespace: databases
+spec:
+  instances: ${POSTGRES_INSTANCES}
+  smartShutdownTimeout: ${POSTGRES_SMART_SHUTDOWN_TIMEOUT}
+  stopDelay: ${POSTGRES_STOP_DELAY}
+  imageName: ghcr.io/cloudnative-pg/postgis:${POSTGIS_IMAGE_TAG}
+
+  resources:
+    requests:
+      cpu: "${POSTGRES_CPU_REQUEST}"
+      memory: "${POSTGRES_MEM_REQUEST}"
+    limits:
+      memory: "${POSTGRES_MEM_LIMIT}"
+
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: postgres-superuser-credentials
+
+  managed:
+    roles:
+      - name: tekton_readwrite
+        login: false
+      - name: core_test
+        ensure: present
+        login: true
+        inRoles:
+          - app_readwrite
+
+  postgresql:
+    pg_hba:
+      - hostssl all core_test all cert map=spiffe
+    pg_ident:
+      - spiffe core-test.spiffe core_test
+
+  storage:
+    size: ${POSTGRES_STORAGE_SIZE}
+    storageClass: ${POSTGRES_STORAGE_CLASS}
+
+  # TLS server certificate and CA issued via cert-manager and OpenBao PKI
+  certificates:
+    serverTLSSecret: postgres-server-cert
+    serverCASecret: postgres-server-cert
+    clientCASecret: postgres-client-ca
+    replicationTLSSecret: postgres-replication-cert
+
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: postgres-backups
+
+  # Recovery reads the same archive the cluster writes, continuing it on a new timeline
+  externalClusters:
+    - name: postgres-backup-store
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: postgres-backups
+          serverName: postgres-cluster

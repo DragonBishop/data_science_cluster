@@ -1,0 +1,9 @@
+---
+- name: The k3s install over a newer installed k3s
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Remove the k3s stub
+      ansible.builtin.file:
+        path: /usr/local/bin/k3s
+        state: absent

@@ -1,0 +1,202 @@
+# S3 object store for WAL archiving and base backups (SeaweedFS)
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: postgres-backups
+  namespace: databases
+spec:
+  retentionPolicy: "${POSTGRES_BACKUP_RETENTION}"
+  configuration:
+    destinationPath: s3://${CNPG_BACKUP_BUCKET}/
+    endpointURL: https://seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
+    endpointCA:
+      name: openbao-root-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: barman-s3-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: barman-s3-credentials
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+---
+# Daily scheduled backup at midnight
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-cluster-daily-backup
+  namespace: databases
+spec:
+  schedule: "${POSTGRES_BACKUP_SCHEDULE}"
+  immediate: true
+  cluster:
+    name: postgres-cluster
+  backupOwnerReference: cluster
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+---
+# Recovery and initdb settings the Job adds to the Cluster
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-bootstrap-patches
+  namespace: databases
+data:
+  recovery.yaml: |
+    metadata:
+      annotations:
+        cnpg.io/skipEmptyWalArchiveCheck: "enabled"
+    spec:
+      bootstrap:
+        recovery:
+          source: postgres-backup-store
+  initdb.yaml: |
+    spec:
+      bootstrap:
+        initdb:
+          database: ${DATA_SCIENCE_DB_NAME}
+          owner: postgres
+          secret:
+            name: postgres-superuser-credentials
+          postInitSQL:
+            - CREATE ROLE app_readwrite NOLOGIN
+          postInitApplicationSQL:
+            - ALTER DEFAULT PRIVILEGES FOR ROLE postgres GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_readwrite
+            - ALTER DEFAULT PRIVILEGES FOR ROLE postgres GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app_readwrite
+---
+# Creates postgres-cluster once: recovery when the archive holds a backup, initdb when it is empty
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-bootstrap
+  namespace: databases
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-bootstrap
+    spec:
+      serviceAccountName: postgres-bootstrap
+      automountServiceAccountToken: true
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+      initContainers:
+        - name: read-archive
+          image: ghcr.io/cloudnative-pg/postgis:${POSTGIS_IMAGE_TAG}
+          securityContext:
+            runAsUser: 26
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: barman-s3-credentials
+                  key: ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: barman-s3-credentials
+                  key: ACCESS_SECRET_KEY
+            - name: AWS_CA_BUNDLE
+              value: /ca/ca.crt
+            - name: S3_ENDPOINT_URL
+              value: https://seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
+            - name: BACKUP_DESTINATION
+              value: s3://${CNPG_BACKUP_BUCKET}/
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              barman-cloud-check-wal-archive --endpoint-url "$S3_ENDPOINT_URL" --cloud-provider aws-s3 \
+                "$BACKUP_DESTINATION" postgres-cluster
+              check_status=$?
+              if [[ $check_status -eq 0 ]]; then
+                echo "The archive is empty: initdb"
+                echo initdb > /decision/bootstrap
+                exit 0
+              fi
+              if [[ $check_status -ne 1 ]]; then
+                echo "barman-cloud-check-wal-archive could not read the archive (exit $check_status)"
+                exit "$check_status"
+              fi
+
+              backup_list=$(barman-cloud-backup-list --format json --endpoint-url "$S3_ENDPOINT_URL" \
+                --cloud-provider aws-s3 "$BACKUP_DESTINATION" postgres-cluster) || exit
+              if [[ $backup_list == *'"status": "DONE"'* ]]; then
+                echo "The archive holds a completed base backup: recovery"
+                echo recovery > /decision/bootstrap
+                exit 0
+              fi
+
+              echo "The archive holds WAL but no completed base backup, so neither recovery nor initdb can use it"
+              exit 1
+          resources:
+            requests:
+              cpu: ${POSTGRES_BOOTSTRAP_CPU_REQUEST}
+              memory: ${POSTGRES_BOOTSTRAP_MEM_REQUEST}
+            limits:
+              memory: ${POSTGRES_BOOTSTRAP_MEM_LIMIT}
+          volumeMounts:
+            - name: decision
+              mountPath: /decision
+            - name: ca
+              mountPath: /ca
+              readOnly: true
+      containers:
+        - name: create-cluster
+          image: alpine/k8s:${ALPINE_K8S_VERSION}
+          securityContext:
+            runAsUser: 65535
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              set -euo pipefail
+
+              existing_cluster=$(kubectl get cluster postgres-cluster -n databases --ignore-not-found -o name)
+              if [[ -n $existing_cluster ]]; then
+                echo "postgres-cluster already exists"
+                exit 0
+              fi
+
+              bootstrap_method=$(< /decision/bootstrap)
+              echo "Creating postgres-cluster with $bootstrap_method"
+              kubectl patch --local -f /cluster/databases-cluster.yaml --type merge \
+                --patch-file "/patches/$bootstrap_method.yaml" -o yaml \
+                | kubectl create --field-manager=postgres-bootstrap -f -
+          resources:
+            requests:
+              cpu: ${POSTGRES_BOOTSTRAP_CPU_REQUEST}
+              memory: ${POSTGRES_BOOTSTRAP_MEM_REQUEST}
+            limits:
+              memory: ${POSTGRES_BOOTSTRAP_MEM_LIMIT}
+          volumeMounts:
+            - name: decision
+              mountPath: /decision
+              readOnly: true
+            - name: cluster
+              mountPath: /cluster
+              readOnly: true
+            - name: patches
+              mountPath: /patches
+              readOnly: true
+      volumes:
+        - name: decision
+          emptyDir: {}
+        - name: cluster
+          configMap:
+            name: postgres-bootstrap-cluster
+        - name: patches
+          configMap:
+            name: postgres-bootstrap-patches
+        - name: ca
+          configMap:
+            name: openbao-root-ca

@@ -1,0 +1,12 @@
+---
+- name: The k3s install over a newer installed k3s
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Install a k3s stub that reports a version newer than the pin
+      ansible.builtin.copy:
+        dest: /usr/local/bin/k3s
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "k3s version v99.0.0+k3s1 (stub)"

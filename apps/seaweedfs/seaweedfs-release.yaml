@@ -78,6 +78,17 @@ spec:
               ports:
                 - protocol: TCP
                   port: ${SEAWEEDFS_S3_PORT}
+            # postgres-bootstrap reads the backup catalog before creating the Cluster
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: databases
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: postgres-bootstrap
+              ports:
+                - protocol: TCP
+                  port: ${SEAWEEDFS_S3_PORT}
             # core-test checks the S3 certificate
             - from:
                 - namespaceSelector:
@@ -91,6 +102,15 @@ spec:
                   port: ${SEAWEEDFS_S3_PORT}
     master:
       ipBind: "0.0.0.0"
+      # Deletes multipart uploads a killed backup left unfinished
+      config: |-
+        [master.maintenance]
+        scripts = """
+          lock
+          s3.clean.uploads -timeAgo=24h
+          unlock
+        """
+        sleep_minutes = 17
       extraEnvironmentVars:
         WEED_HTTPS_MASTER_CERT: /usr/local/share/ca-certificates/master/tls.crt
         WEED_HTTPS_MASTER_KEY: /usr/local/share/ca-certificates/master/tls.key

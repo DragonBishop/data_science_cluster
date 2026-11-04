@@ -1,0 +1,25 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: databases-cluster
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 1m
+  # databases-objectstore waits for postgres-bootstrap, which creates the Cluster this Kustomization then manages
+  dependsOn:
+    - name: databases-objectstore
+    # The TCPRoute attaches to the shared Gateway
+    - name: gateway
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/databases/cluster
+  prune: true
+  wait: true
+  # A recovery replays all archived WAL before the Cluster reports Ready
+  timeout: 30m
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config

@@ -5,7 +5,7 @@ resources:
   - cilium-lan.yaml
   - cilium-clusterwide-networkpolicy.yaml
   - kube-system-networkpolicy.yaml
-  - coredns-custom.yaml
+  - coredns-config.yaml
   - coredns-lan-service.yaml
 configMapGenerator:
   - name: cilium-values

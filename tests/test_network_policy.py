@@ -42,8 +42,10 @@ def test_gateway_namespace_selectors_admit_the_database_namespace():
 
 
 def test_database_gateway_permission_matches_the_published_port():
-    route = built_resource("apps/databases", "TCPRoute", "postgres-external")
-    policy = built_resource("apps/databases", "CiliumNetworkPolicy", "postgres-cluster")
+    route = built_resource("apps/databases/cluster", "TCPRoute", "postgres-external")
+    policy = built_resource(
+        "apps/databases/security", "CiliumNetworkPolicy", "postgres-cluster"
+    )
     backend_port = route["spec"]["rules"][0]["backendRefs"][0]["port"]
     gateway_rules = [
         rule

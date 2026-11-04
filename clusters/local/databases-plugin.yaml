@@ -1,0 +1,27 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: databases-plugin
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 1m
+  dependsOn:
+    - name: cnpg-operator
+    - name: cluster-config
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/databases/plugin
+  prune: true
+  wait: true
+  timeout: 3m
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: plugin-barman-cloud
+      namespace: cnpg-system

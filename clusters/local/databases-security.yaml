@@ -1,27 +1,22 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: barman-cloud
+  name: databases-security
   namespace: flux-system
 spec:
   interval: 1h
   retryInterval: 1m
   dependsOn:
-    - name: cnpg-operator
+    - name: openbao
     - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./apps/barman-cloud
+  path: ./apps/databases/security
   prune: true
   wait: true
-  timeout: 3m
+  timeout: 5m
   postBuild:
     substituteFrom:
       - kind: ConfigMap
         name: cluster-config
-  healthChecks:
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: plugin-barman-cloud
-      namespace: cnpg-system

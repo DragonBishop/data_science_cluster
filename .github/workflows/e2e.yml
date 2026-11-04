@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/dragonbishop/cluster/(galaxy\.yml|CHANGELOG\.md)'
-          E2E_PATHS: '^(ansible|clusters|infrastructure|apps|terraform|components|modules|scripts)/|^\.github/workflows/e2e\.yml$|^pyproject\.toml$|^uv\.lock$'
+          E2E_PATHS: '^(ansible|clusters|infrastructure|apps|terraform|components|modules|scripts|src/bash)/|^\.github/workflows/e2e\.yml$|^(ansible\.cfg|pyproject\.toml|uv\.lock)$'
         run: |
           cluster_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" | grep -E "$E2E_PATHS" || true)
           echo "skip=$([ -z "$cluster_files" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
@@ -112,7 +112,7 @@ jobs:
       - name: Show Postgres Flux reconciliation
         if: failure() || cancelled()
         run: |
-          kubectl get kustomizations.kustomize.toolkit.fluxcd.io cnpg-operator databases -n flux-system -o wide || true
+          kubectl get kustomizations.kustomize.toolkit.fluxcd.io cnpg-operator databases-plugin databases-security databases-objectstore databases-cluster -n flux-system -o wide || true
           kubectl get clusters.postgresql.cnpg.io -A -o wide || true
 
       - name: Show the recent events

@@ -403,7 +403,7 @@ flowchart TD
 
     %% Platform Services
     openbao --> cnpg["cnpg-operator"]
-    cnpg --> barman["barman-cloud"]
+    cnpg --> plugin["databases-plugin"]
 
     openbao --> gw["gateway"]
     gw --> hubble["hubble"]
@@ -411,15 +411,18 @@ flowchart TD
     %% Applications
     openbao --> seaweedfs["seaweedfs"]
     cc --> csidriver["secrets-store-csi-driver"]
-    barman --> db["databases"]
-    seaweedfs --> db
-    gw --> db
-    csidriver --> db
+    openbao --> security["databases-security"]
+    plugin --> objectstore["databases-objectstore"]
+    security --> objectstore
+    seaweedfs --> objectstore
+    csidriver --> objectstore
+    objectstore --> dbcluster["databases-cluster"]
+    gw --> dbcluster
 
     %% CI
     certmgr --> tektonop["tekton-operator"]
     tektonop --> tekton["tekton"]
-    db --> tekton
+    dbcluster --> tekton
     csidriver --> tekton
     tekton --> tektonpipelines["tekton-pipelines"]
     tekton --> tektontasks["tekton-tasks"]
@@ -431,13 +434,15 @@ flowchart TD
 * `trust-manager` depends on `cert-manager`, which holds the `jetstack` HelmRepository and issues the trust-manager webhook's certificate.
 * `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap) and `trust-manager` (for the Bundle CRD its CA Bundles use).
 * `gateway` depends on `openbao` (for PKI).
-* `cnpg-operator` depends on `openbao`, and `barman-cloud` depends on `cnpg-operator`.
+* `cnpg-operator` depends on `openbao`, and `databases-plugin` depends on `cnpg-operator`.
 * `hubble` depends on `gateway`.
 * `secrets-store-csi-driver` depends on `cluster-config`.
 * `seaweedfs` depends on `namespaces` and `openbao` and is Ready only after its install hook creates the `cnpg-backups` bucket.
-* `databases` depends on `openbao`, `barman-cloud`, `seaweedfs`, `gateway` and `secrets-store-csi-driver`, so the PostGIS cluster starts with its backup bucket and its CA Secrets already in place, and Barman's key pair can mount.
+* `databases-security` depends on `openbao`, which creates the `openbao-selfsigned-bootstrap` issuer that self-signs Postgres's CA.
+* `databases-objectstore` depends on `openbao`, `databases-plugin`, `databases-security`, `seaweedfs` and `secrets-store-csi-driver`. Its objects need the `ObjectStore` CRD, the Job's RBAC and network policy, the `cnpg-backups` bucket and Barman's CSI-mounted key pair.
+* `databases-cluster` depends on `databases-objectstore`, which turns Ready when its `postgres-bootstrap` Job has created the Cluster. It also depends on `gateway`, which its TCPRoute attaches to.
 * `tekton-operator` depends on `cert-manager`.
-* `tekton` depends on `tekton-operator`, `openbao`, `databases` and `secrets-store-csi-driver`. Every Results login joins the `tekton_readwrite` role, which `databases` creates. The operator holds Results back until the login's Secret exists, which the `opentofu` role creates empty for the CSI driver to fill.
+* `tekton` depends on `tekton-operator`, `openbao`, `databases-cluster` and `secrets-store-csi-driver`. Every Results login joins the `tekton_readwrite` role, a managed role of the Cluster in `databases-cluster`. The operator holds Results back until Secret `tekton-results-postgres` exists. The `opentofu` role creates it empty, and the CSI driver fills it.
 * `tekton-pipelines` and `tekton-tasks` depend on `tekton`, which installs the Pipeline and Task CRDs.
 
 Once Flux reports every Kustomization Ready, continue with [Verification](VERIFICATION.md).

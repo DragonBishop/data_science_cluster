@@ -11,15 +11,17 @@ The directory tree of this repository, then what each directory and file does.
 ## Naming Conventions
 
 * `apps/` holds the Postgres server and its backups: Postgres, SeaweedFS and Barman Cloud. Everything else in the cluster is `infrastructure/`.
-* Each Flux Kustomization is `clusters/local/<name>.yaml` and points at one directory. A namespace with more than one Kustomization keeps one directory, with a subdirectory per extra Kustomization, as `apps/databases/secrets/` does.
+* Each Flux Kustomization is `clusters/local/<name>.yaml` and points at one directory. A namespace with more than one Kustomization keeps one directory, with a subdirectory per Kustomization, such as `apps/databases/cluster/`.
 * A manifest file is named `<component>-<role>.yaml`, with the role from this list:
 
 | Role | Holds |
 | --- | --- |
 | `-release` | a HelmRelease and its HelmRepository or OCIRepository |
 | `-values` | a Helm values file for a `configMapGenerator` |
-| `-config` | an operator's own configuration resource, such as the TektonConfig |
-| `-cluster` | a CNPG Cluster, its ObjectStore and ScheduledBackup |
+| `-config` | a component's own configuration resource, such as the TektonConfig or CoreDNS's custom ConfigMap |
+| `-cluster` | a CNPG Cluster |
+| `-backups` | an ObjectStore, its ScheduledBackup and the Job that bootstraps the Cluster from them |
+| `-credentials` | a SecretProviderClass and the Deployment that holds its mount |
 | `-issuers` | ClusterIssuers, their RBAC and the CA Certificates they sign with |
 | `-tls` | Certificates and Bundles |
 | `-rbac` | Roles, bindings and ServiceAccounts |
@@ -27,10 +29,9 @@ The directory tree of this repository, then what each directory and file does.
 | `-localhost` | a LocalRedirectPolicy |
 | `-networkpolicy` | a namespace's one policy file ([Network Policy](NETWORKPOLICY.md#conventions)) |
 
-* Some files take another name, for one of five reasons:
+* Some files take another name, for one of four reasons:
   * **A tool fixes the name.** `kustomization.yaml` is kustomize's, and `standard-install.yaml` keeps its upstream release name.
   * **The file holds one kind of object, named for that kind.** `namespaces.yaml` holds the Namespaces, `gateway.yaml` the shared Gateway, and `databases.yaml` the CNPG Databases.
-  * **The file holds one object, named for that object.** `coredns-custom.yaml` holds the ConfigMap of that name, which k3s's CoreDNS reads. Each Task file is named after its Task.
   * **The file is a cluster-config fragment.** Each fragment in `infrastructure/cluster-config/` is named for the kind of value it holds, such as `versions.yaml` or `cpu-memory.yaml`, and `cluster-config.yaml` is the empty base they patch.
   * **The file holds how the LAN reaches the cluster.** `cilium-lan.yaml` holds the LAN LoadBalancer IP pool and its L2 announcement policy, and `coredns-lan-service.yaml` holds CoreDNS's LAN Service.
 * cluster-config keys are `UPPER_SNAKE_CASE`, and manifests read them as `${KEY}`. Ansible reads a key as the same name in lower case, routed in `playbooks/group_vars/all/`, one file per cluster-config category.
@@ -98,33 +99,41 @@ The directory tree of this repository, then what each directory and file does.
 │               ├── spire/
 │               └── trust_manager/
 ├── apps/
-│   ├── barman-cloud/                    # Barman Cloud CNPG plugin
-│   │   ├── barman-cloud-release.yaml
-│   │   ├── cnpg-system-networkpolicy.yaml
-│   │   └── kustomization.yaml
-│   ├── databases/                       # PostgreSQL clusters and databases, one Flux Kustomization
-│   │   ├── kustomization.yaml
-│   │   ├── databases-cluster.yaml
-│   │   ├── databases-credentials.yaml
-│   │   ├── databases-issuers.yaml
-│   │   ├── databases-localhost.yaml
-│   │   ├── databases-networkpolicy.yaml
-│   │   ├── databases-rbac.yaml
-│   │   ├── databases-route.yaml
-│   │   ├── databases-tls.yaml
-│   │   └── databases.yaml
-│   └── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases
+│   ├── databases/                       # PostgreSQL and its backups, one Kustomization per subdirectory
+│   │   ├── cluster/                     # databases-cluster: the Cluster and what uses it
+│   │   │   ├── databases-cluster.yaml
+│   │   │   ├── databases-localhost.yaml
+│   │   │   ├── databases-route.yaml
+│   │   │   ├── databases.yaml
+│   │   │   └── kustomization.yaml
+│   │   ├── objectstore/                 # databases-objectstore: the ObjectStore, its schedule and credentials, the bootstrap Job
+│   │   │   ├── databases-backups.yaml
+│   │   │   ├── databases-credentials.yaml
+│   │   │   └── kustomization.yaml
+│   │   ├── plugin/                      # databases-plugin: the Barman Cloud CNPG plugin
+│   │   │   ├── cnpg-system-networkpolicy.yaml
+│   │   │   ├── cnpg-system-release.yaml
+│   │   │   └── kustomization.yaml
+│   │   └── security/                    # databases-security: certificates, network policy and RBAC
+│   │       ├── databases-issuers.yaml
+│   │       ├── databases-networkpolicy.yaml
+│   │       ├── databases-rbac.yaml
+│   │       ├── databases-tls.yaml
+│   │       └── kustomization.yaml
+│   └── seaweedfs/                       # SeaweedFS S3 backup store, Ready before databases-objectstore
 │       ├── kustomization.yaml
 │       ├── seaweedfs-release.yaml
 │       └── seaweedfs-tls.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
-│       ├── barman-cloud.yaml            # Kustomization → apps/barman-cloud/
 │       ├── cert-manager.yaml            # Kustomization → infrastructure/cert-manager/
 │       ├── cilium.yaml                  # Kustomization → infrastructure/cilium/
 │       ├── cluster-config.yaml          # Kustomization → infrastructure/cluster-config/
 │       ├── cnpg-operator.yaml           # Kustomization → infrastructure/cnpg-operator/
-│       ├── databases.yaml               # Kustomization → apps/databases/
+│       ├── databases-cluster.yaml       # Kustomization → apps/databases/cluster/
+│       ├── databases-objectstore.yaml   # Kustomization → apps/databases/objectstore/
+│       ├── databases-plugin.yaml        # Kustomization → apps/databases/plugin/
+│       ├── databases-security.yaml      # Kustomization → apps/databases/security/
 │       ├── flux-system/                 # Flux's controllers, source and network policy
 │       │   ├── flux-networkpolicy.yaml
 │       │   ├── gotk-components.yaml     # **DO NOT EDIT** Written by `flux bootstrap`
@@ -163,7 +172,7 @@ The directory tree of this repository, then what each directory and file does.
 │   │   ├── cilium-values.yaml
 │   │   ├── cilium-lan.yaml
 │   │   ├── cilium-clusterwide-networkpolicy.yaml
-│   │   ├── coredns-custom.yaml          # internal zone on k3s's own CoreDNS
+│   │   ├── coredns-config.yaml          # internal zone on k3s's own CoreDNS
 │   │   ├── coredns-lan-service.yaml
 │   │   ├── kube-system-networkpolicy.yaml
 │   │   └── kustomization.yaml
@@ -311,30 +320,36 @@ The directory tree of this repository, then what each directory and file does.
   * **`playbooks/group_vars/all/`**: Variables Ansible loads beside the playbook. One file per `infrastructure/cluster-config/` fragment (`certificates.yml`, `cpu_memory.yml`, `networking.yml`, `replicas.yml`, `storage.yml`, `versions.yml`) lists the keys Ansible uses from it, lowercased. `ansible.yml` holds Ansible-only values and merges the fragments.
   * **`roles/`**: The eight roles; each role's `tasks/main.yml` imports named task files. Each role that installs a chart renders its values with `flux envsubst --strict` in `tasks/render.yml`.
   * **`extensions/molecule/`**: The Molecule scenarios. `config.yml` holds what every scenario inherits: the collections path, the shared inventory and the unit test sequence. `default/` creates and destroys the one podman container the `unit-*` scenarios share. `inventory/hosts.yml` describes that container, and `inventory/group_vars` links to `playbooks/group_vars`. `tasks/install_render_tools.yml` installs Helm and the Flux CLI there for the scenarios that template a role's chart. `molecule test --all --exclude full-playbook` from the collection's directory runs the unit scenarios. `full-playbook/` runs the whole playbook on a GitHub runner, from `e2e.yml`; its `verify.yml` checks cert-manager's own-account token access and denial of another local account and the Flux administrator, in separate command and assertion tasks. The clean bootstrap already exercises OpenBao-backed certificate issuance.
-* **`apps/databases/`** - The PostgreSQL clusters and their databases, credentials, networking, TLS, and backup configuration, reconciled as one Flux `Kustomization` (`clusters/local/databases.yaml`). Filenames describe the database group so additional PostgreSQL clusters can share the directory.
-  * **`kustomization.yaml`**: Every resource this Kustomization builds, in one pass.
-  * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster` (with `tekton_readwrite` as a managed role), its `ObjectStore` (configured with `https://seaweedfs-s3.seaweedfs.svc:9000`, verified against Secret `openbao-root-ca`), and `ScheduledBackup`.
-  * **`databases-credentials.yaml`**: Barman's S3 key pair. ServiceAccount and Deployment `barman-s3-credentials` and their `SecretProviderClass`. CNPG pods can't mount CSI volumes, so the Deployment's one `pause` container holds the mount, logging in as `barman-s3-role`. The CSI driver mirrors the key pair from `seaweedfs/creds/barman` into Secret `barman-s3-credentials`, which the `ObjectStore` reads.
-  * **`databases.yaml`**: CNPG `Database` resources for `data_science` (with its schemas and PostGIS extensions) and `tekton_results`.
-  * **`databases-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
-  * **`databases-networkpolicy.yaml`**: Accepts replication between instances, the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
-  * **`databases-route.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
-  * **`databases-issuers.yaml`**: Postgres's own CA, Certificate `postgres-ca` in `cert-manager`, self-signed through `openbao-selfsigned-bootstrap`, and ClusterIssuer `postgres-ca-issuer`, which signs with it.
-  * **`databases-rbac.yaml`**: ServiceAccount `databases-openbao-auth`. pgiscluster's `HostDBConnector` requests a token for it and logs in to OpenBao as `databases-role`.
-  * **`databases-tls.yaml`**: cert-manager `Certificate` `postgres-server-cert` from `postgres-ca-issuer`, labelled `cnpg.io/reload` so CNPG reloads renewals, and Bundle `postgres-ca`, which publishes the CA as ConfigMap `postgres-ca` in every labelled namespace. SANs cover the Cluster's Services, `localhost`/`127.0.0.1`, `databases.${INTERNAL_DOMAIN}`, and the shared Gateway's static LAN IP.
-* **`apps/barman-cloud/`** - The Barman Cloud CNPG plugin, in its own Flux `Kustomization` (`clusters/local/barman-cloud.yaml`).
-  * **`barman-cloud-release.yaml`**: `HelmRelease` for the plugin in `cnpg-system`.
-  * **`cnpg-system-networkpolicy.yaml`**: `cnpg-system`'s policy file; the CNPG operator reaches the plugin.
-* **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`) so `databases` is applied only after the `cnpg-backups` bucket exists.
+* **`apps/databases/`** - PostgreSQL and its backups, in four Flux Kustomizations, one per subdirectory, listed in the order Flux applies them.
+  * **`plugin/`**: The Flux `Kustomization` `databases-plugin` (`clusters/local/databases-plugin.yaml`). It installs the `ObjectStore` CRD before `databases-objectstore` applies an ObjectStore.
+    * **`cnpg-system-release.yaml`**: `HelmRelease` for the Barman Cloud CNPG plugin in `cnpg-system`.
+    * **`cnpg-system-networkpolicy.yaml`**: `cnpg-system`'s policy file, which lets the CNPG operator reach the plugin.
+  * **`security/`**: The Flux `Kustomization` `databases-security` (`clusters/local/databases-security.yaml`). It holds Postgres's certificates, its network policy and the namespace's RBAC.
+    * **`databases-issuers.yaml`**: Postgres's own CA, Certificate `postgres-ca` in `cert-manager`, self-signed through `openbao-selfsigned-bootstrap`, and ClusterIssuer `postgres-ca-issuer`, which signs with it.
+    * **`databases-networkpolicy.yaml`**: Accepts replication between instances, the CNPG operator's status checks, OpenBao's role management, and the Tekton Results API and retention-policy agent.
+    * **`databases-rbac.yaml`**: Three ServiceAccounts. pgiscluster's `HostDBConnector` requests a token for `databases-openbao-auth` and logs in to OpenBao as `databases-role`. The credentials Deployment runs as `barman-s3-credentials`. The Job runs as `postgres-bootstrap`, whose Role and RoleBinding let it get and create CNPG Clusters.
+    * **`databases-tls.yaml`**: cert-manager `Certificate` `postgres-server-cert` from `postgres-ca-issuer`, labelled `cnpg.io/reload` so CNPG reloads renewals, and Bundle `postgres-ca`, which publishes the CA as ConfigMap `postgres-ca` in every labelled namespace. SANs cover the Cluster's Services, `localhost`/`127.0.0.1`, `databases.${INTERNAL_DOMAIN}`, and the shared Gateway's static LAN IP.
+  * **`objectstore/`**: The Flux `Kustomization` `databases-objectstore` (`clusters/local/databases-objectstore.yaml`). It holds the `ObjectStore` the plugin archives to, its backup schedule and credentials, and the Job that creates the Cluster from the archive.
+    * **`kustomization.yaml`**: Generates ConfigMap `postgres-bootstrap-cluster` from `../cluster/databases-cluster.yaml`, the file the Job builds the Cluster from.
+    * **`databases-backups.yaml`**: The `ObjectStore` for WAL archiving and base backups at `https://seaweedfs-s3.seaweedfs.svc:9000`, verified against ConfigMap `openbao-root-ca`, and the `ScheduledBackup` of `postgres-cluster`. Job `postgres-bootstrap` creates `postgres-cluster` once, with `bootstrap.recovery` when Barman finds a completed base backup in the archive and `bootstrap.initdb` when the archive is empty. ConfigMap `postgres-bootstrap-patches` holds those two bootstrap sections.
+    * **`databases-credentials.yaml`**: Deployment `barman-s3-credentials` and its `SecretProviderClass`, which deliver Barman's S3 key pair. CNPG pods can't mount CSI volumes. The Deployment's one `pause` container holds the mount instead, logging in as `barman-s3-role`. The CSI driver mirrors the key pair from `seaweedfs/creds/barman` into Secret `barman-s3-credentials`, which the `ObjectStore` reads.
+  * **`cluster/`**: The Flux `Kustomization` `databases-cluster` (`clusters/local/databases-cluster.yaml`), applied after `databases-objectstore`. It holds the Cluster and the objects that need it running.
+    * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster` (with `tekton_readwrite` as a managed role) and its recovery source `postgres-backup-store`.
+    * **`databases.yaml`**: CNPG `Database` resources for `data_science` (with its schemas and PostGIS extensions) and `tekton_results`.
+    * **`databases-localhost.yaml`**: `CiliumLocalRedirectPolicy` redirecting `127.0.0.1:5432` on the node to the CNPG primary pod via eBPF, selected by CNPG's `instanceRole` label.
+    * **`databases-route.yaml`**: `TCPRoute` attaching the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
+* **`apps/seaweedfs/`** - The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`). `databases-objectstore` starts after it creates the `cnpg-backups` bucket.
   * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, `cnpg-backups` bucket created by the chart's post-install hook, and the chart's own network policies, which also admit Postgres backups and OpenBao to S3. The gateway reads its one static identity, `openbao`, from Secret `seaweedfs-credentials`, which the `opentofu` role writes, and runs with `-iam.readOnly=false` so OpenBao can create and delete Barman's IAM users.
   * **`seaweedfs-tls.yaml`**: cert-manager `Certificate` requesting the SeaweedFS S3 server certificate from `openbao-pki-issuer`.
-* **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. One Kustomization per directory under `infrastructure/` and `apps/` below.
-  * **`barman-cloud.yaml`**: Kustomization → `apps/barman-cloud/`
+* **`clusters/local/`** - Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. Each Kustomization below points at one directory under `infrastructure/` or `apps/`.
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
   * **`cilium.yaml`**: Kustomization → `infrastructure/cilium/`
   * **`cluster-config.yaml`**: Kustomization → `infrastructure/cluster-config/`
   * **`cnpg-operator.yaml`**: Kustomization → `infrastructure/cnpg-operator/`
-  * **`databases.yaml`**: Kustomization → `apps/databases/`
+  * **`databases-cluster.yaml`**: Kustomization → `apps/databases/cluster/`
+  * **`databases-objectstore.yaml`**: Kustomization → `apps/databases/objectstore/`
+  * **`databases-plugin.yaml`**: Kustomization → `apps/databases/plugin/`
+  * **`databases-security.yaml`**: Kustomization → `apps/databases/security/`
   * **`flux-system/`**: (`flux-networkpolicy.yaml`, `gotk-components.yaml`, `gotk-sync.yaml`, `kustomization.yaml`): Flux's own controllers, its `GitRepository` source and the `flux` network policy, applied together by the root `flux-system` Kustomization. `flux bootstrap` writes the `gotk-*` files (do not edit them directly).
   * **`gateway-api-crds.yaml`**: Kustomization → `infrastructure/gateway-api-crds/`
   * **`gateway.yaml`**: Kustomization → `infrastructure/gateway/`
@@ -360,7 +375,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`VERIFICATION.md`**: The checks to run once Flux has reconciled the bootstrap: the database, Gateway routing, Hubble, cluster health and backups.
 * **`infrastructure/`** - Cluster-wide platform components, listed alphabetically below:
   * **`cert-manager/`**: `cert-manager-release.yaml`, `cert-manager-values.yaml` (the Helm values the `cert_manager` role and the HelmRelease share, through ConfigMap `cert-manager-values`), `kustomization.yaml`
-  * **`cilium/`**: `cilium-lan.yaml` (LAN LoadBalancer IP pool and L2 announcements), `cilium-release.yaml`, `cilium-values.yaml`, `cilium-clusterwide-networkpolicy.yaml` (the cluster's one policy file), `coredns-custom.yaml` and `coredns-lan-service.yaml` (internal zone on CoreDNS), `kube-system-networkpolicy.yaml` (`kube-system`'s policy file), `kustomization.yaml`
+  * **`cilium/`**: `cilium-lan.yaml` (LAN LoadBalancer IP pool and L2 announcements), `cilium-release.yaml`, `cilium-values.yaml`, `cilium-clusterwide-networkpolicy.yaml` (the cluster's one policy file), `coredns-config.yaml` and `coredns-lan-service.yaml` (internal zone on CoreDNS), `kube-system-networkpolicy.yaml` (`kube-system`'s policy file), `kustomization.yaml`
   * **`cluster-config/`**: `cluster-config.yaml` (empty base), `kustomization.yaml`, and one fragment per kind of value: `certificates.yaml`, `cpu-memory.yaml`, `databases.yaml`, `networking.yaml`, `replicas.yaml`, `retention.yaml`, `schedules.yaml`, `storage.yaml`, `timeouts.yaml`, `versions.yaml` (centralized configuration ConfigMap)
   * **`cnpg-operator/`**: `cnpg-operator-release.yaml`, `kustomization.yaml`
   * **`gateway/`**: `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
@@ -371,7 +386,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`secrets-store-csi-driver/`**: `kustomization.yaml`, `secrets-store-csi-driver-release.yaml`. The Secrets Store CSI Driver in `kube-system`. It mirrors each mounted login into the Secret its `SecretProviderClass` names, and reads it again every `CREDENTIAL_ROTATION_INTERVAL`.
   * **`spire/`**: SPIRE in `spire`. `spire-release.yaml` holds the HelmRepository and the `spire-crds` and `spire` HelmReleases, which read `spire-values.yaml` through ConfigMap `spire-values`, the values the `spire` role also installs from. `flux-controllers-spiffeid.yaml` and `core-test-spiffeid.yaml` are the ClusterSPIFFEIDs that give the Flux controllers and `core-test`'s `openbao` and `postgres-login` pods their identities.
   * **`tekton/`**: The `TektonConfig` installs every Tekton component, Results included, into `tekton`. Tasks, Pipelines and their runs go in `tekton-pipelines`, apart from the controllers and Results' Secrets.
-    * **`tekton-config.yaml`**: The `TektonConfig`. The Results API mounts its login through the CSI driver.
+    * **`tekton-config.yaml`**: The `TektonConfig`. The Results API mounts its login through the CSI driver, and a `credential-watch` sidecar in the API and retention-agent pods restarts their containers when that login changes.
     * **`tekton-networkpolicy.yaml`**: `tekton`'s policy file: the remote resolvers reach their source hosts, and the Results watcher reaches the Results API.
     * **`tekton-results-credentials.yaml`**: `SecretProviderClass` `tekton-results-postgres`. The Results API logs in as `tekton-results-role`, and the CSI driver mirrors its login from `database/creds/tekton-results-app-role` into Secret `tekton-results-postgres`.
     * **`tekton-results-tls.yaml`**: cert-manager `Certificate` for the Results API from `openbao-pki-issuer`. Results verifies Postgres against ConfigMap `postgres-ca`.
