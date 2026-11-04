@@ -42,6 +42,29 @@ kubectl get backups -n databases --sort-by=.metadata.creationTimestamp
 
 `just backup` uses the Barman Cloud Plugin. Confirm that the new Backup reaches `completed`. [Verification](VERIFICATION.md#verify-database-backups) covers backup and archive status checks.
 
+An interrupted base backup leaves an unfinished multipart upload in SeaweedFS. The SeaweedFS master's maintenance script deletes multipart uploads older than 24 hours.
+
+## Reinstall Continuity
+
+The SeaweedFS data directory survives `just uninstall`. Each bootstrap continues the backup history stored there.
+
+The `postgres-bootstrap` Job in the `databases-objectstore` Kustomization creates `postgres-cluster` once, before Flux manages it. The Job asks Barman what the archive at `s3://cnpg-backups/postgres-cluster/` contains:
+
+* When the archive holds a completed base backup, the Job creates the Cluster with `bootstrap.recovery`. PostgreSQL replays all archived WAL after the newest base backup.
+* When the archive is empty, the Job creates the Cluster with `bootstrap.initdb`, which gives an empty database.
+* When the archive holds WAL without a completed base backup, the Job fails and the `databases-objectstore` Kustomization reports it.
+* When `postgres-cluster` already exists, the Job changes nothing.
+
+A recovered cluster archives into the same `postgres-cluster/` folder on the next PostgreSQL timeline. Its WAL files carry the new timeline number, and its base backups get new IDs in the same `base/` folder. The ObjectStore's retention policy covers every timeline in that folder. A recovered cluster carries the annotation `cnpg.io/skipEmptyWalArchiveCheck: enabled`. A cluster created with `initdb` keeps CNPG's check that its archive starts empty.
+
+Check the decision and the timeline after a bootstrap:
+
+```bash
+kubectl logs job/postgres-bootstrap -n databases -c read-archive
+kubectl cnpg psql postgres-cluster -n databases --tty=false -- postgres \
+  -c 'SELECT timeline_id FROM pg_control_checkpoint()'
+```
+
 ## Restoring the PostgreSQL Cluster from SeaweedFS
 
 Create a separate `Cluster` custom resource using the CRD CNPG already installed. It bootstraps a new PostgreSQL cluster and leaves `postgres-cluster` and its Gateway route in place. This example reads the source archive and does not enable new WAL archiving on the recovery cluster.

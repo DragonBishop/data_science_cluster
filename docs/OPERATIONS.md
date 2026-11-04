@@ -15,6 +15,10 @@ Organized to match the justfile's own section layout (`just --list --unsorted` s
 | `just install` | Install every dependency group and extra from the lockfile |
 | `just update` | Update packages and the lockfile |
 | `just git-setup` | Install the pre-commit hooks with `prek` |
+| `flux build kustomization <name> --path ./<path> --kustomization-file ./clusters/local/<name>.yaml` | Render a Kustomization the way Flux applies it, with cluster-config values from the running cluster |
+| `flux build kustomization <name> --path ./<path> --kustomization-file ./clusters/local/<name>.yaml --dry-run` | Render a Kustomization the cluster doesn't have yet, leaving `${VAR}` placeholders in place |
+
+Render manifests with `flux build` before pushing a change. `kubectl kustomize` can't build `apps/databases/objectstore/`, because its generator reads `../cluster/databases-cluster.yaml` ([Troubleshooting](TROUBLESHOOTING.md#gitops)).
 
 ## Bootstrap
 

@@ -177,7 +177,7 @@ Publishing a service has three declarations:
 2. Add a Gateway route (`HTTPRoute` or `TCPRoute`) in that namespace.
 3. Allow `fromEntities: [ingress]` on the backend's listening port in the receiver's policy.
 
-PostgreSQL declares its backend permission in `apps/databases/databases-networkpolicy.yaml`:
+PostgreSQL declares its backend permission in `apps/databases/security/databases-networkpolicy.yaml`:
 
 ```yaml
 ingress:
@@ -268,7 +268,7 @@ Reuse `databases-route.yaml` as the TCPRoute pattern. A different raw TCP servic
 ## Conventions
 
 * The cluster has one policy file, `infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`.
-* Each namespace that needs more than the baseline has one policy file, `<component>-networkpolicy.yaml`, holding every policy object for that namespace. It sits in the directory of the Kustomization that deploys the namespace's resources.
+* Each namespace that needs more than the baseline has one policy file, `<component>-networkpolicy.yaml`, holding every policy object for that namespace.
 * A namespace that needs nothing beyond the baseline has no policy file.
 * A policy is named after the workload it selects, and holds that workload's incoming and outgoing rules.
 * Each rule carries a one-line comment saying what the traffic is.
@@ -298,8 +298,8 @@ Flux needs network access before it can deliver any policy, and so do the worklo
 | `hubble-relay` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | Hubble Relay to the agent's Hubble server on 4244; Tekton runs to Relay on 4245 |
 | `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090; Flux to its source hosts on 443 |
 | `openbao` | [`infrastructure/openbao/openbao-networkpolicy.yaml`](../infrastructure/openbao/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200; OpenBao to the secrets-aws plugin's registry on 443 |
-| `plugin-barman-cloud` | [`apps/barman-cloud/cnpg-system-networkpolicy.yaml`](../apps/barman-cloud/cnpg-system-networkpolicy.yaml) | The CNPG operator to the plugin on 9090 |
-| `postgres-cluster` | [`apps/databases/databases-networkpolicy.yaml`](../apps/databases/databases-networkpolicy.yaml) | Gateway, instances, OpenBao, Tekton Results and `core-test` on 5432; the CNPG operator on 8000 |
+| `plugin-barman-cloud` | [`apps/databases/plugin/cnpg-system-networkpolicy.yaml`](../apps/databases/plugin/cnpg-system-networkpolicy.yaml) | The CNPG operator to the plugin on 9090 |
+| `postgres-cluster` | [`apps/databases/security/databases-networkpolicy.yaml`](../apps/databases/security/databases-networkpolicy.yaml) | Gateway, instances, OpenBao, Tekton Results and `core-test` on 5432; the CNPG operator on 8000 |
 | SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other; Postgres, OpenBao and `core-test` to S3 on `SEAWEEDFS_S3_PORT` |
 | `remote-resolvers`, `results-api` | [`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443; the Results watcher to the Results API on 8080 |
 | `taskrun` | [`infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443 |

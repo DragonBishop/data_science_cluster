@@ -82,7 +82,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **What's happening:** The script could not verify that the database shut down cleanly.
   * **How to check if it actually failed:** On the next start, run `kubectl logs -n databases postgres-cluster-1 -c postgres | grep -i "cluster state"`. `Database cluster state: shut down` with a timestamp means the shutdown was clean and the script did not wait long enough to observe it.
   * **If it genuinely failed, it's usually one of three things:**
-    1. **Idle database connections:** `spec.smartShutdownTimeout` in `apps/databases/databases-cluster.yaml` is set to 15 (the CNPG default is 180). Postgres waits that long for existing connections to close before escalating to a fast shutdown, which disconnects them. Check for active connections before stopping: `kubectl cnpg psql postgres-cluster -n databases -- -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`
+    1. **Idle database connections:** `spec.smartShutdownTimeout` in `apps/databases/cluster/databases-cluster.yaml` reads `POSTGRES_SMART_SHUTDOWN_TIMEOUT`, which is 15 seconds (the CNPG default is 180). Postgres waits that long for open connections to close, then switches to a fast shutdown that disconnects them. Check for active connections before stopping: `kubectl cnpg psql postgres-cluster -n databases -- -c "select pid, usename, application_name, state from pg_stat_activity where backend_type='client backend';"`
     2. **CloudNativePG (CNPG) operator isn't available:** The shutdown command was sent, but the operator was not running to process it. The stop script usually catches this first and halts with a specific warning.
     3. **The cluster isn't healthy:** A cluster will not hibernate from a broken state, such as a pod in CrashLoop or mid-boot. Check with `kubectl cnpg status postgres-cluster -n databases`.
 
@@ -156,6 +156,10 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 > [!IMPORTANT]
 > Commit and push the fix in the same breath as any live patch to a `prune: true` Kustomization — otherwise the next reconcile silently reverts it.
 
+* **`kubectl kustomize apps/databases/objectstore` fails with `security; file '.../cluster/databases-cluster.yaml' is not in or below '.../objectstore'`**
+  * **What's happening:** `apps/databases/objectstore/kustomization.yaml` generates ConfigMap `postgres-bootstrap-cluster` from `../cluster/databases-cluster.yaml`. `kubectl kustomize` refuses files outside the Kustomization's directory by default. Flux builds the directory without that restriction.
+  * **How to fix it:** Render it with `flux build` ([Operations](OPERATIONS.md#development)). With `kubectl kustomize`, add `--load-restrictor LoadRestrictionsNone`.
+
 * **Headlamp shows a stale or failed connection**
   * **What's happening:** Headlamp reads `~/.kube/config`, which k3s rewrites directly (`--write-kubeconfig`) every time `start-cluster.sh` runs. A stale profile means the file predates the current cluster instance.
   * **How to fix it:** Run `start-cluster.sh` to regenerate `~/.kube/config`, then reconnect Headlamp.
@@ -217,7 +221,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **How to fix it:** Run `kubectl describe pod <pod_name> -n databases` and read the Events stream at the bottom. It reports scheduling failures, insufficient resources, and image pull failures.
 
 * **Password authentication fails even though the password is correct**
-  * **How to fix it:** Confirm both `enableSuperuserAccess: true` and `superuserSecret` are set in `apps/databases/databases-cluster.yaml`. With the first missing, CNPG nulls the password on every reconciliation. Confirm the `username` field in `secret/postgres` is exactly `postgres`; CNPG rejects any other value before applying the password.
+  * **How to fix it:** Confirm both `enableSuperuserAccess: true` and `superuserSecret` are set in `apps/databases/cluster/databases-cluster.yaml`. Without `enableSuperuserAccess: true`, CNPG nulls the password on every reconciliation. Confirm the `username` field in Secret `postgres-superuser-credentials` is exactly `postgres`. CNPG rejects any other value before applying the password.
 
 > [!IMPORTANT]
 > Both failure modes are silent — CNPG neither errors nor logs when it nulls the password or rejects a bad `username`, so check them even when the Secret otherwise looks correct.
@@ -242,10 +246,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
-  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/databases-tls.yaml`. `postgres-cluster-rw`, `-ro`, and `-r` are covered in both short and fully-qualified forms, along with `localhost`, `127.0.0.1`, `databases.cluster.internal`, and the shared Gateway's LAN IP. Adding a name there causes cert-manager to reissue the certificate via `postgres-ca-issuer`.
-
-> [!NOTE]
-> Any new name added to `databases-tls.yaml` must also be permitted in `terraform/openbao/pki.tf` (`permitted_dns_domains` and `allowed_domains`), or OpenBao PKI rejects the CSR before cert-manager can reissue.
+  * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/security/databases-tls.yaml`. The certificate covers `postgres-cluster-rw`, `-ro` and `-r` in short and fully qualified forms, `localhost`, `127.0.0.1`, `databases.cluster.internal` and the shared Gateway's LAN IP. When you add a name there, cert-manager reissues the certificate through `postgres-ca-issuer`.
 
 * **Barman Cloud Plugin backups start failing**
   * **What's happening:** The database cannot reach or authenticate to the object store, or S3 TLS handshake fails.

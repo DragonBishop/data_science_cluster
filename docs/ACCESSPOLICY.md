@@ -46,10 +46,12 @@ Ansible installs trust-manager and OpenBao's listener certificates and Bundle be
 | Consumer | Delivery | Lifetime and refresh |
 | --- | --- | --- |
 | CNPG Barman Cloud | OpenBao CSI provider, using the named Barman ServiceAccount and S3 role | Four-day S3 lease; issuing token covers that lease; daily refresh/reload |
-| Tekton Results | OpenBao CSI provider, synchronizing the database login into its configured Secret | Four-day database lease; issuing token covers that lease; daily refresh/reload |
+| Tekton Results | OpenBao CSI provider, synchronizing the database login into its configured Secret | Four-day database lease; issuing token covers that lease; daily refresh; in-place restart when the login changes |
 | Data-science database clients | OpenBao's named database authentication role | Three-hour default database lease, up to 24 hours; the client must refresh before expiry |
 
 A CSI issuing token must cover the lease of the credential it creates. Keep the provider's `cache-size=0`, issuing-token lifetimes and child leases aligned. Shortening a parent token independently can revoke credentials still in use. Daily rotation and consumer reload deliver replacement credentials.
+
+Tekton Results reads its login at startup. A `credential-watch` sidecar in the API and retention-agent pods compares the username its pod started with to the current username. When they differ, the sidecar exits with code 3 and the kubelet restarts every container in the pod in place. The pod keeps its volumes, including the API's CSI mount and its current login. In the API pod, the sidecar reads the username from the CSI mount. In the retention-agent pod, it reads Secret `tekton-results-postgres`.
 
 OpenBao connects to `postgres-cluster-rw.databases.svc.cluster.local` with `sslmode=verify-full`, verifying the server's CA and hostname against the public `postgres-ca` Bundle mounted at `/openbao/userconfig/postgres-ca`. Provisioning registers the connection before PostgreSQL exists; Flux supplies the database and its CA before credentials can be issued.
 
