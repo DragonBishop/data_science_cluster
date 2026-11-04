@@ -9,8 +9,7 @@ spec:
   dependsOn:
     - name: tekton-operator
     - name: openbao
-    # Dynamic logins join tekton_readwrite, which the databases Kustomization creates
-    - name: databases
+    - name: databases-cluster
     - name: secrets-store-csi-driver
     - name: cluster-config
   sourceRef:

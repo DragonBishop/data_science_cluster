@@ -163,11 +163,11 @@
           kustomization/cnpg-operator --for=create --for=condition=Ready --timeout=1200s
       changed_when: false
 
-    - name: Wait for Flux to reconcile databases
+    - name: Wait for Flux to reconcile databases-cluster
       ansible.builtin.command:
         cmd: >-
           kubectl --kubeconfig="{{ kubeconfig_path }}" -n flux-system wait
-          kustomization/databases --for=create --for=condition=Ready --timeout=1200s
+          kustomization/databases-cluster --for=create --for=condition=Ready --timeout=1200s
       changed_when: false
 
     - name: It should archive Postgres WAL to SeaweedFS
