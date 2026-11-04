@@ -1,3 +1,21 @@
+## [2.5.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.1...v2.5.0) - 2026-11-04
+
+### 🚀 Features
+
+- *(cluster)* Track PostGIS image updates and document recovery ([19a52f0](https://github.com/DragonBishop/data_science_cluster/commit/19a52f0f00323fa4979496060af74f5ef48db8b8))
+- *(ansible)* Upgrade k3s to the pinned version and refuse downgrades ([47bb993](https://github.com/DragonBishop/data_science_cluster/commit/47bb993c832cd4cae64ddd62d1e49eeaf1a2ec7c))
+- *(postgres)* Bootstrap postgres-cluster from the backup archive ([6586fbc](https://github.com/DragonBishop/data_science_cluster/commit/6586fbc3d76a9b527e5f5b0d343c7f3340226334))
+- *(tekton)* Restart Tekton Results when its database login rotates ([e440c4c](https://github.com/DragonBishop/data_science_cluster/commit/e440c4c23f43c36518610ae9bbbe8e2c1b4c8d2d))
+
+### 🐛 Bug Fixes
+
+- *(bash)* Halt stop and uninstall when cluster state can't be read ([a5550e8](https://github.com/DragonBishop/data_science_cluster/commit/a5550e8182a3344fac611037fc1402c20d706982))
+- *(tekton)* Run core-test's openssl steps on the PostGIS image ([4c4f7cd](https://github.com/DragonBishop/data_science_cluster/commit/4c4f7cdad03b84360f196efc136b61066ee455ec))
+
+### 📚 Documentation
+
+- Describe the database Kustomizations and reinstall continuity ([2c95ce8](https://github.com/DragonBishop/data_science_cluster/commit/2c95ce8bf5dd809dfb71923771e90049c01d153b))
+
 ## [2.4.1](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.0...v2.4.1) - 2026-11-01
 
 ### 🐛 Bug Fixes

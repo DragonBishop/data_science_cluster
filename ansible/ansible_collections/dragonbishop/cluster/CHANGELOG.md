@@ -1,3 +1,10 @@
+## [2.5.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.1...v2.5.0) - 2026-11-04
+
+### 🚀 Features
+
+- *(ansible)* Upgrade k3s to the pinned version and refuse downgrades ([47bb993](https://github.com/DragonBishop/data_science_cluster/commit/47bb993c832cd4cae64ddd62d1e49eeaf1a2ec7c))
+- *(postgres)* Bootstrap postgres-cluster from the backup archive ([6586fbc](https://github.com/DragonBishop/data_science_cluster/commit/6586fbc3d76a9b527e5f5b0d343c7f3340226334))
+
 ## [2.4.1](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.0...v2.4.1) - 2026-11-01
 
 ### 🐛 Bug Fixes
