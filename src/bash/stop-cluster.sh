@@ -72,7 +72,7 @@ pause_scheduled_backups() {
 # Polls up to 300s for the operator to confirm hibernation, or halts.
 wait_for_hibernation() {
     local hibernation_status hibernation_reason hibernation_message
-    local condition_raw condition_remainder retries=0
+    local condition_raw condition_remainder instance_pods retries=0
     while [ $retries -lt 60 ]; do
         condition_raw=$(kubectl get cluster "$CLUSTER_NAME" -n "$CLUSTER_NS" \
             -o jsonpath='{range .status.conditions[?(@.type=="cnpg.io/hibernation")]}{.status}|{.reason}|{.message}{end}' \
@@ -86,9 +86,11 @@ wait_for_hibernation() {
             echo "  ✅ Operator reports hibernated: ${hibernation_message:-Cluster has been hibernated}"
             return 0
         fi
-        if [ -z "$(kubectl get pods -n "$CLUSTER_NS" -l "cnpg.io/cluster=$CLUSTER_NAME" -o name 2>/dev/null)" ]; then
-            echo "  ✅ All instance pods removed."
-            return 0
+        if instance_pods=$(kubectl get pods -n "$CLUSTER_NS" -l "cnpg.io/cluster=$CLUSTER_NAME" -o name 2>/dev/null); then
+            if [ -z "$instance_pods" ]; then
+                echo "  ✅ All instance pods removed."
+                return 0
+            fi
         fi
 
         sleep 5
@@ -112,7 +114,12 @@ attempt_hibernate_databases() {
    Check: sudo tail -n 50 /var/log/k3s.log   (or: journalctl -u k3s -n 50)"
         return 0
     fi
-    if ! kubectl get cluster "$CLUSTER_NAME" -n "$CLUSTER_NS" &>/dev/null; then
+    local cluster_resource
+    if ! cluster_resource=$(kubectl get cluster "$CLUSTER_NAME" -n "$CLUSTER_NS" --ignore-not-found -o name); then
+        halt "Could not determine whether $CLUSTER_NAME exists. Hibernation is unconfirmed."
+        return 0
+    fi
+    if [ -z "$cluster_resource" ]; then
         echo "ℹ️  $CLUSTER_NAME not found. Unable to hibernate."
         return 0
     fi
