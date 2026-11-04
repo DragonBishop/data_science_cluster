@@ -170,6 +170,46 @@ spec:
                       - name: tekton-results-postgres
                         mountPath: /etc/tekton-results-postgres
                         readOnly: true
+                  # Exit 3 restarts the pod's containers in place with the rotated login
+                  - name: credential-watch
+                    image: alpine/k8s:${ALPINE_K8S_VERSION}
+                    restartPolicy: Always
+                    restartPolicyRules:
+                      - action: RestartAllContainers
+                        exitCodes:
+                          operator: In
+                          values: [3]
+                    command: [bash, -c]
+                    args:
+                      - |
+                        while true; do
+                          current_user=$(< /credential/username) || exit 1
+                          [[ $current_user == "$DB_USER" ]] || exit 3
+                          sleep 60
+                        done
+                    env:
+                      - name: DB_USER
+                        valueFrom:
+                          secretKeyRef:
+                            name: tekton-results-postgres
+                            key: username
+                    securityContext:
+                      runAsNonRoot: true
+                      runAsUser: 65532
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop: [ALL]
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESULTS_CREDENTIAL_WATCH_CPU_REQUEST}
+                        memory: ${TEKTON_RESULTS_CREDENTIAL_WATCH_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESULTS_CREDENTIAL_WATCH_MEM_LIMIT}
+                    volumeMounts:
+                      - name: tekton-results-postgres
+                        mountPath: /credential
+                        readOnly: true
                 volumes:
                   - name: postgres-ca
                     configMap:
@@ -197,10 +237,56 @@ spec:
                       - name: postgres-ca
                         mountPath: /etc/postgres-ca
                         readOnly: true
+                  # Watches the username in the synced Secret
+                  - name: credential-watch
+                    image: alpine/k8s:${ALPINE_K8S_VERSION}
+                    restartPolicy: Always
+                    restartPolicyRules:
+                      - action: RestartAllContainers
+                        exitCodes:
+                          operator: In
+                          values: [3]
+                    command: [bash, -c]
+                    args:
+                      - |
+                        while true; do
+                          current_user=$(< /credential/username) || exit 1
+                          [[ $current_user == "$DB_USER" ]] || exit 3
+                          sleep 60
+                        done
+                    env:
+                      - name: DB_USER
+                        valueFrom:
+                          secretKeyRef:
+                            name: tekton-results-postgres
+                            key: username
+                    securityContext:
+                      runAsNonRoot: true
+                      runAsUser: 65532
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop: [ALL]
+                    resources:
+                      requests:
+                        cpu: ${TEKTON_RESULTS_CREDENTIAL_WATCH_CPU_REQUEST}
+                        memory: ${TEKTON_RESULTS_CREDENTIAL_WATCH_MEM_REQUEST}
+                      limits:
+                        memory: ${TEKTON_RESULTS_CREDENTIAL_WATCH_MEM_LIMIT}
+                    volumeMounts:
+                      - name: tekton-results-login
+                        mountPath: /credential
+                        readOnly: true
                 volumes:
                   - name: postgres-ca
                     configMap:
                       name: postgres-ca
+                  - name: tekton-results-login
+                    secret:
+                      secretName: tekton-results-postgres
+                      items:
+                        - key: username
+                          path: username
         tekton-results-watcher:
           spec:
             template:
