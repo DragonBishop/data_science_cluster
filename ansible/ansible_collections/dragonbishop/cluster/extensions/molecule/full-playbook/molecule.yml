@@ -4,9 +4,9 @@ ansible:
     args:
       ansible_playbook:
         - --inventory=${MOLECULE_SCENARIO_DIRECTORY}/../inventory/
-        - --extra-vars=openbao_gpg_passphrase=${OPENBAO_GPG_PASSPHRASE}
-        - --extra-vars=opentofu_state_encryption_passphrase=${OPENTOFU_STATE_ENCRYPTION_PASSPHRASE}
-        - --extra-vars=opentofu_postgres_superuser_password=${OPENTOFU_POSTGRES_SUPERUSER_PASSWORD}
+        - --extra-vars=openbao_gpg_passphrase={{ 'full-playbook-gpg' | hash('sha256') }}
+        - --extra-vars=opentofu_state_encryption_passphrase={{ 'full-playbook-state' | hash('sha256') }}
+        - --extra-vars=opentofu_postgres_superuser_password={{ 'full-playbook-superuser' | hash('sha256') }}
         - --extra-vars=opentofu_binary=${OPENTOFU_BINARY}
 
 scenario:
