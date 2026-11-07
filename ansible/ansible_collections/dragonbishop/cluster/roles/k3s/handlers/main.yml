@@ -1,0 +1,5 @@
+---
+- name: Load containerd's AppArmor profile
+  ansible.builtin.command: apparmor_parser --replace /etc/apparmor.d/cri-containerd.apparmor.d
+  become: true
+  changed_when: true
