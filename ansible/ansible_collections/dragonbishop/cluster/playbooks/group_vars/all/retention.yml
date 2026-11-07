@@ -1,0 +1,3 @@
+---
+# --- cluster-config/retention.yaml ---
+openbao_snapshot_retention_days: "{{ cluster_config.OPENBAO_SNAPSHOT_RETENTION_DAYS }}"

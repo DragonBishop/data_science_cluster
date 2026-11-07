@@ -18,13 +18,13 @@
     - "max-cache-ttl 0"
   notify: Reload gpg-agent
 
-- name: Reload gpg-agent before the keyfile is encrypted or decrypted
+- name: Reload gpg-agent before OpenBao's keyfiles are encrypted or decrypted
   ansible.builtin.meta: flush_handlers
 
-- name: Verify the unseal-keyfile GPG passphrase is available
+- name: Verify the GPG passphrase for OpenBao's keyfiles is available
   ansible.builtin.assert:
     that:
       - openbao_gpg_passphrase | default('') | length > 0
     fail_msg: >-
-      No GPG passphrase supplied for {{ openbao_keyfile }}. Answer the
-      "GPG passphrase for the unseal keyfile" prompt at the start of the play.
+      No GPG passphrase supplied for {{ openbao_recovery_keyfile }} and {{ openbao_seal_keyfile }}. Answer the
+      "GPG passphrase for OpenBao's recovery and seal keyfiles" prompt at the start of the play.

@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 #
-# start-cluster.sh: Starts k3s, unseals the in-cluster OpenBao, and resumes CNPG cluster.
+# start-cluster.sh: Starts k3s, checks the in-cluster OpenBao, and resumes CNPG cluster.
 #
 set -eu
-
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 configure_kubeconfig() {
     local kubeconfig_dest="$HOME/.kube/config"
@@ -102,62 +100,27 @@ incluster_seal_state() {
     fi
 }
 
-# Decrypts $1 and writes each key to OpenBao's unseal endpoint via stdin
-decrypt_and_unseal() {
-    local keyfile="$1"
-    gpg --quiet --decrypt "$keyfile" | while IFS= read -r key; do
-        [ -n "$key" ] || continue
-        if ! error_output=$(printf '%s\n' "$key" | kubectl exec -i -n openbao openbao-0 -- bao write -format=json sys/unseal key=- 2>&1 >/dev/null); then
-            echo "   ⚠️ Key rejected by OpenBao: $error_output"
-        fi
-    done
-    return "${PIPESTATUS[0]}"
-}
-
-unseal_openbao() {
+# OpenBao unseals itself from its static seal key; this only reports whether it did
+check_openbao() {
     wait_for_openbao_process || true
 
     local seal_state
     seal_state=$(incluster_seal_state)
 
-    if [ "$seal_state" = unsealed ]; then
-        echo "✅ In-cluster OpenBao already unsealed."
-        return 0
-    fi
-
-    if [ "$seal_state" = unreachable ]; then
-        echo "❌ ERROR: Cannot reach openbao-0."
-        kubectl exec -n openbao openbao-0 -- bao status 2>&1 | sed 's/^/   /'
-        echo "💡 TROUBLESHOOTING: Is the pod up?  kubectl get pods -n openbao"
-        return 1
-    fi
-
-    echo "🔒 In-cluster OpenBao is sealed."
-    local keyfile="$REPO_ROOT/.local/openbao/unseal-keys.gpg"
-    if [ ! -f "$keyfile" ]; then
-        echo "❌ ERROR: $keyfile not found. Cannot unseal OpenBao."
-        echo "💡 TROUBLESHOOTING: Did the GPG keyfile get created during 'just bootstrap' (docs/INSTALLATION.md)?."
-        return 1
-    fi
-
-    echo "🔑 Enter GPG passphrase to decrypt unseal keys:"
-    if ! decrypt_and_unseal "$keyfile"; then
-        echo "❌ ERROR: GPG decryption failed or was cancelled. OpenBao remains sealed."
-        return 1
-    fi
-
-    seal_state=$(incluster_seal_state)
     case "$seal_state" in
         unsealed)
-            echo "✅ In-cluster OpenBao unsealed successfully."
+            echo "✅ In-cluster OpenBao unsealed itself."
             ;;
         sealed)
-            echo "❌ ERROR: OpenBao still sealed after applying keys from $keyfile."
+            echo "❌ ERROR: In-cluster OpenBao is still sealed. It should unseal itself from Secret openbao-seal-key."
+            echo "💡 TROUBLESHOOTING: kubectl get secret openbao-seal-key -n openbao"
+            echo "                    kubectl logs openbao-0 -n openbao"
             return 1
             ;;
         *)
-            echo "❌ ERROR: Cannot reach OpenBao after applying keys from $keyfile."
+            echo "❌ ERROR: Cannot reach openbao-0."
             kubectl exec -n openbao openbao-0 -- bao status 2>&1 | sed 's/^/   /'
+            echo "💡 TROUBLESHOOTING: Is the pod up?  kubectl get pods -n openbao"
             return 1
             ;;
     esac
@@ -221,7 +184,7 @@ main() {
     wait_for_api
     wait_for_node_ready
 
-    unseal_openbao || had_warnings=true
+    check_openbao || had_warnings=true
     echo ""
 
     resume_databases || had_warnings=true

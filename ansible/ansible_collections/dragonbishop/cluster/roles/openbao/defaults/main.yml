@@ -1,2 +1,3 @@
 ---
-openbao_keyfile: "{{ openbao_local_dir }}/unseal-keys.gpg"
+openbao_recovery_keyfile: "{{ openbao_local_dir }}/recovery-keys.gpg"
+openbao_seal_keyfile: "{{ openbao_local_dir }}/seal-key.gpg"

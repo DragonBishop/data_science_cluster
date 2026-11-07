@@ -5,6 +5,13 @@
 - name: Render and apply OpenBao's certificates, Bundles, policy and redirect
   ansible.builtin.import_tasks: manifests.yml
 
+- name: Prepare gpg-agent for OpenBao's keyfiles
+  ansible.builtin.import_tasks: gpg_agent.yml
+
+# The pod can't start without the Secret its static seal key is mounted from
+- name: Ensure OpenBao's seal key exists
+  ansible.builtin.import_tasks: seal_key.yml
+
 - name: Install OpenBao
   ansible.builtin.import_tasks: install.yml
 
@@ -14,14 +21,8 @@
 - name: Check OpenBao's status
   ansible.builtin.import_tasks: status.yml
 
-- name: Prepare gpg-agent for the unseal keyfile
-  ansible.builtin.import_tasks: gpg_agent.yml
-
 - name: Initialize OpenBao if needed
   ansible.builtin.import_tasks: init.yml
 
-- name: Write and read the unseal keyfile
+- name: Write the recovery keyfile
   ansible.builtin.import_tasks: keyfile.yml
-
-- name: Unseal OpenBao
-  ansible.builtin.import_tasks: unseal.yml

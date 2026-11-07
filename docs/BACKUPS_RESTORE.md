@@ -5,6 +5,8 @@ The cluster supports two backup paths:
 * **Logical exports:** `pg_dump --format=custom` writes a compressed archive of one database to a location the administrator chooses. Restore it with `pg_restore`.
 * **Physical recovery:** CNPG archives WAL continuously and writes scheduled base backups to SeaweedFS through the Barman Cloud Plugin. A new CNPG Cluster can recover all databases and roles from a base backup and its archived WAL.
 
+OpenBao has its own hourly Raft snapshot, kept only for rolling back a bad upgrade (see [OpenBao Raft Snapshots](#openbao-raft-snapshots)).
+
 Workstation-specific command notebooks, dump files and saved recovery manifests belong outside this repository.
 
 ## Logical Exports
@@ -192,9 +194,21 @@ kubectl delete -f restore-networkpolicy.yaml
 
 These commands delete the recovery cluster's local data. They leave the source cluster and its SeaweedFS backup archive in place.
 
+## OpenBao Raft Snapshots
+
+The OpenBao chart's snapshot agent, the CronJob `openbao-snapshot`, runs every `OPENBAO_SNAPSHOT_SCHEDULE`:
+
+1. It logs in to OpenBao as `openbao-snapshot-role`, whose policy can only read `sys/storage/raft/snapshot`.
+2. It saves a Raft snapshot and uploads it to the SeaweedFS bucket `openbao-snapshots` as `bao_<date>-<time>.snapshot`.
+3. It deletes snapshots older than `OPENBAO_SNAPSHOT_RETENTION_DAYS`.
+
+These snapshots exist to roll back an OpenBao upgrade that damages its data. Flux replaces `openbao-0` as soon as an upgrade merges, so the newest snapshot is at most one schedule interval old. OpenBao's other contents (PKI, auth roles, policies, engine configuration) are specific to this cluster, and a rebuild recreates them from Terraform, not from a snapshot.
+
+Take a snapshot on demand with `kubectl create job -n openbao --from=cronjob/openbao-snapshot openbao-snapshot-manual`. To roll back, copy the chosen snapshot from the bucket into `openbao-0` and run `bao operator raft snapshot restore <file>` there with a root token. A snapshot only restores onto an OpenBao that unseals with the same seal key.
+
 ## Recovery Limits and Image Updates
 
-PostgreSQL and SeaweedFS currently share one host. Keep an additional copy off the machine to cover loss of its storage. SeaweedFS recovery also depends on surviving object-store data and the working OpenBao/CSI credential-delivery path.
+PostgreSQL and SeaweedFS currently share one host. SeaweedFS recovery also depends on surviving object-store data and the working OpenBao/CSI credential-delivery path.
 
 `POSTGIS_IMAGE_TAG` in `infrastructure/cluster-config/versions.yaml` holds the complete operand tag. Renovate tracks that pin, the README version and the recovery example above. Its regex rule compares both component versions and retains `system-trixie`. New PostgreSQL major and PostGIS minor or major versions can be proposed for review. PostgreSQL major upgrades require a migration, and PostGIS upgrades may require updating the installed extensions. Local recovery files do not change when Renovate updates the repository. Review their image against the backup being restored.
 
@@ -205,3 +219,5 @@ PostgreSQL and SeaweedFS currently share one host. Keep an additional copy off t
 * [Using the Barman Cloud Plugin](https://cloudnative-pg.io/plugin-barman-cloud/docs/usage/)
 * [CNPG PostGIS Container Images](https://github.com/cloudnative-pg/postgis-containers)
 * [Renovate: Regular Expression Versioning](https://docs.renovatebot.com/modules/versioning/regex/)
+* [OpenBao: operator raft snapshot](https://openbao.org/docs/commands/operator/raft/#snapshot)
+* [OpenBao snapshot agent](https://github.com/openbao/openbao-snapshot-agent)

@@ -2,4 +2,5 @@
 # --- cluster-config/storage.yaml ---
 cnpg_backup_bucket: "{{ cluster_config.CNPG_BACKUP_BUCKET }}"
 openbao_data_storage_size: "{{ cluster_config.OPENBAO_DATA_STORAGE_SIZE }}"
+openbao_snapshot_bucket: "{{ cluster_config.OPENBAO_SNAPSHOT_BUCKET }}"
 spire_server_storage_size: "{{ cluster_config.SPIRE_SERVER_STORAGE_SIZE }}"

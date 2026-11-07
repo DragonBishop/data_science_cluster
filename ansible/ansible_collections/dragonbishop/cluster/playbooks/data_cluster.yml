@@ -5,7 +5,7 @@
 
   vars_prompt:
     - name: openbao_gpg_passphrase
-      prompt: "GPG passphrase for the unseal keyfile"
+      prompt: "GPG passphrase for OpenBao's recovery and seal keyfiles"
       private: true
       default: ""
     - name: opentofu_state_encryption_passphrase
@@ -61,8 +61,8 @@
     - { role: dragonbishop.cluster.flux, tags: [flux] }
 
   tasks:
-    - name: Print freshly-generated OpenBao root token and unseal keys
+    - name: Print freshly-generated OpenBao root token and recovery keys
       ansible.builtin.debug:
-        msg: "{{ ['Root Token:', openbao_root_token, 'Fresh Unseal Keys:'] + openbao_fresh_unseal_keys }}"
-      when: openbao_fresh_unseal_keys is defined
+        msg: "{{ ['Root Token:', openbao_root_token, 'Fresh Recovery Keys:'] + openbao_fresh_recovery_keys }}"
+      when: openbao_fresh_recovery_keys is defined
       tags: always

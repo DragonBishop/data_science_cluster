@@ -38,7 +38,7 @@ Start and stop the cluster each work session, check its health, and inspect or r
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just start` | Start the cluster | Each work session; starts k3s, unseals OpenBao, wakes `postgres-cluster` from hibernation and resumes its scheduled backups |
+| `just start` | Start the cluster | Each work session; starts k3s, checks that OpenBao unsealed itself, wakes `postgres-cluster` from hibernation and resumes its scheduled backups |
 | `just status` | Check overall cluster health | Post-install verification or periodic health check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
 | `just stop` (`just stop --force` if a stuck stop needs it) | Stop the cluster | Each work session; gracefully hibernates CNPG PostgreSQL before shutting down k3s |
 | `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears `.local/openbao`, orphaned `terraform/openbao` state, and Cilium's persistent host files; reboot before the next `just bootstrap` |
