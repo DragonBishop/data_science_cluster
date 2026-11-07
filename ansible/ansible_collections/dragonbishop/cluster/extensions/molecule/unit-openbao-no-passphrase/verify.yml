@@ -1,5 +1,5 @@
 ---
-- name: OpenBao unseal keyfile without a GPG passphrase
+- name: OpenBao recovery keyfile without a GPG passphrase
   hosts: molecule
   gather_facts: false
   vars_files:
@@ -7,11 +7,11 @@
   tasks:
     - name: Check for an OpenBao keyfile
       ansible.builtin.stat:
-        path: "{{ openbao_keyfile }}"
-      register: openbao_keyfile_stat
+        path: "{{ openbao_recovery_keyfile }}"
+      register: openbao_recovery_keyfile_stat
 
-    - name: It should not write an unseal keyfile
+    - name: It should not write a recovery keyfile
       ansible.builtin.assert:
         that:
-          - not openbao_keyfile_stat.stat.exists
-        fail_msg: an unseal keyfile was written without a GPG passphrase
+          - not openbao_recovery_keyfile_stat.stat.exists
+        fail_msg: a recovery keyfile was written without a GPG passphrase

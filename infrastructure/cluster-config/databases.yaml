@@ -6,4 +6,3 @@ metadata:
   namespace: flux-system
 data:
   DATA_SCIENCE_DB_NAME: "data_science"
-  TEKTON_RESULTS_DB_NAME: "tekton_results"

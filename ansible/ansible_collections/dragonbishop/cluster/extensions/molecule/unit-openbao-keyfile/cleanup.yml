@@ -1,5 +1,5 @@
 ---
-- name: OpenBao unseal keyfile on a fresh host
+- name: OpenBao recovery keyfile on a fresh host
   hosts: molecule
   gather_facts: true
   vars_files:

@@ -6,7 +6,7 @@ resource "vault_mount" "db" {
 resource "vault_database_secret_backend_connection" "postgres_cluster" {
   backend       = vault_mount.db.path
   name          = "postgres-cluster"
-  allowed_roles = ["postgres-app-role", "tekton-results-app-role"]
+  allowed_roles = ["postgres-app-role"]
   # postgres-cluster-rw is created later in the Flux chain, downstream of this apply.
   verify_connection = false
 
@@ -27,15 +27,4 @@ resource "vault_database_secret_backend_role" "postgres_app_role" {
   ]
   default_ttl = 10800 # 3h
   max_ttl     = 86400 # 24h
-}
-
-resource "vault_database_secret_backend_role" "tekton_results_app_role" {
-  backend = vault_mount.db.path
-  name    = "tekton-results-app-role"
-  db_name = vault_database_secret_backend_connection.postgres_cluster.name
-  creation_statements = [
-    "CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}' IN ROLE tekton_readwrite; ALTER ROLE \"{{name}}\" SET role = tekton_readwrite;"
-  ]
-  default_ttl = 345600 # 4d
-  max_ttl     = 345600 # 4d
 }

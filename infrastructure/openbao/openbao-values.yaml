@@ -16,12 +16,16 @@ server:
       memory: ${OPENBAO_MEM_REQUEST}
     limits:
       memory: ${OPENBAO_MEM_LIMIT}
+  # Standalone has no standbys to order, and the static seal unseals each new pod
+  updateStrategyType: RollingUpdate
   extraEnvironmentVars:
     BAO_CACERT: /openbao/userconfig/openbao-server-cert/ca.crt
 
   extraVolumes:
     - type: secret
       name: openbao-server-cert
+    - type: secret
+      name: openbao-seal-key
 
   # Public CA bundles for SeaweedFS S3 and PostgreSQL connections
   volumes:
@@ -64,8 +68,14 @@ server:
         tls_key_file     = "/openbao/userconfig/openbao-server-cert/tls.key"
       }
 
-      storage "pebbledb" {
-        path = "/openbao/data/pebbledb"
+      storage "raft" {
+        path    = "/openbao/data/raft"
+        node_id = "openbao-0"
+      }
+
+      seal "static" {
+        current_key_id = "openbao-seal-1"
+        current_key    = "file:///openbao/userconfig/openbao-seal-key/key"
       }
 
 csi:
@@ -88,4 +98,55 @@ csi:
   volumeMounts:
     - name: openbao-ca-bundle
       mountPath: /openbao-ca
+      readOnly: true
+
+snapshotAgent:
+  enabled: true
+  schedule: "${OPENBAO_SNAPSHOT_SCHEDULE}"
+  image:
+    repository: ghcr.io/openbao/openbao-snapshot-agent
+    tag: "${OPENBAO_SNAPSHOT_AGENT_VERSION}"
+  resources:
+    requests:
+      cpu: ${OPENBAO_SNAPSHOT_AGENT_CPU_REQUEST}
+      memory: ${OPENBAO_SNAPSHOT_AGENT_MEM_REQUEST}
+    limits:
+      memory: ${OPENBAO_SNAPSHOT_AGENT_MEM_LIMIT}
+  s3CredentialsSecret: openbao-snapshot-s3
+  config:
+    s3Host: seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
+    # s3cmd's host-bucket template; no %(bucket)s selects path-style addressing for SeaweedFS
+    s3Bucket: seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
+    s3Uri: s3://${OPENBAO_SNAPSHOT_BUCKET}
+    s3ExpireDays: "${OPENBAO_SNAPSHOT_RETENTION_DAYS}"
+    s3cmdExtraFlag: "--ca-certs=/openbao/root-ca/ca.crt"
+    baoAuthPath: kubernetes
+    baoRole: openbao-snapshot-role
+    # Projected below with the audience OpenBao's Kubernetes auth roles require
+    tokenPath: /var/run/secrets/openbao/token
+  extraEnvironmentVars:
+    BAO_CACERT: /openbao/ca-bundle/ca.crt
+  extraVolumes:
+    - name: openbao-token
+      projected:
+        sources:
+          - serviceAccountToken:
+              audience: openbao
+              expirationSeconds: 600
+              path: token
+    - name: openbao-ca-bundle
+      configMap:
+        name: openbao-ca-bundle
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+  extraVolumeMounts:
+    - name: openbao-token
+      mountPath: /var/run/secrets/openbao
+      readOnly: true
+    - name: openbao-ca-bundle
+      mountPath: /openbao/ca-bundle
+      readOnly: true
+    - name: openbao-root-ca
+      mountPath: /openbao/root-ca
       readOnly: true

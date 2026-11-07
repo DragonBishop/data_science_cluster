@@ -1,0 +1,115 @@
+---
+- name: Read OpenBao's seal key Secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: openbao-seal-key
+    namespace: "{{ openbao_namespace }}"
+  register: openbao_seal_key_secret
+  no_log: true
+
+- name: Check for the seal keyfile
+  ansible.builtin.stat:
+    path: "{{ openbao_seal_keyfile }}"
+  register: openbao_seal_keyfile_stat
+
+- name: Note which copies of the seal key exist
+  ansible.builtin.set_fact:
+    openbao_seal_key_secret_exists: "{{ openbao_seal_key_secret.resources | length > 0 }}"
+    openbao_seal_keyfile_exists: "{{ openbao_seal_keyfile_stat.stat.exists }}"
+
+- name: Restore the seal key from its keyfile
+  when: not openbao_seal_key_secret_exists and openbao_seal_keyfile_exists
+  block:
+    - name: Decrypt the seal keyfile
+      ansible.builtin.command:
+        cmd: gpg --quiet --batch --pinentry-mode loopback --passphrase-fd 0 --decrypt {{ openbao_seal_keyfile }}
+        stdin: "{{ openbao_gpg_passphrase }}\n"
+      register: openbao_seal_keyfile_decrypted
+      changed_when: false
+      no_log: true
+
+    - name: Keep the seal key from the keyfile
+      ansible.builtin.set_fact:
+        openbao_seal_key: "{{ openbao_seal_keyfile_decrypted.stdout }}"
+      no_log: true
+
+- name: Read the seal key from its Secret
+  when: openbao_seal_key_secret_exists and not openbao_seal_keyfile_exists
+  ansible.builtin.set_fact:
+    openbao_seal_key: "{{ openbao_seal_key_secret.resources[0].data.key | b64decode }}"
+  no_log: true
+
+- name: Generate a new seal key
+  when: not openbao_seal_key_secret_exists and not openbao_seal_keyfile_exists
+  block:
+    - name: Generate 32 random bytes, base64-encoded
+      ansible.builtin.command: openssl rand -base64 32
+      register: openbao_seal_key_generated
+      changed_when: true
+      no_log: true
+
+    - name: Keep the new seal key
+      ansible.builtin.set_fact:
+        openbao_seal_key: "{{ openbao_seal_key_generated.stdout }}"
+      no_log: true
+
+# The static seal reads the file byte for byte, so the key carries no trailing newline
+- name: Create OpenBao's seal key Secret
+  when: not openbao_seal_key_secret_exists
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: openbao-seal-key
+        namespace: "{{ openbao_namespace }}"
+      type: Opaque
+      stringData:
+        key: "{{ openbao_seal_key }}"
+  no_log: true
+
+- name: Write the seal keyfile
+  when: not openbao_seal_keyfile_exists
+  block:
+    - name: Ensure local OpenBao directory exists
+      ansible.builtin.file:
+        path: "{{ openbao_local_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Create tmpfs workdir for the seal keyfile
+      ansible.builtin.tempfile:
+        state: directory
+        path: /dev/shm
+        prefix: openbao-seal-
+      register: openbao_seal_workdir
+
+    - name: Write the seal key to the tmpfs workdir
+      ansible.builtin.copy:
+        dest: "{{ openbao_seal_workdir.path }}/seal-key.txt"
+        content: "{{ openbao_seal_key }}\n"
+        mode: "0600"
+      no_log: true
+
+    - name: GPG-encrypt the seal keyfile
+      ansible.builtin.command:
+        cmd: >-
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0
+          --cipher-algo AES256 --s2k-mode 3 --s2k-count 65011712
+          --s2k-digest-algo SHA512 --symmetric --output {{ openbao_seal_keyfile }}
+          {{ openbao_seal_workdir.path }}/seal-key.txt
+        stdin: "{{ openbao_gpg_passphrase }}\n"
+      no_log: true
+      changed_when: true
+
+    - name: Set seal keyfile permissions
+      ansible.builtin.file:
+        path: "{{ openbao_seal_keyfile }}"
+        mode: "0600"
+
+    - name: Remove the tmpfs workdir
+      ansible.builtin.file:
+        path: "{{ openbao_seal_workdir.path }}"
+        state: absent

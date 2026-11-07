@@ -1,0 +1,3 @@
+---
+# --- cluster-config/schedules.yaml ---
+openbao_snapshot_schedule: "{{ cluster_config.OPENBAO_SNAPSHOT_SCHEDULE }}"

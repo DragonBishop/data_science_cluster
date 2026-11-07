@@ -13,5 +13,13 @@
     OPENBAO_MEM_LIMIT: "{{ openbao_mem_limit }}"
     OPENBAO_MEM_REQUEST: "{{ openbao_mem_request }}"
     OPENBAO_SECRETS_AWS_VERSION: "{{ openbao_secrets_aws_version }}"
+    OPENBAO_SNAPSHOT_AGENT_CPU_REQUEST: "{{ openbao_snapshot_agent_cpu_request }}"
+    OPENBAO_SNAPSHOT_AGENT_MEM_LIMIT: "{{ openbao_snapshot_agent_mem_limit }}"
+    OPENBAO_SNAPSHOT_AGENT_MEM_REQUEST: "{{ openbao_snapshot_agent_mem_request }}"
+    OPENBAO_SNAPSHOT_AGENT_VERSION: "{{ openbao_snapshot_agent_version }}"
+    OPENBAO_SNAPSHOT_BUCKET: "{{ openbao_snapshot_bucket }}"
+    OPENBAO_SNAPSHOT_RETENTION_DAYS: "{{ openbao_snapshot_retention_days }}"
+    OPENBAO_SNAPSHOT_SCHEDULE: "{{ openbao_snapshot_schedule }}"
+    SEAWEEDFS_S3_PORT: "{{ seaweedfs_s3_port }}"
   register: openbao_values_substituted
   changed_when: false

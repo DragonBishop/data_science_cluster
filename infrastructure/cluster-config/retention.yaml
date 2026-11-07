@@ -5,6 +5,6 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
+  OPENBAO_SNAPSHOT_RETENTION_DAYS: "1"
   POSTGRES_BACKUP_RETENTION: "4d"
   TEKTON_PRUNER_KEEP: "100"
-  TEKTON_RESULTS_RETENTION: "7d"

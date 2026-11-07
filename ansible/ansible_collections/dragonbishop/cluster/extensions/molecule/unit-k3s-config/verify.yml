@@ -39,6 +39,11 @@
         that:
           - "'servicelb' in k3s_config.disable"
         fail_msg: ServiceLB remains enabled.
+    - name: It should leave the Gateway API CRDs to Flux ('gateway-api-crd')
+      ansible.builtin.assert:
+        that:
+          - "'gateway-api-crd' in k3s_config.disable"
+        fail_msg: k3s still installs its bundled Gateway API CRDs.
     - name: It should encrypt secrets at rest
       ansible.builtin.assert:
         that:

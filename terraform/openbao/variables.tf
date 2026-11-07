@@ -34,3 +34,8 @@ variable "backup_bucket" {
   type        = string
   description = "Bucket Barman's S3 logins are scoped to (cluster-config CNPG_BACKUP_BUCKET)."
 }
+
+variable "snapshot_bucket" {
+  type        = string
+  description = "Bucket OpenBao's Raft snapshots go to (cluster-config OPENBAO_SNAPSHOT_BUCKET)."
+}

@@ -1,8 +1,20 @@
 ---
-- name: OpenBao restarted after the bootstrap
+- name: OpenBao replaced, and its seal key restored, after the bootstrap
   hosts: localhost
   gather_facts: true
   tasks:
+    - name: Delete OpenBao's seal key Secret
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Secret
+        name: openbao-seal-key
+        namespace: "{{ openbao_namespace }}"
+
+    - name: Restore the seal key with the openbao role
+      ansible.builtin.include_role:
+        name: dragonbishop.cluster.openbao
+
     - name: Read the running OpenBao pod
       kubernetes.core.k8s_info:
         kind: Pod
@@ -30,39 +42,39 @@
       retries: 30
       delay: 10
 
+    # The static seal unseals a moment after the process starts
     - name: Read OpenBao's status after the restart
       kubernetes.core.k8s_exec:
         namespace: "{{ openbao_namespace }}"
         pod: "{{ openbao_pod }}"
         command: bao status -format=json
       register: openbao_status_restarted
-      until: openbao_status_restarted.stdout | default('') | length > 0
+      until: >-
+        openbao_status_restarted.stdout | default('') | length > 0
+        and not (openbao_status_restarted.stdout | from_json).sealed
       retries: 12
       delay: 5
       changed_when: false
       failed_when: false
 
-    - name: It should come back sealed after a restart
+    - name: Parse OpenBao's status after the restart
+      ansible.builtin.set_fact:
+        openbao_status_after_restart: "{{ openbao_status_restarted.stdout | default('{}', true) | from_json }}"
+
+    - name: It should unseal on its own after a restart
       ansible.builtin.assert:
         that:
-          - (openbao_status_restarted.stdout | from_json).sealed
-        fail_msg: OpenBao came back unsealed, so the unseal path was not exercised
+          - not openbao_status_after_restart.sealed | default(true)
+        fail_msg: OpenBao is still sealed after a restart, so its static seal key did not unseal it
 
-    - name: Unseal OpenBao with the openbao role
-      ansible.builtin.include_role:
-        name: dragonbishop.cluster.openbao
-
-    - name: Read OpenBao's status after the role
-      kubernetes.core.k8s_exec:
-        namespace: "{{ openbao_namespace }}"
-        pod: "{{ openbao_pod }}"
-        command: bao status -format=json
-      register: openbao_status_unsealed
-      changed_when: false
-      failed_when: false
-
-    - name: It should unseal OpenBao from the keyfile
+    - name: It should use the static seal
       ansible.builtin.assert:
         that:
-          - not (openbao_status_unsealed.stdout | from_json).sealed
-        fail_msg: OpenBao is still sealed after the openbao role ran
+          - openbao_status_after_restart.type | default('') == 'static'
+        fail_msg: "OpenBao's seal type is {{ openbao_status_after_restart.type | default('unknown') }}, not static"
+
+    - name: It should store its data in Raft
+      ansible.builtin.assert:
+        that:
+          - openbao_status_after_restart.storage_type | default('') == 'raft'
+        fail_msg: "OpenBao's storage is {{ openbao_status_after_restart.storage_type | default('unknown') }}, not raft"

@@ -23,6 +23,8 @@ data:
   OPENBAO_IMAGE_TAG: "2.7.2"
   # renovate: datasource=docker depName=ghcr.io/openbao/openbao-plugin-secrets-aws
   OPENBAO_SECRETS_AWS_VERSION: "v0.3.3@sha256:d930da29a004415c489c4d242a1985d211ca8b507887e35aa097719d95f6e574"
+  # renovate: datasource=docker depName=ghcr.io/openbao/openbao-snapshot-agent
+  OPENBAO_SNAPSHOT_AGENT_VERSION: "0.4.5"
   # renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm
   OPENBAO_VERSION: "0.30.7"
   # renovate: datasource=docker depName=ghcr.io/cloudnative-pg/postgis

@@ -19,7 +19,7 @@ Access to namespaced Kubernetes resources uses a Role and RoleBinding in the res
 
 The human administrator uses the `postgres` superuser login with a password supplied during bootstrap. CNPG manages that password through Secret `postgres-superuser-credentials`. OpenBao uses the same login to create temporary database users.
 
-Workload logins use stable database-owner roles: `app_readwrite` for the data-science database and `tekton_readwrite` for Results. These owners have no login or global data-role memberships. CNPG initializes the data-science database with default table and sequence privileges for `app_readwrite` before installing PostGIS. Objects created by `postgres` in that database inherit these privileges; other databases do not. OpenBao's temporary logins select their owner role by default, so objects they create retain a stable owner after a login expires.
+Workload logins use the stable database-owner role `app_readwrite` for the data-science database. This owner has no login or global data-role memberships. CNPG initializes the data-science database with default table and sequence privileges for `app_readwrite` before installing PostGIS. Objects created by `postgres` in that database inherit these privileges; other databases do not. OpenBao's temporary logins select their owner role by default, so objects they create retain a stable owner after a login expires.
 
 ### Issuer Authentication
 
@@ -39,19 +39,18 @@ Flux's `openbao` Kustomization applies the issuer manifest after cert-manager is
 
 The OpenTofu role verifies OpenBao's listener certificate using the public CA in ConfigMap `openbao-ca-bundle`. It waits for the Bundle output and writes the CA to `.local/openbao/certs/openbao-internal-ca.crt`. The directory and file have owner-only permissions to protect the trust file from modification.
 
-Ansible installs trust-manager and OpenBao's listener certificates and Bundle before OpenTofu and Flux. The listener CA is independent of the service PKI managed by OpenTofu. The GPG-encrypted unseal file supplies the startup workflow's recovery input.
+Ansible installs trust-manager and OpenBao's listener certificates and Bundle before OpenTofu and Flux. The listener CA is independent of the service PKI managed by OpenTofu.
+
+OpenBao unseals itself with the `static` seal. Its 32-byte key lives in Secret `openbao-seal-key`, and the `openbao` role keeps a GPG-encrypted copy in `.local/openbao/seal-key.gpg`. When the Secret is missing, the role restores it from that copy. The recovery keys, which `generate-root` needs, are GPG-encrypted in `.local/openbao/recovery-keys.gpg`. Anyone with a copy of this machine's disk can unseal OpenBao, because k3s encrypts Secrets at rest with a key kept on the same disk. On a running machine nothing changes, since root can already read an unsealed OpenBao.
 
 ## Workload Credentials
 
 | Consumer | Delivery | Lifetime and refresh |
 | --- | --- | --- |
 | CNPG Barman Cloud | OpenBao CSI provider, using the named Barman ServiceAccount and S3 role | Four-day S3 lease; issuing token covers that lease; daily refresh/reload |
-| Tekton Results | OpenBao CSI provider, synchronizing the database login into its configured Secret | Four-day database lease; issuing token covers that lease; daily refresh; in-place restart when the login changes |
 | Data-science database clients | OpenBao's named database authentication role | Three-hour default database lease, up to 24 hours; the client must refresh before expiry |
 
 A CSI issuing token must cover the lease of the credential it creates. Keep the provider's `cache-size=0`, issuing-token lifetimes and child leases aligned. Shortening a parent token independently can revoke credentials still in use. Daily rotation and consumer reload deliver replacement credentials.
-
-Tekton Results reads its login at startup. A `credential-watch` sidecar in the API and retention-agent pods compares the username its pod started with to the current username. When they differ, the sidecar exits with code 3 and the kubelet restarts every container in the pod in place. The pod keeps its volumes, including the API's CSI mount and its current login. In the API pod, the sidecar reads the username from the CSI mount. In the retention-agent pod, it reads Secret `tekton-results-postgres`.
 
 OpenBao connects to `postgres-cluster-rw.databases.svc.cluster.local` with `sslmode=verify-full`, verifying the server's CA and hostname against the public `postgres-ca` Bundle mounted at `/openbao/userconfig/postgres-ca`. Provisioning registers the connection before PostgreSQL exists; Flux supplies the database and its CA before credentials can be issued.
 
@@ -64,7 +63,7 @@ Trust a certificate only when it identifies the service or workload you expected
 | Consumer | Trust source |
 | --- | --- |
 | OpenTofu, cert-manager and SPIRE connecting to OpenBao | `openbao-local-ca-secret`, distributed as `openbao-ca-bundle` |
-| Gateway, SeaweedFS S3, Results API and Hubble clients | OpenBao's service-PKI root, distributed as `openbao-root-ca` or carried in their TLS Secret |
+| Gateway, SeaweedFS S3 and Hubble clients | OpenBao's service-PKI root, distributed as `openbao-root-ca` or carried in their TLS Secret |
 | OpenBao and application clients verifying PostgreSQL; PostgreSQL replication | Dedicated `postgres-ca` |
 | PostgreSQL SVID login | `postgres-client-ca`, containing the SPIRE signing root and PostgreSQL replication CA |
 | Flux controller mTLS and workload identity consumers | SPIRE's workload API trust bundle |

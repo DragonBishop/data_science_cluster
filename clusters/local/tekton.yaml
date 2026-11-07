@@ -8,9 +8,6 @@ spec:
   retryInterval: 1m
   dependsOn:
     - name: tekton-operator
-    - name: openbao
-    - name: databases-cluster
-    - name: secrets-store-csi-driver
     - name: cluster-config
   sourceRef:
     kind: GitRepository

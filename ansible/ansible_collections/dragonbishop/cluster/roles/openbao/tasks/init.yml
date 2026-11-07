@@ -15,8 +15,8 @@
         openbao_init: "{{ openbao_init_result.stdout | from_json }}"
       no_log: true
 
-    - name: Keep the root token and the first three unseal keys
+    - name: Keep the root token and the first three recovery keys
       ansible.builtin.set_fact:
         openbao_root_token: "{{ openbao_init.root_token }}"
-        openbao_fresh_unseal_keys: "{{ openbao_init.unseal_keys_b64[:3] }}"
+        openbao_fresh_recovery_keys: "{{ openbao_init.recovery_keys_b64[:3] }}"
       no_log: true

@@ -15,4 +15,5 @@
     TF_VAR_seaweedfs_secret_key: "{{ opentofu_seaweedfs_credential.secretKey }}"
     TF_VAR_seaweedfs_s3_port: "{{ seaweedfs_s3_port }}"
     TF_VAR_backup_bucket: "{{ cnpg_backup_bucket }}"
+    TF_VAR_snapshot_bucket: "{{ openbao_snapshot_bucket }}"
   no_log: true

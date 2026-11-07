@@ -15,6 +15,9 @@ spec:
             k8s:io.kubernetes.pod.namespace: openbao
             app.kubernetes.io/name: openbao-csi-provider
         - matchLabels:
+            k8s:io.kubernetes.pod.namespace: openbao
+            app.kubernetes.io/component: snapshot-agent
+        - matchLabels:
             k8s:io.kubernetes.pod.namespace: tekton-pipelines
             tekton.dev/pipeline: core-test
         - matchLabels:

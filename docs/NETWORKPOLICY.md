@@ -81,40 +81,6 @@ flowchart LR
 
 Each example below is a policy already in the cluster.
 
-### A pod calls another pod
-
-The Tekton Results watcher sends records to the Results API. The rule lives on the API, the receiving side:
-
-```mermaid
-flowchart LR
-  watcher[Results watcher] -->|8080| api
-  subgraph policy["results-api: ingress rule names the watcher and 8080"]
-    api[Results API]
-  end
-```
-
-[`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml)
-
-```yaml
-spec:
-  endpointSelector:
-    matchLabels:
-      app.kubernetes.io/name: tekton-results-api
-  ingress:
-    # Watcher sends PipelineRun and TaskRun records
-    - fromEndpoints:
-        - matchLabels:
-            app.kubernetes.io/name: tekton-results-watcher
-      toPorts:
-        - ports:
-            - port: "8080"
-              protocol: TCP
-```
-
-In a namespaced policy, `fromEndpoints` matches pods in the policy's own namespace. To name a caller from another namespace, add `k8s:io.kubernetes.pod.namespace: <namespace>` to the rule's `matchLabels`, as `postgres-cluster` does for OpenBao.
-
-Write the pod's listening port, not the Service port. Cilium translates the Service address before it checks policy. `kubectl get svc <name> -o yaml` shows the `targetPort`.
-
 ### A pod calls an internet site
 
 TaskRun pods in `tekton-pipelines` clone from the Git forge and install from PyPI. The rule lives on the sender:
@@ -299,7 +265,7 @@ Flux needs network access before it can deliver any policy, and so do the worklo
 | `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090; Flux to its source hosts on 443 |
 | `openbao` | [`infrastructure/openbao/openbao-networkpolicy.yaml`](../infrastructure/openbao/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200; OpenBao to the secrets-aws plugin's registry on 443 |
 | `plugin-barman-cloud` | [`apps/databases/plugin/cnpg-system-networkpolicy.yaml`](../apps/databases/plugin/cnpg-system-networkpolicy.yaml) | The CNPG operator to the plugin on 9090 |
-| `postgres-cluster` | [`apps/databases/security/databases-networkpolicy.yaml`](../apps/databases/security/databases-networkpolicy.yaml) | Gateway, instances, OpenBao, Tekton Results and `core-test` on 5432; the CNPG operator on 8000 |
+| `postgres-cluster` | [`apps/databases/security/databases-networkpolicy.yaml`](../apps/databases/security/databases-networkpolicy.yaml) | Gateway, instances, OpenBao and `core-test` on 5432; the CNPG operator on 8000 |
 | SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other; Postgres, OpenBao and `core-test` to S3 on `SEAWEEDFS_S3_PORT` |
-| `remote-resolvers`, `results-api` | [`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443; the Results watcher to the Results API on 8080 |
+| `remote-resolvers` | [`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443 |
 | `taskrun` | [`infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443 |

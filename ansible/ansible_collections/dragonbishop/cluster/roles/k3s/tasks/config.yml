@@ -27,6 +27,7 @@
       disable:
         - traefik
         - servicelb
+        - gateway-api-crd
       disable-kube-proxy: true
       disable-network-policy: true
       flannel-backend: none

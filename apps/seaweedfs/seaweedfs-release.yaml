@@ -67,7 +67,7 @@ spec:
               ports:
                 - protocol: TCP
                   port: ${SEAWEEDFS_S3_PORT}
-            # OpenBao's secrets-aws plugin creates and deletes Barman's IAM users
+            # OpenBao's secrets-aws plugin creates and deletes IAM users, and its snapshot agent uploads Raft snapshots
             - from:
                 - namespaceSelector:
                     matchLabels:
@@ -183,6 +183,7 @@ spec:
       port: ${SEAWEEDFS_S3_PORT}
       createBuckets:
         - name: ${CNPG_BACKUP_BUCKET}
+        - name: ${OPENBAO_SNAPSHOT_BUCKET}
       livenessProbe:
         httpGet:
           scheme: HTTPS

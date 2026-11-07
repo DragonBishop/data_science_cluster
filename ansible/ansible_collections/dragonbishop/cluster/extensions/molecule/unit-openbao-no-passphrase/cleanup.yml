@@ -1,5 +1,5 @@
 ---
-- name: OpenBao unseal keyfile without a GPG passphrase
+- name: OpenBao recovery keyfile without a GPG passphrase
   hosts: molecule
   gather_facts: true
   vars_files:

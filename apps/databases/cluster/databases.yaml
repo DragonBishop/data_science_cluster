@@ -23,13 +23,15 @@ spec:
     - name: postgis_tiger_geocoder
       schema: tiger
 ---
+# Delete the retired run-history database after recovery; remove this declaration once applied.
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
   name: tekton-results
   namespace: databases
 spec:
-  name: ${TEKTON_RESULTS_DB_NAME}
+  name: tekton_results
   owner: tekton_readwrite
+  ensure: absent
   cluster:
     name: postgres-cluster
