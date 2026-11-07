@@ -26,110 +26,164 @@ jobs:
           RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/dragonbishop/cluster/(galaxy\.yml|CHANGELOG\.md)'
           E2E_PATHS: '^(ansible|clusters|infrastructure|apps|terraform|components|modules|scripts|src/bash)/|^\.github/workflows/e2e\.yml$|^(ansible\.cfg|pyproject\.toml|uv\.lock)$'
         run: |
-          cluster_files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | grep -v -x -E "$RELEASE_FILES" | grep -E "$E2E_PATHS" || true)
-          echo "skip=$([ -z "$cluster_files" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-  bootstrap:
+          cluster_files="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' |
+              grep -v -x -E "$RELEASE_FILES" |
+              grep -E "$E2E_PATHS" || true
+          )"
+          skip=false
+          if [[ -z "$cluster_files" ]]; then
+            skip=true
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+  bootstrap-ubuntu:
     needs: e2e-scope
     if: ${{ !cancelled() && needs.e2e-scope.outputs.skip != 'true' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     env:
-      GITHUB_APP_ID: ${{ secrets.FLUX_GITHUB_APP_ID }}
-      GITHUB_APP_INSTALLATION_ID: ${{ secrets.FLUX_GITHUB_APP_INSTALLATION_ID }}
-      FLUX_GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
+      REPO_DIR: .
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version-file: ".python-version"
-      - uses: fluxcd/flux2/action@3fa784edd773d56630bb9f62645e08f70c2cff0a # v2.10.0
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - &setup_uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - &setup_flux
+        uses: fluxcd/flux2/action@3fa784edd773d56630bb9f62645e08f70c2cff0a # v2.10.0
         with:
           version: 2.10.0
-      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+      - &setup_opentofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
           tofu_version: v1.13.2
           tofu_wrapper: false
-      - run: uv sync --frozen
-      - run: uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
 
-      - name: Generate the test secrets
+      - &install_python_environment
+        name: Install the Python environment
+        run: $ON_NODE uv --directory "$REPO_DIR" sync --frozen
+
+      - &install_collection
+        name: Install the collection
         run: |
-          for variable_name in OPENBAO_GPG_PASSPHRASE OPENTOFU_STATE_ENCRYPTION_PASSPHRASE OPENTOFU_POSTGRES_SUPERUSER_PASSWORD; do
-            secret_value="$(openssl rand -hex 32)"
-            echo "::add-mask::$secret_value"
-            echo "$variable_name=$secret_value" >> "$GITHUB_ENV"
-          done
-          echo "OPENTOFU_BINARY=$(command -v tofu)" >> "$GITHUB_ENV"
+          $ON_NODE uv --directory "$REPO_DIR" run ansible-galaxy collection install \
+            --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
 
-      - name: Write the Flux GitHub App private key
+      - &write_flux_private_key
+        name: Write the Flux GitHub App private key
         env:
           FLUX_GITHUB_APP_PRIVATE_KEY: ${{ secrets.FLUX_GITHUB_APP_PRIVATE_KEY }}
         run: |
-          key_path="$RUNNER_TEMP/flux-github-app.pem"
-          printf '%s\n' "$FLUX_GITHUB_APP_PRIVATE_KEY" > "$key_path"
-          chmod 600 "$key_path"
-          echo "GITHUB_APP_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+          $ON_NODE install --mode=600 /dev/null /tmp/flux-github-app.pem
+          printf '%s\n' "$FLUX_GITHUB_APP_PRIVATE_KEY" | $ON_NODE tee /tmp/flux-github-app.pem > /dev/null
 
-      - name: Bootstrap the cluster with the full-playbook scenario
-        run: uv run molecule test --scenario-name full-playbook
-        working-directory: ansible/ansible_collections/dragonbishop/cluster
-
-      - name: Wait for every Kustomization to be Ready
+      - &run_full_playbook
+        name: Bootstrap the cluster with the full-playbook scenario
+        env:
+          GITHUB_APP_ID: ${{ secrets.FLUX_GITHUB_APP_ID }}
+          GITHUB_APP_INSTALLATION_ID: ${{ secrets.FLUX_GITHUB_APP_INSTALLATION_ID }}
+          FLUX_GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          kustomizations=$(kubectl -n flux-system get kustomization -o name)
-          deadline=$((SECONDS + 1200))
-          until kubectl -n flux-system wait $kustomizations --for=condition=ready --timeout=0s > /dev/null 2>&1; do
-            if (( SECONDS >= deadline )); then
-              echo "Kustomizations not Ready after 20 minutes"
-              exit 1
-            fi
-            flux get kustomizations
-            sleep 60
+          $ON_NODE bash -s <<EOF
+          export GITHUB_APP_ID='$GITHUB_APP_ID'
+          export GITHUB_APP_INSTALLATION_ID='$GITHUB_APP_INSTALLATION_ID'
+          export GITHUB_APP_PRIVATE_KEY_PATH=/tmp/flux-github-app.pem
+          export FLUX_GIT_BRANCH='$FLUX_GIT_BRANCH'
+          export OPENTOFU_BINARY="\$(command -v tofu)"
+          uv --directory '$REPO_DIR/ansible/ansible_collections/dragonbishop/cluster' \
+            run molecule test --scenario-name full-playbook
+          EOF
+
+      - &wait_for_kustomizations
+        name: Wait for every Kustomization to be Ready
+        run: |
+          $ON_NODE kubectl -n flux-system wait kustomization --all \
+            --for=condition=ready --timeout=1200s
+
+      - &show_flux_objects
+        name: Show the Flux objects
+        if: failure() || cancelled()
+        run: $ON_NODE flux get all -A || true
+
+      - &show_cluster_state
+        name: Show the cluster's state
+        if: failure() || cancelled()
+        run: |
+          for controller_name in source-controller kustomize-controller helm-controller; do
+            echo "--- $controller_name logs"
+            $ON_NODE kubectl logs -n flux-system "deploy/$controller_name" --tail=200 || true
           done
-          flux get kustomizations
 
-      - name: Show the Flux objects
-        if: failure() || cancelled()
-        run: flux get all -A || true
+          echo "--- Pods"
+          $ON_NODE kubectl get pods -A || true
 
-      - name: Show source-controller's logs
-        if: failure() || cancelled()
-        run: kubectl logs -n flux-system deploy/source-controller --tail=200 || true
+          echo "--- Postgres clusters"
+          $ON_NODE kubectl get clusters.postgresql.cnpg.io -A -o wide || true
 
-      - name: Show kustomize-controller's logs
-        if: failure() || cancelled()
-        run: kubectl logs -n flux-system deploy/kustomize-controller --tail=200 || true
+          echo "--- Recent events"
+          $ON_NODE kubectl get events -A --sort-by=.lastTimestamp | tail -n 100
 
-      - name: Show helm-controller's logs
-        if: failure() || cancelled()
-        run: kubectl logs -n flux-system deploy/helm-controller --tail=200 || true
+          echo "--- Logs from unready pods"
+          unready_pods="$(
+            $ON_NODE kubectl get pods -A --no-headers --field-selector=status.phase!=Succeeded |
+              awk '{ split($3, ready, "/") } ready[1] != ready[2] { print $1, $2 }'
+          )"
+          xargs --no-run-if-empty --max-lines=1 \
+            $ON_NODE kubectl describe pod -n <<< "$unready_pods" || true
+          xargs --no-run-if-empty --max-lines=1 \
+            $ON_NODE kubectl logs --all-containers --prefix --tail=100 -n <<< "$unready_pods" || true
 
-      - name: Show the pods
-        if: failure() || cancelled()
-        run: kubectl get pods -A || true
+  bootstrap-fedora:
+    needs: e2e-scope
+    if: ${{ !cancelled() && needs.e2e-scope.outputs.skip != 'true' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    env:
+      ON_NODE: ssh lima-node
+      REPO_DIR: repo
+    steps:
+      - *checkout
+      - *setup_uv
+      - *setup_flux
+      - *setup_opentofu
+      - uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
+        with:
+          version: v2.3.0
 
-      - name: Show Postgres Flux reconciliation
-        if: failure() || cancelled()
+      - name: Start the Fedora VM
         run: |
-          kubectl get kustomizations.kustomize.toolkit.fluxcd.io cnpg-operator databases-plugin databases-security databases-objectstore databases-cluster -n flux-system -o wide || true
-          kubectl get clusters.postgresql.cnpg.io -A -o wide || true
+          limactl start --plain --name=node \
+            --cpus=4 --memory=12 --disk=60 template:fedora-44
 
-      - name: Show the recent events
-        if: failure() || cancelled()
-        run: kubectl get events -A --sort-by=.lastTimestamp | tail -n 100
+      - name: Install the VM's packages
+        run: $ON_NODE sudo dnf install --assumeyes rsync firewalld git gnupg2 openssl
 
-      - name: Describe pods that are not ready
-        if: failure() || cancelled()
+      - name: Start firewalld in the VM
+        run: $ON_NODE sudo systemctl enable --now firewalld
+
+      - name: Give the VM the cluster's LAN interface
         run: |
-          kubectl get pods -A -o json |
-            jq -r '
-              .items[]
-              | select(.status.phase != "Succeeded")
-              | select(.status.phase != "Running" or any(.status.conditions[]?; .type == "Ready" and .status != "True"))
-              | [.metadata.namespace, .metadata.name] | @tsv
-            ' |
-            while IFS=$'\t' read -r namespace pod_name; do
-              kubectl describe pod -n "$namespace" "$pod_name" || true
-              kubectl logs -n "$namespace" "$pod_name" --all-containers --prefix --tail=100 || true
-            done
+          lan_interface="$(yq '.data.LAN_INTERFACE' infrastructure/cluster-config/networking.yaml)"
+          $ON_NODE sudo ip link add "$lan_interface" type dummy
+
+      - name: Copy the tools into the VM
+        run: |
+          for tool_name in uv kubectl helm flux tofu; do
+            tool_path="$(command -v "$tool_name")"
+            rsync --copy-links --executability --rsync-path='sudo rsync' \
+              "$tool_path" "lima-node:/usr/local/bin/$tool_name"
+          done
+
+      - name: Copy the repository into the VM
+        run: rsync --archive ./ "lima-node:$REPO_DIR/"
+
+      - *install_python_environment
+      - *install_collection
+      - *write_flux_private_key
+      - *run_full_playbook
+      - *wait_for_kustomizations
+      - *show_flux_objects
+      - *show_cluster_state
+
+      - name: Show SELinux denials
+        if: failure() || cancelled()
+        run: $ON_NODE sudo journalctl -k --grep=avc --no-pager || true
