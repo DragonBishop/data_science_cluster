@@ -59,24 +59,6 @@ resource "vault_kubernetes_auth_backend_role" "spire_server" {
   token_ttl                        = 3600 # 1h
 }
 
-resource "vault_policy" "tekton_results" {
-  name   = "tekton-results-policy"
-  policy = <<EOT
-path "database/creds/tekton-results-app-role" { capabilities = ["read"] }
-EOT
-}
-
-resource "vault_kubernetes_auth_backend_role" "tekton_results" {
-  backend                          = vault_auth_backend.kubernetes.path
-  role_name                        = "tekton-results-role"
-  bound_service_account_names      = ["tekton-results-api"]
-  bound_service_account_namespaces = ["tekton"]
-  audience                         = "openbao"
-  token_policies                   = [vault_policy.tekton_results.name]
-  token_ttl                        = vault_database_secret_backend_role.tekton_results_app_role.default_ttl
-  token_max_ttl                    = vault_database_secret_backend_role.tekton_results_app_role.max_ttl
-}
-
 resource "vault_policy" "barman_s3" {
   name   = "barman-s3-policy"
   policy = <<EOT
@@ -93,4 +75,41 @@ resource "vault_kubernetes_auth_backend_role" "barman_s3" {
   token_policies                   = [vault_policy.barman_s3.name]
   token_ttl                        = vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds
   token_max_ttl                    = vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
+}
+
+resource "vault_policy" "openbao_snapshot_s3" {
+  name   = "openbao-snapshot-s3-policy"
+  policy = <<EOT
+path "seaweedfs/creds/openbao-snapshot" { capabilities = ["read"] }
+EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "openbao_snapshot_s3" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "openbao-snapshot-s3-role"
+  bound_service_account_names      = ["openbao-snapshot-credentials"]
+  bound_service_account_namespaces = ["openbao"]
+  audience                         = "openbao"
+  token_policies                   = [vault_policy.openbao_snapshot_s3.name]
+  token_ttl                        = vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds
+  token_max_ttl                    = vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
+}
+
+resource "vault_policy" "openbao_snapshot" {
+  name   = "openbao-snapshot-policy"
+  policy = <<EOT
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }
+EOT
+}
+
+# The chart's snapshot agent CronJob logs in once per run, takes one snapshot and exits
+resource "vault_kubernetes_auth_backend_role" "openbao_snapshot" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "openbao-snapshot-role"
+  bound_service_account_names      = ["openbao-snapshot"]
+  bound_service_account_namespaces = ["openbao"]
+  audience                         = "openbao"
+  token_policies                   = [vault_policy.openbao_snapshot.name]
+  token_ttl                        = 600
+  token_max_ttl                    = 600
 }

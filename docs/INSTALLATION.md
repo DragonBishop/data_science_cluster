@@ -17,7 +17,7 @@ Once host-side prerequisites are met, running `just bootstrap` orchestrates the 
 * [Cluster Bootstrap](#cluster-bootstrap)
   * [Step 1: Clone Repository](#step-1-clone-repository)
   * [Step 2: Execute Ansible Bootstrap](#step-2-execute-ansible-bootstrap)
-  * [Step 3: Secure OpenBao Credentials & Unseal Keys](#step-3-secure-openbao-credentials--unseal-keys)
+  * [Step 3: Secure OpenBao Credentials & Recovery Keys](#step-3-secure-openbao-credentials--recovery-keys)
 * [Flux Dependency Graph](#flux-dependency-graph)
 
 ---
@@ -89,7 +89,7 @@ Used by `just fuzzypods`.
 
 #### GnuPG
 
-`gpg` encrypts the OpenBao unseal keyfile during `just bootstrap` and decrypts it on every `just start`.
+`gpg` encrypts OpenBao's recovery keys and a copy of its seal key during `just bootstrap`, and decrypts the seal key when the `openbao` role has to restore Secret `openbao-seal-key`.
 
 * **Ubuntu / Debian**:
 
@@ -377,14 +377,14 @@ Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on
 > uv run ansible-playbook dragonbishop.cluster.data_cluster --ask-become-pass
 > ```
 
-### Step 3: Secure OpenBao Credentials & Unseal Keys
+### Step 3: Secure OpenBao Credentials & Recovery Keys
 
-The bootstrap script prompts for a GPG passphrase and an OpenTofu state-encryption passphrase, then prints the in-cluster OpenBao unseal keys and root token.
+The bootstrap script prompts for a GPG passphrase and an OpenTofu state-encryption passphrase, then prints the in-cluster OpenBao recovery keys and root token.
 
 > [!IMPORTANT]
-> Store the generated unseal keys and root token in a secure password manager immediately. Data cannot be recovered if these keys are lost.
+> Store the generated recovery keys and root token in a secure password manager immediately. `generate-root` needs the recovery keys if the root token is lost.
 
-Future cluster starts (`just start` / `start-cluster.sh`) unseal OpenBao using the GPG-encrypted keyfile written during bootstrap to `.local/openbao/unseal-keys.gpg`, inside this repo and gitignored. `git clean -fdx` and `just uninstall` delete it, so keep a backup elsewhere. Note that the cache-TTL setting in `~/.gnupg/gpg-agent.conf` only governs `gpg-agent`'s in-memory cache; on desktop environments with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be stored in the OS keyring. Add `no-allow-external-cache` to `~/.gnupg/gpg-agent.conf` to disable OS keyring caching.
+OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`, so `just start` only checks it. The bootstrap writes two GPG-encrypted files inside this repo, both gitignored: `.local/openbao/recovery-keys.gpg` holds the recovery keys, and `.local/openbao/seal-key.gpg` holds a copy of the seal key, which the `openbao` role uses to restore the Secret. `git clean -fdx` and `just uninstall` delete them. Note that the cache-TTL setting in `~/.gnupg/gpg-agent.conf` only governs `gpg-agent`'s in-memory cache; on desktop environments with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be stored in the OS keyring. Add `no-allow-external-cache` to `~/.gnupg/gpg-agent.conf` to disable OS keyring caching.
 
 ## Flux Dependency Graph
 
@@ -416,14 +416,15 @@ flowchart TD
     security --> objectstore
     seaweedfs --> objectstore
     csidriver --> objectstore
+    openbao --> baosnapshot["openbao-snapshot"]
+    seaweedfs --> baosnapshot
+    csidriver --> baosnapshot
     objectstore --> dbcluster["databases-cluster"]
     gw --> dbcluster
 
     %% CI
     certmgr --> tektonop["tekton-operator"]
     tektonop --> tekton["tekton"]
-    dbcluster --> tekton
-    csidriver --> tekton
     tekton --> tektonpipelines["tekton-pipelines"]
     tekton --> tektontasks["tekton-tasks"]
 ```
@@ -437,12 +438,13 @@ flowchart TD
 * `cnpg-operator` depends on `openbao`, and `databases-plugin` depends on `cnpg-operator`.
 * `hubble` depends on `gateway`.
 * `secrets-store-csi-driver` depends on `cluster-config`.
-* `seaweedfs` depends on `namespaces` and `openbao` and is Ready only after its install hook creates the `cnpg-backups` bucket.
+* `seaweedfs` depends on `namespaces` and `openbao` and is Ready only after its install hook creates the `cnpg-backups` and `openbao-snapshots` buckets.
+* `openbao-snapshot` depends on `openbao`, `seaweedfs` and `secrets-store-csi-driver`. Its holder pod mounts the S3 key the chart's snapshot agent uploads with, and the key's IAM user exists only once SeaweedFS runs. It can't live in `openbao`, because `seaweedfs` depends on `openbao`.
 * `databases-security` depends on `openbao`, which creates the `openbao-selfsigned-bootstrap` issuer that self-signs Postgres's CA.
 * `databases-objectstore` depends on `openbao`, `databases-plugin`, `databases-security`, `seaweedfs` and `secrets-store-csi-driver`. Its objects need the `ObjectStore` CRD, the Job's RBAC and network policy, the `cnpg-backups` bucket and Barman's CSI-mounted key pair.
 * `databases-cluster` depends on `databases-objectstore`, which turns Ready when its `postgres-bootstrap` Job has created the Cluster. It also depends on `gateway`, which its TCPRoute attaches to.
 * `tekton-operator` depends on `cert-manager`.
-* `tekton` depends on `tekton-operator`, `openbao`, `databases-cluster` and `secrets-store-csi-driver`. Every Results login joins the `tekton_readwrite` role, a managed role of the Cluster in `databases-cluster`. The operator holds Results back until Secret `tekton-results-postgres` exists. The `opentofu` role creates it empty, and the CSI driver fills it.
+* `tekton` depends on `tekton-operator` and `cluster-config`.
 * `tekton-pipelines` and `tekton-tasks` depend on `tekton`, which installs the Pipeline and Task CRDs.
 
 Once Flux reports every Kustomization Ready, continue with [Verification](VERIFICATION.md).

@@ -10,6 +10,7 @@ variables {
   seaweedfs_secret_key        = "foo567"
   seaweedfs_s3_port           = 9000
   backup_bucket               = "foo-backups"
+  snapshot_bucket             = "foo-snapshots"
 }
 
 run "postgres_tls_is_verified" {
@@ -32,23 +33,9 @@ run "database_roles_allowed" {
     condition = alltrue([
       for role in [
         vault_database_secret_backend_role.postgres_app_role,
-        vault_database_secret_backend_role.tekton_results_app_role,
       ] : contains(vault_database_secret_backend_connection.postgres_cluster.allowed_roles, role.name)
     ])
     error_message = "A database role is missing from postgres_cluster's allowed_roles."
-  }
-}
-
-run "pod_start_ttls" {
-  command = plan
-
-  assert {
-    condition = alltrue([
-      for role in [
-        vault_database_secret_backend_role.tekton_results_app_role,
-      ] : role.default_ttl == 345600 && role.max_ttl == 345600
-    ])
-    error_message = "A pod-start database role's TTL is not 4 days."
   }
 }
 
@@ -61,8 +48,9 @@ run "auth_roles_bound_narrowly" {
         vault_kubernetes_auth_backend_role.databases,
         vault_kubernetes_auth_backend_role.cert_manager,
         vault_kubernetes_auth_backend_role.spire_server,
-        vault_kubernetes_auth_backend_role.tekton_results,
         vault_kubernetes_auth_backend_role.barman_s3,
+        vault_kubernetes_auth_backend_role.openbao_snapshot_s3,
+        vault_kubernetes_auth_backend_role.openbao_snapshot,
       ] : length(role.bound_service_account_names) == 1 && length(role.bound_service_account_namespaces) == 1
     ])
     error_message = "A Kubernetes auth role is bound to more than one ServiceAccount or namespace."
@@ -95,8 +83,9 @@ run "policies_read_only" {
     condition = alltrue([
       for policy in [
         vault_policy.databases,
-        vault_policy.tekton_results,
         vault_policy.barman_s3,
+        vault_policy.openbao_snapshot_s3,
+        vault_policy.openbao_snapshot,
       ] : length(regexall("capabilities\\s*=\\s*\\[\"read\"\\]", policy.policy)) == length(regexall("capabilities", policy.policy))
     ])
     error_message = "A policy grants more than read."
@@ -158,9 +147,9 @@ run "csi_tokens_cover_secret_leases" {
 
   assert {
     condition = (
-      vault_kubernetes_auth_backend_role.tekton_results.token_ttl >= vault_database_secret_backend_role.tekton_results_app_role.default_ttl &&
-      vault_kubernetes_auth_backend_role.tekton_results.token_max_ttl >= vault_database_secret_backend_role.tekton_results_app_role.max_ttl
+      vault_kubernetes_auth_backend_role.openbao_snapshot_s3.token_ttl >= vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds &&
+      vault_kubernetes_auth_backend_role.openbao_snapshot_s3.token_max_ttl >= vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
     )
-    error_message = "Tekton Results' CSI login token expires before its database lease, revoking the login before the next daily rotation."
+    error_message = "The OpenBao snapshot holder's CSI login token expires before its S3 lease, revoking the key before the next daily rotation."
   }
 }

@@ -41,7 +41,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **OpenTofu role fails to apply OpenBao configuration**
   * **What's happening:** OpenBao is sealed, its local redirect on 127.0.0.1:8210 is missing, or OpenTofu state encryption passphrase was mistyped.
-  * **How to fix it:** Verify the `openbao-0` pod is Running and unsealed (`kubectl exec -n openbao openbao-0 -- bao status`). Run OpenTofu manually to inspect verbose output:
+  * **How to fix it:** Verify the `openbao-0` pod is Running and unsealed (`kubectl exec -n openbao openbao-0 -- bao status`). If it's sealed, see "OpenBao stays sealed after a restart" below. Run OpenTofu manually to inspect verbose output:
 
     ```bash
     tofu -chdir=terraform/openbao init
@@ -168,31 +168,29 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 ## OpenBao Secrets
 
-* **OpenBao reports as "sealed" when it isn't (or prompts for a GPG password on every run)**
-  * **What's happening:** `bao status` returns `0` for unsealed, `2` for sealed, and another code if the command itself failed. Might be a dead pod. A check that greps the output for "false" treats a failed connection as sealed and goes looking for unseal keys.
-  * **How to fix it:** Diagnose using the exit code rather than the text output:
-
-    ```bash
-    kubectl exec -n openbao openbao-0 -- bao status; echo "exit=$?"
-    ```
-
-    If OpenBao is re-sealing without a pod restart, check `kubectl get pods -n openbao` for a crashing container.
+* **OpenBao stays sealed after a restart**
+  * **What's happening:** OpenBao unseals itself from the static seal key at `/openbao/userconfig/openbao-seal-key/key`, mounted from Secret `openbao-seal-key`. Without that Secret the pod can't start. A Secret holding a different key leaves OpenBao sealed, and its log names the seal error. `bao status` returns `0` for unsealed, `2` for sealed, and another code if the command itself failed.
+  * **How to fix it:**
+    1. Check the status by its exit code: `kubectl exec -n openbao openbao-0 -- bao status; echo "exit=$?"`.
+    2. Check the Secret and the log: `kubectl get secret openbao-seal-key -n openbao` and `kubectl logs openbao-0 -n openbao`.
+    3. If the Secret is missing, `just bootstrap --tags openbao` restores it from `.local/openbao/seal-key.gpg`. Then `kubectl delete pod openbao-0 -n openbao` starts OpenBao with it.
 
 * **GPG decryption fails**
-  * **What's happening:** The script cannot read or decrypt the unseal keys.
+  * **What's happening:** The `openbao` role can't decrypt `.local/openbao/seal-key.gpg` while restoring Secret `openbao-seal-key`.
   * **How to fix it:**
-    1. Confirm `.local/openbao/unseal-keys.gpg` exists and is mode `600` (`ls -l .local/openbao/unseal-keys.gpg`, from the repo root).
-    2. Confirm the passphrase matches the one used to create the keyfile.
+    1. Confirm the file exists and is mode `600` (`ls -l .local/openbao/seal-key.gpg`, from the repo root).
+    2. Confirm the passphrase matches the one used to create it.
 
-> [!NOTE]
-> `bao operator unseal` does not accept piped input, so the script passes the key via `bao write sys/unseal key=-` instead. To exercise that mechanism without changing the seal state, run `printf 'SENTINEL\n' | kubectl exec -i -n openbao openbao-0 -- bao write -output-curl-string sys/unseal key=-` to get output containing `SENTINEL`.
+* **The OpenBao snapshot agent's Job fails**
+  * **What's happening:** The chart's `openbao-snapshot` CronJob logs in as `openbao-snapshot-role`, saves a Raft snapshot and uploads it with the S3 key from Secret `openbao-snapshot-s3`. The `openbao-snapshot-credentials` holder pod's CSI mount fills that Secret.
+  * **How to fix it:** `kubectl logs -n openbao job/<newest openbao-snapshot job>` names the failing step. For a login error, check that `openbao-snapshot-role` exists (`just bootstrap --tags opentofu`). For a missing S3 key, check that `deployment/openbao-snapshot-credentials` is Available. For an upload error, check that the `openbao-snapshots` bucket exists and that SeaweedFS's S3 certificate verifies against ConfigMap `openbao-root-ca`.
 
 * **The OpenBao root token was never captured and is now needed**
   * **What's happening:** `bao operator init` prints the root token exactly once; the bootstrap play prints it to the terminal at that moment, but nothing persists it to disk, by design.
-  * **How to fix it:** If OpenBao has already been unsealed since, generate a new one from the unseal key shares instead of the lost token:
+  * **How to fix it:** Generate a new one from the recovery key shares instead of the lost token:
 
     ```bash
-    gpg --quiet --decrypt .local/openbao/unseal-keys.gpg   # prints the 3 unseal key shares
+    gpg --quiet --decrypt .local/openbao/recovery-keys.gpg   # prints the 3 recovery key shares
     kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -init   # prints a nonce + OTP
     kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -nonce=<nonce> <key>   # once per key share
     kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -decode=<encoded_token> -otp=<otp>
@@ -264,7 +262,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Retention fails with `InvalidAccessKeyId` about 10 minutes after startup**
   * **What's happening:** The CSI login token expired and OpenBao revoked its S3 lease, deleting the key from SeaweedFS. A 4-day S3 lease cannot outlive its issuing token. The same deleted key also blocks WAL uploads. Correlate `kubectl logs -n openbao openbao-0` with the `plugin-barman-cloud` container in the primary database pod: token and `seaweedfs/creds/barman` revocations precede failed `ListObjectsV2` and `PutObject` calls.
-  * **How to fix it:** Apply the CSI auth-role TTLs in `terraform/openbao/kubernetes-auth.tf` and the provider's `-cache-size=0` setting in `infrastructure/openbao/openbao-values.yaml`. Both CSI roles use 4-day login tokens, and each daily rotation authenticates afresh so a new credential cannot inherit a nearly expired token. This also fixes the same token-lifetime mismatch for Tekton Results. Existing tokens and deleted keys are not repaired by changing a role: after applying the changes and waiting for the CSI provider rollout, refresh Barman's holder mount:
+  * **How to fix it:** Apply the CSI auth-role TTLs in `terraform/openbao/kubernetes-auth.tf` and the provider's `-cache-size=0` setting in `infrastructure/openbao/openbao-values.yaml`. Both CSI roles use 4-day login tokens, and each daily rotation authenticates afresh so a new credential cannot inherit a nearly expired token. Existing tokens and deleted keys are not repaired by changing a role: after applying the changes and waiting for the CSI provider rollout, refresh Barman's holder mount:
 
     ```bash
     kubectl rollout restart deployment/barman-s3-credentials -n databases
@@ -275,22 +273,3 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
     ```
 
     Use the current primary's pod name if it differs from `postgres-cluster-1`. Confirm successful WAL uploads resume and `last_archived_time` advances; the historical `failed_count` does not reset on recovery. Retention retries automatically every five minutes. Check that its next cycle has no new `RetentionPolicyFailed` event or authentication error. Changing the retention window does not restore a revoked key.
-
-* **`TektonResult` never becomes Ready and no Results pods exist**
-  * **What's happening:** The operator holds Results back until `tekton-results-postgres` exists in `tekton`.
-  * **How to fix it:** `kubectl get secret tekton-results-postgres -n tekton` shows whether it exists. The `opentofu` role creates it empty, so `just bootstrap --tags opentofu` restores it.
-
-* **A Results pod is stuck in `CreateContainerConfigError`**
-  * **What's happening:** The pod reads `username` and `password` from Secret `tekton-results-postgres`, which the CSI driver fills from the `tekton-results-api` pod's mount. The kubelet starts the container once both keys exist.
-  * **How to fix it:** `kubectl describe pod -l app.kubernetes.io/name=tekton-results-api -n tekton` shows a failed mount in its events, usually the `tekton-results-role` login or the `tekton-results-app-role` role. `kubectl logs daemonset/openbao-csi-provider -n openbao` shows the provider's side.
-
-* **The Results API crash-loops on its database connection**
-  * **What's happening:** The API connects to `postgres-cluster-rw` with `sslmode=verify-full`, trusting `/etc/postgres-ca/ca.crt` from ConfigMap `postgres-ca`, as a login that must still be within its 4-day lease. The CSI driver writes a new login every `CREDENTIAL_ROTATION_INTERVAL`, and the pod reads it at its next start.
-  * **How to fix it:** `kubectl logs deploy/tekton-results-api -n tekton` names the failure. For a certificate error, confirm `postgres-server-cert` was issued by `postgres-ca-issuer` (`kubectl describe certificate postgres-server-cert -n databases`) and that ConfigMap `postgres-ca` exists in `tekton`. For a timeout, check that the `postgres-cluster` network policy still matches the pod's `app.kubernetes.io/name` label. For an authentication error, `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` restarts it, and the new pod's mount writes a new login.
-
-* **PipelineRuns finish but no records appear**
-  * **What's happening:** The API serves the certificate it loaded at startup, so an API pod running past `tekton-results-tls` expiry fails the watcher's TLS handshake.
-  * **How to fix it:** `kubectl logs deploy/tekton-results-watcher -n tekton` shows the TLS error. `kubectl delete pod -l app.kubernetes.io/name=tekton-results-api -n tekton` loads the renewed certificate; a nightly shutdown already does this.
-
-> [!NOTE]
-> Delete Results pods rather than running `kubectl rollout restart`: the operator reverts the restart's template change within a second, so the old pod keeps running.
