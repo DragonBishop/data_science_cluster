@@ -2,6 +2,9 @@
 - name: Configure k3s
   ansible.builtin.import_tasks: config.yml
 
+- name: Load containerd's AppArmor profile
+  ansible.builtin.import_tasks: apparmor.yml
+
 - name: Install k3s
   ansible.builtin.import_tasks: install.yml
 
