@@ -45,7 +45,7 @@ require_firewalld() {
         return 1
     fi
 
-    if ! firewall-cmd --state >/dev/null 2>&1; then
+    if ! sudo firewall-cmd --state >/dev/null 2>&1; then
         echo "❌ firewalld is inactive. Enable it before configuring the firewall." >&2
         return 1
     fi
@@ -55,13 +55,13 @@ get_firewalld_lan_zone() {
     local lan_interface lan_zone zone_config
     lan_interface=$(get_cluster_config_value LAN_INTERFACE) || return 1
     ip link show dev "$lan_interface" >/dev/null || return 1
-    lan_zone=$(firewall-cmd --get-zone-of-interface="$lan_interface" 2>/dev/null || true)
+    lan_zone=$(sudo firewall-cmd --get-zone-of-interface="$lan_interface" 2>/dev/null || true)
 
     if [ -z "$lan_zone" ] || [ "$lan_zone" = "no zone" ]; then
-        lan_zone=$(firewall-cmd --get-default-zone) || return 1
+        lan_zone=$(sudo firewall-cmd --get-default-zone) || return 1
     fi
 
-    zone_config=$(firewall-cmd --zone="$lan_zone" --list-all) || return 1
+    zone_config=$(sudo firewall-cmd --zone="$lan_zone" --list-all) || return 1
     if echo "$zone_config" | grep -qx '  target: ACCEPT'; then
         echo "❌ LAN interface $lan_interface uses an ACCEPT zone ($lan_zone). Assign it a filtering zone first." >&2
         return 1
@@ -227,7 +227,7 @@ remove_firewalld_high_ports() {
 
 firewalld_policy_exists() {
     local policy_name="$1"
-    firewall-cmd --permanent --get-policies | tr ' ' '\n' | grep -qx "$policy_name"
+    sudo firewall-cmd --permanent --get-policies | tr ' ' '\n' | grep -qx "$policy_name"
 }
 
 configure_firewalld_policy() {
@@ -265,7 +265,7 @@ configure_firewalld_trusted_zone() {
 cleanup_legacy_firewalld_policies() {
     local legacy_policy
     for legacy_policy in k8s-host-to-pods k8s-pods-to-host k8s-pods-to-wan; do
-        if firewall-cmd --get-policies 2>/dev/null | grep -q "$legacy_policy"; then
+        if sudo firewall-cmd --get-policies 2>/dev/null | grep -q "$legacy_policy"; then
             echo "   -> Removing legacy policy '$legacy_policy'..."
             sudo firewall-cmd --permanent --delete-policy="$legacy_policy" >/dev/null 2>&1 || true
         fi
