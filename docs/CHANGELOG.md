@@ -1,3 +1,14 @@
+## [2.5.1](https://github.com/DragonBishop/data_science_cluster/compare/v2.5.0...v2.5.1) - 2026-11-07
+
+### 🐛 Bug Fixes
+
+- *(k3s)* Allow signals between stacked AppArmor container labels ([faabce4](https://github.com/DragonBishop/data_science_cluster/commit/faabce4030608da233233b50951197023264d8a5))
+- *(firewall)* Read firewalld state with sudo ([0278993](https://github.com/DragonBishop/data_science_cluster/commit/0278993077a4345b743555046dc03bcafe958449))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(e2e)* Bootstrap on bare Ubuntu and Fedora VMs ([dffb7aa](https://github.com/DragonBishop/data_science_cluster/commit/dffb7aa53be2a2bd2354f07c62560f41b7ad78ed))
+
 ## [2.5.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.1...v2.5.0) - 2026-11-04
 
 ### 🚀 Features
