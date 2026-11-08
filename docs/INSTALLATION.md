@@ -87,22 +87,6 @@ Used by `just fuzzypods`.
   sudo dnf install -y gh
   ```
 
-#### GnuPG
-
-`gpg` encrypts OpenBao's recovery keys and a copy of its seal key during `just bootstrap`, and decrypts the seal key when the `openbao` role has to restore Secret `openbao-seal-key`.
-
-* **Ubuntu / Debian**:
-
-  ```bash
-  sudo apt update && sudo apt install -y gnupg
-  ```
-
-* **Fedora / RHEL / Red Hat**:
-
-  ```bash
-  sudo dnf install -y gnupg2
-  ```
-
 #### Helm
 
 ```bash
@@ -360,6 +344,8 @@ cd <your-repository>
 
 ### Step 2: Execute Ansible Bootstrap
 
+On a fresh installation with no OpenBao storage claims, Ansible generates a random static seal key automatically. You can optionally supply your own key as `OPENBAO_SEAL_KEY` (or Ansible variable `openbao_seal_key`): 32 random bytes encoded as base64, without a trailing newline. An existing `openbao-seal-key` Secret is reused. If that Secret is lost while storage exists, supply the **original** key; bootstrap refuses to generate a replacement for existing data.
+
 Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on, then runs the full setup via the collection's playbook (`dragonbishop.cluster.data_cluster`): k3s, Cilium, cert-manager, trust-manager, OpenBao, `terraform/openbao`, SPIRE and Flux. On a fresh clone, `uv run` first builds `.venv` from `uv.lock`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
 > [!TIP]
@@ -379,12 +365,16 @@ Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on
 
 ### Step 3: Secure OpenBao Credentials & Recovery Keys
 
-The bootstrap script prompts for a GPG passphrase and an OpenTofu state-encryption passphrase, then prints the in-cluster OpenBao recovery keys and root token.
+The bootstrap script prompts for an OpenTofu state-encryption passphrase and the Postgres superuser password. At the end of a successful play that initializes OpenBao, it prints the seal key, recovery keys and root token.
 
 > [!IMPORTANT]
-> Store the generated recovery keys and root token in a secure password manager immediately. `generate-root` needs the recovery keys if the root token is lost.
+> Store the seal key, generated recovery keys and root token in a secure password manager immediately. `generate-root` needs the recovery keys if the root token is lost.
 
-OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`, so `just start` only checks it. The bootstrap writes two GPG-encrypted files inside this repo, both gitignored: `.local/openbao/recovery-keys.gpg` holds the recovery keys, and `.local/openbao/seal-key.gpg` holds a copy of the seal key, which the `openbao` role uses to restore the Secret. `git clean -fdx` and `just uninstall` delete them. Note that the cache-TTL setting in `~/.gnupg/gpg-agent.conf` only governs `gpg-agent`'s in-memory cache; on desktop environments with a keyring-integrated pinentry (e.g. `pinentry-gnome3`), the passphrase can also be stored in the OS keyring. Add `no-allow-external-cache` to `~/.gnupg/gpg-agent.conf` to disable OS keyring caching.
+OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`, so `just start` only checks it. Bootstrap preserves an existing Secret. For a missing Secret it uses a supplied key, or generates one only when there are no OpenBao storage claims and the server is not known to be initialized. No GPG files are read or written, and no GPG passphrase or agent configuration is required.
+
+If the play fails after initialization, the seal key remains in the Kubernetes Secret but the final credential output is not reached; no local recovery-key backup is written.
+
+For an existing installation, save the current seal key from Secret `openbao-seal-key` in your external store, along with the recovery keys and root token. If the recovery keys exist only in an old `.local/openbao/recovery-keys.gpg` backup, decrypt that backup manually to migrate them. Existing GPG backups are left untouched; remove them yourself after verifying the external copies. Raft snapshots still need their original seal key for recovery.
 
 ## Flux Dependency Graph
 

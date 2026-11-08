@@ -173,24 +173,21 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **How to fix it:**
     1. Check the status by its exit code: `kubectl exec -n openbao openbao-0 -- bao status; echo "exit=$?"`.
     2. Check the Secret and the log: `kubectl get secret openbao-seal-key -n openbao` and `kubectl logs openbao-0 -n openbao`.
-    3. If the Secret is missing, `just bootstrap --tags openbao` restores it from `.local/openbao/seal-key.gpg`. Then `kubectl delete pod openbao-0 -n openbao` starts OpenBao with it.
+    3. If the Secret is missing, inject the original seal key from your external store as `OPENBAO_SEAL_KEY` (or `openbao_seal_key`) and run `just bootstrap --tags openbao` to restore it. Then `kubectl delete pod openbao-0 -n openbao` starts OpenBao with it.
 
-* **GPG decryption fails**
-  * **What's happening:** The `openbao` role can't decrypt `.local/openbao/seal-key.gpg` while restoring Secret `openbao-seal-key`.
-  * **How to fix it:**
-    1. Confirm the file exists and is mode `600` (`ls -l .local/openbao/seal-key.gpg`, from the repo root).
-    2. Confirm the passphrase matches the one used to create it.
+* **Bootstrap refuses because the seal key is missing**
+  * **What's happening:** Secret `openbao-seal-key` is missing, OpenBao storage or an initialized server already exists, and no external seal key was supplied. Bootstrap refuses to generate a replacement key that could leave existing Raft data inaccessible.
+  * **How to fix it:** Retrieve the original key from your external store and inject it as `OPENBAO_SEAL_KEY` or `openbao_seal_key`. It must be 32 bytes encoded as base64 with no trailing newline. For a fresh installation without OpenBao storage, Ansible generates the key automatically and prints it with the other credentials at the end of the play.
 
 * **The OpenBao snapshot agent's Job fails**
   * **What's happening:** The chart's `openbao-snapshot` CronJob logs in as `openbao-snapshot-role`, saves a Raft snapshot and uploads it with the S3 key from Secret `openbao-snapshot-s3`. The `openbao-snapshot-credentials` holder pod's CSI mount fills that Secret.
   * **How to fix it:** `kubectl logs -n openbao job/<newest openbao-snapshot job>` names the failing step. For a login error, check that `openbao-snapshot-role` exists (`just bootstrap --tags opentofu`). For a missing S3 key, check that `deployment/openbao-snapshot-credentials` is Available. For an upload error, check that the `openbao-snapshots` bucket exists and that SeaweedFS's S3 certificate verifies against ConfigMap `openbao-root-ca`.
 
 * **The OpenBao root token was never captured and is now needed**
-  * **What's happening:** `bao operator init` prints the root token exactly once; the bootstrap play prints it to the terminal at that moment, but nothing persists it to disk, by design.
-  * **How to fix it:** Generate a new one from the recovery key shares instead of the lost token:
+  * **What's happening:** `bao operator init` prints the root token exactly once; the bootstrap play prints it to the terminal at the end of a successful initialization run, but nothing persists it to disk, by design.
+  * **How to fix it:** Retrieve the recovery key shares from your external store, then generate a new token:
 
     ```bash
-    gpg --quiet --decrypt .local/openbao/recovery-keys.gpg   # prints the 3 recovery key shares
     kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -init   # prints a nonce + OTP
     kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -nonce=<nonce> <key>   # once per key share
     kubectl exec -i -n openbao openbao-0 -- bao operator generate-root -decode=<encoded_token> -otp=<otp>

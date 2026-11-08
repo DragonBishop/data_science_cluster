@@ -23,7 +23,7 @@ The playbook runs them in this order.
 | `cilium` | Applies the cluster's Namespaces, then installs Cilium with Helm, from the same values Flux later manages, before Flux exists. Applies the cluster's baseline network policy and `kube-system`'s policies. |
 | `cert_manager` | Installs cert-manager from `cert-manager-values.yaml`, the values Flux later manages. |
 | `trust_manager` | Installs trust-manager from `trust-manager-values.yaml`, the values Flux later manages. |
-| `openbao` | Installs OpenBao with its certificates, Bundles, network policy and local redirect, gives it a static seal key in Secret `openbao-seal-key` so it unseals itself, initializes it, and keeps its recovery keys and a copy of the seal key in GPG-encrypted keyfiles. |
+| `openbao` | Installs OpenBao with its certificates, Bundles, network policy and local redirect, gives it a static seal key in Secret `openbao-seal-key` so it unseals itself, initializes it, and generates a random seal key on fresh installations. The play prints the seal key, fresh recovery keys and root token at the end for external storage. A missing seal Secret with existing storage requires the original key. |
 | `opentofu` | Writes the Postgres superuser Secret, SeaweedFS's admin identity for OpenBao, then applies `terraform/openbao`, which sets up OpenBao's secrets engines, PKI and Kubernetes authentication. A changed credential gets a new write-only version, so OpenTofu sends it to OpenBao on the same run. |
 | `spire` | Installs SPIRE, whose CA OpenBao's PKI root signs, so the Flux controllers have identities when they start. |
 | `flux` | Installs Flux, its Git credentials and the network policy Flux needs to fetch its first source. |
@@ -33,7 +33,7 @@ The playbook runs them in this order.
 * `ansible-core` 2.19 or later, tested with 2.21.5
 * The `kubernetes.core` (6.5.0 or later) and `cloud.terraform` (4.0.0 or later) collections, and the `kubernetes` Python package
 * A checkout of the data science cluster repository. The roles read its manifests, its cluster-config and `terraform/openbao` through `repo_root`.
-* On the host: `flux`, `gpg`, `helm` 4, `kubectl`, `tofu`, and `gh` when no GitHub App is configured
+* On the host: `flux`, `helm` 4, `kubectl`, `tofu`, and `gh` when no GitHub App is configured
 * `sudo` for the k3s install and `/etc/rancher/k3s/`
 
 The repository's [Installation](https://github.com/DragonBishop/data_science_cluster/blob/main/docs/INSTALLATION.md) guide covers installing each tool.
@@ -62,11 +62,11 @@ Each role has its own tag. `opentofu` also carries `openbao`:
 just bootstrap --tags opentofu
 ```
 
-The playbook asks for three secrets. A run that initializes OpenBao needs the GPG passphrase, and with it empty the `openbao` role refuses and writes no keyfile. On a cluster where OpenBao is already initialized, the playbook also asks for the root token.
+The playbook prompts for the state-encryption passphrase and Postgres password. On a cluster where OpenBao is already initialized, it also asks for the root token. Fresh installations generate a seal key automatically. Recovery of a missing seal Secret with existing storage requires the original seal key; an existing Secret is preserved without requiring the input.
 
 | Input | Source | Used for |
 | --- | --- | --- |
-| `openbao_gpg_passphrase` | prompt | Encrypting OpenBao's recovery and seal keyfiles, and decrypting the seal keyfile to restore its Secret |
+| `openbao_seal_key` | variable, or `OPENBAO_SEAL_KEY` | Optional 32-byte base64 key for first install; required original key to recover a missing Secret with existing Raft data |
 | `opentofu_state_encryption_passphrase` | prompt | Encrypting the `terraform/openbao` state |
 | `opentofu_postgres_superuser_password` | prompt | The Postgres superuser password OpenTofu writes to OpenBao |
 | `openbao_root_token` | prompt, or `OPENBAO_ROOT_TOKEN` | Logging in to an initialized OpenBao |
@@ -86,8 +86,6 @@ The role defaults:
 | Variable | Default | Role |
 | --- | --- | --- |
 | `k3s_install_script_url` | `https://get.k3s.io` | `k3s` |
-| `openbao_recovery_keyfile` | `{{ openbao_local_dir }}/recovery-keys.gpg` | `openbao` |
-| `openbao_seal_keyfile` | `{{ openbao_local_dir }}/seal-key.gpg` | `openbao` |
 | `opentofu_binary` | `/usr/local/bin/tofu` | `opentofu` |
 | `opentofu_secrets_dir` | `~/.config/data_science_cluster` | `opentofu` |
 | `opentofu_secrets_wo_version_file` | `{{ opentofu_secrets_dir }}/openbao-secrets-wo-version` | `opentofu` |
@@ -96,12 +94,10 @@ The role defaults:
 ## State on the Host
 
 * `/etc/rancher/k3s/config.yaml`: the k3s config
-* `.local/openbao/recovery-keys.gpg` in the repository: the recovery keys `generate-root` needs, mode 0600, written once when OpenBao is initialized.
-* `.local/openbao/seal-key.gpg` in the repository: a copy of the static seal key in Secret `openbao-seal-key`, mode 0600. When the Secret is missing, the `openbao` role restores it from this file.
 * `terraform/openbao/terraform.tfstate`: the encrypted OpenTofu state
 * `~/.config/data_science_cluster/openbao-secrets-wo-version`: the version of the secrets OpenTofu writes. A run that changes the Postgres password or SeaweedFS's admin key pair records a new version. Create `rotate-openbao-secrets` beside it, and the next run gives OpenBao a new SeaweedFS admin key pair and removes the marker.
 
-The run that initializes OpenBao prints the root token and the recovery keys once. Store them in a password manager.
+A successful play that initializes OpenBao prints the seal key, root token and recovery keys at the end. Store all three in your external secret store. A fresh installation generates the seal key automatically; existing Secrets are reused. Bootstrap reads and writes no GPG files and leaves old backups untouched. If provisioning fails before the final output, the seal key remains in its Kubernetes Secret but no local recovery-key backup is available.
 
 ## Testing
 
@@ -114,12 +110,11 @@ The run that initializes OpenBao prints the root token and the recovery keys onc
 | `unit-k3s-newer-version` | With a k3s newer than `K3S_VERSION` installed, the install refuses the downgrade and leaves that k3s in place |
 | `unit-k3s-stale-cilium-dir` | With `/run/cilium` present and no k3s installed, the install refuses, naming `/run/cilium` |
 | `unit-k3s-stale-cilium-interface` | With a `cilium_host` interface and no `/run/cilium`, the install refuses, naming `/sys/class/net/cilium_host` |
-| `unit-openbao-keyfile` | The recovery keys are written once to a mode-0600 GPG file that decrypts to exactly those keys, and a second run skips the write |
-| `unit-openbao-no-passphrase` | With an empty GPG passphrase, the role refuses and writes no keyfile |
+| `unit-openbao-seal-key` | Malformed keys are rejected, fresh installs generate a valid key, and generation refuses existing storage or an initialized server |
 | `unit-openbao-values` | The pinned OpenBao chart renders with the values the role renders, and its schema accepts them |
 | `unit-opentofu` | With the rotation marker present, OpenTofu gets a new secrets version, the file holds it, and the marker is gone |
 | `unit-trust-manager-values` | The pinned trust-manager chart renders with the values the role renders, and its schema accepts them |
-| `full-playbook` | The whole playbook on a fresh host: converge, idempotence, then the seal key Secret is deleted, the `openbao` role restores it from its keyfile, and a replaced OpenBao pod unseals itself on the static seal and Raft |
+| `full-playbook` | The whole playbook on a fresh host: converge, idempotence, then the seal key Secret is deleted, the `openbao` role restores it from the supplied key, and a replaced OpenBao pod unseals itself on the static seal and Raft |
 
 The unit scenarios share one podman container, which `default` creates and destroys. From the collection's directory:
 
