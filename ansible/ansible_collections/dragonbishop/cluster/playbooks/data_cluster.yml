@@ -51,16 +51,30 @@
     - { role: dragonbishop.cluster.cilium, tags: [cilium] }
     - { role: dragonbishop.cluster.cert_manager, tags: [cert_manager] }
     - { role: dragonbishop.cluster.trust_manager, tags: [trust_manager] }
-    - { role: dragonbishop.cluster.openbao, tags: [openbao] }
-    - { role: dragonbishop.cluster.opentofu, tags: [opentofu, openbao] }
-    - { role: dragonbishop.cluster.spire, tags: [spire] }
-    - { role: dragonbishop.cluster.flux, tags: [flux] }
 
   tasks:
-    - name: Print OpenBao credentials for external storage
-      ansible.builtin.debug:
-        msg: >-
-          {{ ['Store these in your external secret store.', 'Seal Key:', openbao_effective_seal_key,
-              'Root Token:', openbao_root_token, 'Fresh Recovery Keys:'] + openbao_fresh_recovery_keys }}
-      when: openbao_fresh_recovery_keys is defined
-      tags: always
+    - name: Provision OpenBao and dependent services and report generated credentials
+      block:
+        - name: Provision OpenBao
+          ansible.builtin.import_role:
+            name: dragonbishop.cluster.openbao
+          tags: [openbao]
+
+        - name: Configure OpenBao with OpenTofu
+          ansible.builtin.import_role:
+            name: dragonbishop.cluster.opentofu
+          tags: [opentofu, openbao]
+
+        - name: Provision SPIRE
+          ansible.builtin.import_role:
+            name: dragonbishop.cluster.spire
+          tags: [spire]
+
+        - name: Provision Flux
+          ansible.builtin.import_role:
+            name: dragonbishop.cluster.flux
+          tags: [flux]
+      always:
+        - name: Report OpenBao credentials even when provisioning fails
+          ansible.builtin.import_tasks: tasks/openbao_credentials.yml
+          tags: always

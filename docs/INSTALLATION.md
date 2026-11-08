@@ -365,14 +365,14 @@ Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on
 
 ### Step 3: Secure OpenBao Credentials & Recovery Keys
 
-The bootstrap script prompts for an OpenTofu state-encryption passphrase and the Postgres superuser password. At the end of a successful play that initializes OpenBao, it prints the seal key, recovery keys and root token.
+The bootstrap script prompts for an OpenTofu state-encryption passphrase and the Postgres superuser password. At the end of provisioning, it prints the generated seal key and any freshly initialized recovery keys and root token, including when a provisioning task fails.
 
 > [!IMPORTANT]
 > Store the seal key, generated recovery keys and root token in a secure password manager immediately. `generate-root` needs the recovery keys if the root token is lost.
 
 OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`, so `just start` only checks it. Bootstrap preserves an existing Secret. For a missing Secret it uses a supplied key, or generates one only when there are no OpenBao storage claims and the server is not known to be initialized. No GPG files are read or written, and no GPG passphrase or agent configuration is required.
 
-If the play fails after initialization, the seal key remains in the Kubernetes Secret but the final credential output is not reached; no local recovery-key backup is written.
+An Ansible `always` block reports the available generated credentials even when provisioning fails, and the play still exits with a failure status. No local credential backup is written.
 
 For an existing installation, save the current seal key from Secret `openbao-seal-key` in your external store, along with the recovery keys and root token. If the recovery keys exist only in an old `.local/openbao/recovery-keys.gpg` backup, decrypt that backup manually to migrate them. Existing GPG backups are left untouched; remove them yourself after verifying the external copies. Raft snapshots still need their original seal key for recovery.
 

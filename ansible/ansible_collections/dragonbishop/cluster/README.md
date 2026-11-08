@@ -97,7 +97,7 @@ The role defaults:
 * `terraform/openbao/terraform.tfstate`: the encrypted OpenTofu state
 * `~/.config/data_science_cluster/openbao-secrets-wo-version`: the version of the secrets OpenTofu writes. A run that changes the Postgres password or SeaweedFS's admin key pair records a new version. Create `rotate-openbao-secrets` beside it, and the next run gives OpenBao a new SeaweedFS admin key pair and removes the marker.
 
-A successful play that initializes OpenBao prints the seal key, root token and recovery keys at the end. Store all three in your external secret store. A fresh installation generates the seal key automatically; existing Secrets are reused. Bootstrap reads and writes no GPG files and leaves old backups untouched. If provisioning fails before the final output, the seal key remains in its Kubernetes Secret but no local recovery-key backup is available.
+At the end of provisioning, an `always` block prints the generated seal key and any fresh root token and recovery keys, on both success and task failure. Store all three in your external secret store. A fresh installation generates the seal key automatically; existing Secrets are reused. Bootstrap reads and writes no GPG files and leaves old backups untouched. Credential output does not mask a provisioning failure; the play still exits unsuccessfully.
 
 ## Testing
 
