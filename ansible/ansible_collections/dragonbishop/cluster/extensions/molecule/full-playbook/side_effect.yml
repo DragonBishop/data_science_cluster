@@ -3,6 +3,15 @@
   hosts: localhost
   gather_facts: true
   tasks:
+    - name: Save the original seal key for simulated external recovery
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Secret
+        name: openbao-seal-key
+        namespace: "{{ openbao_namespace }}"
+      register: openbao_original_seal_secret
+      no_log: true
+
     - name: Delete OpenBao's seal key Secret
       kubernetes.core.k8s:
         state: absent
@@ -14,6 +23,9 @@
     - name: Restore the seal key with the openbao role
       ansible.builtin.include_role:
         name: dragonbishop.cluster.openbao
+
+      vars:
+        openbao_seal_key: "{{ openbao_original_seal_secret.resources[0].data.key | b64decode }}"
 
     - name: Read the running OpenBao pod
       kubernetes.core.k8s_info:

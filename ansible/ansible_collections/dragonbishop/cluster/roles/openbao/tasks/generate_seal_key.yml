@@ -1,0 +1,21 @@
+---
+- name: Refuse to generate a replacement seal key for existing storage
+  ansible.builtin.assert:
+    that:
+      - openbao_storage_claims.resources | length == 0
+      - not openbao_status.initialized | default(false)
+    fail_msg: >-
+      Secret openbao-seal-key is missing but OpenBao storage or an initialized server
+      already exists. Supply the original seal key as openbao_seal_key or
+      OPENBAO_SEAL_KEY from your external store; a replacement cannot unseal existing data.
+
+- name: Generate 32 random bytes encoded as base64
+  ansible.builtin.command: openssl rand -base64 32
+  register: openbao_generated_seal_key
+  changed_when: true
+  no_log: true
+
+- name: Keep the generated seal key
+  ansible.builtin.set_fact:
+    openbao_effective_seal_key: "{{ openbao_generated_seal_key.stdout }}"
+  no_log: true

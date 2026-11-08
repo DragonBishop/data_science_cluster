@@ -4,10 +4,6 @@
   become: false
 
   vars_prompt:
-    - name: openbao_gpg_passphrase
-      prompt: "GPG passphrase for OpenBao's recovery and seal keyfiles"
-      private: true
-      default: ""
     - name: opentofu_state_encryption_passphrase
       prompt: "State encryption passphrase for terraform/openbao's state file"
       private: true
@@ -61,8 +57,10 @@
     - { role: dragonbishop.cluster.flux, tags: [flux] }
 
   tasks:
-    - name: Print freshly-generated OpenBao root token and recovery keys
+    - name: Print OpenBao credentials for external storage
       ansible.builtin.debug:
-        msg: "{{ ['Root Token:', openbao_root_token, 'Fresh Recovery Keys:'] + openbao_fresh_recovery_keys }}"
+        msg: >-
+          {{ ['Store these in your external secret store.', 'Seal Key:', openbao_effective_seal_key,
+              'Root Token:', openbao_root_token, 'Fresh Recovery Keys:'] + openbao_fresh_recovery_keys }}
       when: openbao_fresh_recovery_keys is defined
       tags: always
