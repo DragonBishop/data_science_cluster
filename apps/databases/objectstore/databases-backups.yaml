@@ -19,6 +19,8 @@ spec:
       secretAccessKey:
         name: barman-s3-credentials
         key: ACCESS_SECRET_KEY
+    data:
+      compression: gzip
     wal:
       compression: gzip
 ---
