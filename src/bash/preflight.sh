@@ -75,7 +75,6 @@ get_project_name() {
         helm) echo "Helm" ;;
         flux) echo "the Flux CLI" ;;
         gh) echo "the GitHub CLI (gh)" ;;
-        gpg) echo "GnuPG" ;;
         git) echo "Git" ;;
         kubectl-cnpg) echo "the CloudNativePG kubectl plugin (kubectl-cnpg)" ;;
         tkn) echo "the Tekton CLI (tkn)" ;;
@@ -144,8 +143,6 @@ EOF
    sudo dnf install -y gh
 EOF
             ;;
-        gpg:debian) echo "   sudo apt update && sudo apt install -y gnupg" ;;
-        gpg:fedora) echo "   sudo dnf install -y gnupg2" ;;
         git:debian) echo "   sudo apt update && sudo apt install -y git" ;;
         git:fedora) echo "   sudo dnf install -y git" ;;
         just:debian) echo "   sudo apt update && sudo apt install -y just" ;;
@@ -195,7 +192,7 @@ check_host_tooling() {
     local has_errors=false
     local tool
 
-    for tool in tofu helm flux gpg git uv just; do
+    for tool in tofu helm flux git uv just; do
         if command -v "$tool" >/dev/null 2>&1; then
             echo "✅ $tool"
         else

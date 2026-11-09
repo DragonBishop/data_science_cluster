@@ -1,3 +1,4 @@
 ---
-openbao_recovery_keyfile: "{{ openbao_local_dir }}/recovery-keys.gpg"
-openbao_seal_keyfile: "{{ openbao_local_dir }}/seal-key.gpg"
+# Optional for first install; required to restore a missing Secret with existing storage.
+# An existing Secret remains authoritative and is never overwritten here.
+openbao_seal_key: "{{ lookup('ansible.builtin.env', 'OPENBAO_SEAL_KEY') }}"

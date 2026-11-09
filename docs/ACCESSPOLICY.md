@@ -41,7 +41,7 @@ The OpenTofu role verifies OpenBao's listener certificate using the public CA in
 
 Ansible installs trust-manager and OpenBao's listener certificates and Bundle before OpenTofu and Flux. The listener CA is independent of the service PKI managed by OpenTofu.
 
-OpenBao unseals itself with the `static` seal. Its 32-byte key lives in Secret `openbao-seal-key`, and the `openbao` role keeps a GPG-encrypted copy in `.local/openbao/seal-key.gpg`. When the Secret is missing, the role restores it from that copy. The recovery keys, which `generate-root` needs, are GPG-encrypted in `.local/openbao/recovery-keys.gpg`. Anyone with a copy of this machine's disk can unseal OpenBao, because k3s encrypts Secrets at rest with a key kept on the same disk. On a running machine nothing changes, since root can already read an unsealed OpenBao.
+OpenBao unseals itself with the `static` seal. Its 32-byte key lives in Secret `openbao-seal-key`. Keep an external copy of that key, the recovery shares needed by `generate-root`, and the root token. Bootstrap generates a random seal key on a fresh installation and prints it with the root token and recovery shares at the end of the play. It preserves an existing Secret; if it is missing while storage exists, supply the original key through `openbao_seal_key` or `OPENBAO_SEAL_KEY`. No local credential backup is written. Anyone with a copy of this machine's disk can unseal OpenBao, because k3s encrypts Secrets at rest with a key kept on the same disk. On a running machine nothing changes, since root can already read an unsealed OpenBao.
 
 ## Workload Credentials
 

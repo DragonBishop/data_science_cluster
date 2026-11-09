@@ -9,7 +9,7 @@ Four tools roll out this cluster:
 * **OpenTofu:** Declares OpenBao's secrets engines, access policies, PKI and Kubernetes authentication (`terraform/openbao/`).
 * **Tekton:** Tests the core after every change Flux applies to it, including the paths into it that the workstation uses.
 
-Cluster secrets and security rely on an in-cluster OpenBao that unseals itself from a static seal key in a Kubernetes `Secret`, so Flux can replace it on an upgrade without anyone present. GPG-encrypted copies of the seal key and the recovery keys stay gitignored in this repo (`.local/openbao/`). Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, and its database and secrets-aws engines issue the short-lived logins the Secrets Store CSI driver mirrors into Kubernetes `Secret`s every day.
+Cluster secrets and security rely on an in-cluster OpenBao that unseals itself from a static seal key in a Kubernetes `Secret`, so Flux can replace it on an upgrade without anyone present. Keep the seal key, recovery keys and root token in an external secret store; bootstrap writes no local credential backups. Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, and its database and secrets-aws engines issue the short-lived logins the Secrets Store CSI driver mirrors into Kubernetes `Secret`s every day.
 
 Workloads are structured modularly to maximize compute efficiency on local hardware. The cluster maintains an always-on core database architecture, powered by PostgreSQL/PostGIS (CloudNativePG), Cilium eBPF networking and Gateway routing, and SeaweedFS S3-compatible storage. Specialized modules for testing, cluster observability, ETL data pipelines, and machine learning workflows can be deployed dynamically when performing specific data science tasks and torn down afterward to conserve memory and CPU.
 
@@ -63,12 +63,11 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | OpenTofu | `1.13.1` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
 | uv | `astral-sh/uv` | Builds `.venv` from `uv.lock`, Python included; `just bootstrap` and the dev recipes run through it. |
 
-**GnuPG** protects the OpenBao keyfile, and **Git** initializes a source download for `just setup`:
+**Git** initializes a source download for `just setup`:
 
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
 | Git | `git` | `just setup` runs `git init` in a source download without `.git`; the GitHub CLI fallback reads the `origin` URL. |
-| GnuPG (`gpg`) | `gnupg` / `gnupg2` | Encrypts and decrypts OpenBao's recovery and seal keyfiles in `.local/openbao/`. |
 
 **just** runs every recipe, and **kubectl**, the **kubectl cnpg plugin**, the **Tekton CLI**, **Headlamp** and **fzf** inspect and operate the running cluster:
 
@@ -199,7 +198,6 @@ The ML expansion focuses on managing experiment tracking, environment provisioni
 | Component | Documentation Link |
 | --- | --- |
 | Git | [https://git-scm.com/doc](https://git-scm.com/doc) |
-| GnuPG (`gpg`) | [https://www.gnupg.org/documentation/](https://www.gnupg.org/documentation/) |
 
 | Component | Documentation Link |
 | --- | --- |

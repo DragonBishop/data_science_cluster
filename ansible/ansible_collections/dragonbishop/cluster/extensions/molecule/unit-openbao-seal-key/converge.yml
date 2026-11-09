@@ -1,0 +1,122 @@
+---
+- name: Generated and supplied OpenBao seal keys
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Reject a missing seal key
+      block:
+        - name: Validate an empty seal key
+          ansible.builtin.include_role:
+            name: dragonbishop.cluster.openbao
+            tasks_from: validate_seal_key
+          vars:
+            openbao_effective_seal_key: ""
+
+        - name: Fail if the missing key was accepted
+          ansible.builtin.fail:
+            msg: A missing seal key was accepted
+      rescue:
+        - name: Verify the missing-key failure
+          ansible.builtin.assert:
+            that:
+              - "'Secret openbao-seal-key is missing' in ansible_failed_result.msg"
+
+    - name: Reject a malformed seal key
+      block:
+        - name: Validate a malformed seal key
+          ansible.builtin.include_role:
+            name: dragonbishop.cluster.openbao
+            tasks_from: validate_seal_key
+          vars:
+            openbao_effective_seal_key: not-a-base64-key
+
+        - name: Fail if the malformed key was accepted
+          ansible.builtin.fail:
+            msg: A malformed seal key was accepted
+      rescue:
+        - name: Verify the malformed-key failure
+          ansible.builtin.assert:
+            that:
+              - "'32 bytes encoded as base64' in ansible_failed_result.msg"
+
+    - name: Reject a seal key with a trailing newline
+      block:
+        - name: Validate a seal key with a trailing newline
+          ansible.builtin.include_role:
+            name: dragonbishop.cluster.openbao
+            tasks_from: validate_seal_key
+          vars:
+            openbao_effective_seal_key: "{{ (('unit-openbao-seal' | hash('sha256'))[:32] | b64encode) + '\n' }}"
+
+        - name: Fail if the key with a trailing newline was accepted
+          ansible.builtin.fail:
+            msg: A seal key with a trailing newline was accepted
+      rescue:
+        - name: Verify the trailing-newline failure
+          ansible.builtin.assert:
+            that:
+              - "'32 bytes encoded as base64' in ansible_failed_result.msg"
+
+    - name: Accept a valid externally supplied seal key
+      ansible.builtin.include_role:
+        name: dragonbishop.cluster.openbao
+        tasks_from: validate_seal_key
+      vars:
+        openbao_effective_seal_key: "{{ ('unit-openbao-seal' | hash('sha256'))[:32] | b64encode }}"
+
+    - name: Reject key generation over existing storage
+      block:
+        - name: Try generating a replacement key
+          ansible.builtin.include_role:
+            name: dragonbishop.cluster.openbao
+            tasks_from: generate_seal_key
+          vars:
+            openbao_storage_claims:
+              resources:
+                - metadata:
+                    name: data-openbao-0
+
+        - name: Fail if existing storage allowed a replacement
+          ansible.builtin.fail:
+            msg: A replacement seal key was generated for existing storage
+      rescue:
+        - name: Verify the existing-storage failure
+          ansible.builtin.assert:
+            that:
+              - "'Supply the original seal key' in ansible_failed_result.msg"
+
+    - name: Reject key generation for an initialized server
+      block:
+        - name: Try generating a key for an initialized server
+          ansible.builtin.include_role:
+            name: dragonbishop.cluster.openbao
+            tasks_from: generate_seal_key
+          vars:
+            openbao_storage_claims:
+              resources: []
+            openbao_status:
+              initialized: true
+
+        - name: Fail if an initialized server allowed a replacement
+          ansible.builtin.fail:
+            msg: A replacement seal key was generated for an initialized server
+      rescue:
+        - name: Verify the initialized-server failure
+          ansible.builtin.assert:
+            that:
+              - "'Supply the original seal key' in ansible_failed_result.msg"
+
+    - name: Generate a seal key for a fresh installation
+      ansible.builtin.include_role:
+        name: dragonbishop.cluster.openbao
+        tasks_from: generate_seal_key
+      vars:
+        openbao_storage_claims:
+          resources: []
+        openbao_status:
+          initialized: false
+
+    - name: Verify the generated seal key format
+      ansible.builtin.include_role:
+        name: dragonbishop.cluster.openbao
+        tasks_from: validate_seal_key

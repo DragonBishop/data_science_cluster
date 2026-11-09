@@ -1,0 +1,17 @@
+---
+- name: Require a static seal key
+  ansible.builtin.assert:
+    that:
+      - openbao_effective_seal_key | default('') | length > 0
+    fail_msg: >-
+      Secret openbao-seal-key is missing. Supply openbao_seal_key or OPENBAO_SEAL_KEY
+      from your external secret store. For existing Raft data, supply the original
+      seal key; a replacement key cannot unseal it. Fresh installations generate a key automatically when no OpenBao storage exists.
+
+- name: Validate the static seal key format
+  ansible.builtin.assert:
+    that:
+      - openbao_effective_seal_key | length == 44
+      - openbao_effective_seal_key is match('^[A-Za-z0-9+/]{43}=$')
+    fail_msg: The static seal key must be 32 bytes encoded as base64, without a trailing newline.
+  no_log: true
