@@ -1,3 +1,31 @@
+## [2.6.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.5.0...v2.6.0) - 2026-11-14
+
+### 🚀 Features
+
+- *(openbao)* Use Raft storage, static auto-unseal and scheduled snapshots ([b2994f6](https://github.com/DragonBishop/data_science_cluster/commit/b2994f6704e805e32108dc0fc805e9e446f79f58))
+- *(cluster)* Add Postgres standby and compress base backups ([1d60093](https://github.com/DragonBishop/data_science_cluster/commit/1d60093163bbf3c5d332e3fda30a00a36621433a))
+
+### 🐛 Bug Fixes
+
+- *(k3s)* Allow signals between stacked AppArmor container labels ([faabce4](https://github.com/DragonBishop/data_science_cluster/commit/faabce4030608da233233b50951197023264d8a5))
+- *(k3s)* Leave Gateway API CRDs to Flux ([c3df94c](https://github.com/DragonBishop/data_science_cluster/commit/c3df94c1fa792e133ca43fb9725632583f601ba4))
+- *(openbao)* Report generated credentials when provisioning fails ([f9aeb42](https://github.com/DragonBishop/data_science_cluster/commit/f9aeb42288193510823748d212b15054b8b67db6))
+
+### 📚 Documentation
+
+- *(openbao)* Document external credential custody and recovery ([5d843a1](https://github.com/DragonBishop/data_science_cluster/commit/5d843a15e3bf11e3faa8be6b015755424a9f1a21))
+- Correct stale descriptions and rewrite prose for readability ([6131327](https://github.com/DragonBishop/data_science_cluster/commit/6131327e31b0098ba328f9a88e7883952ec5d237))
+
+### ♻️ Refactor
+
+- *(tekton)* Remove Results and complete OpenBao snapshot configuration ([8bc647f](https://github.com/DragonBishop/data_science_cluster/commit/8bc647f49b6065ed5f36116b76bf37fe6d0cca37))
+- *(openbao)* Remove GPG keyfiles from bootstrap ([b29a059](https://github.com/DragonBishop/data_science_cluster/commit/b29a05979b3297f4ed64f5f332b03f12a79c077e))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(e2e)* Bootstrap on bare Ubuntu and Fedora VMs ([dffb7aa](https://github.com/DragonBishop/data_science_cluster/commit/dffb7aa53be2a2bd2354f07c62560f41b7ad78ed))
+- Install the Flux CLI version gotk-components pins ([6613e86](https://github.com/DragonBishop/data_science_cluster/commit/6613e865d2debf3684e46e72bbe431d0fb04d51e))
+
 ## [2.5.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.4.1...v2.5.0) - 2026-11-04
 
 ### 🚀 Features
