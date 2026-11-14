@@ -86,7 +86,7 @@ The role defaults:
 | Variable | Default | Role |
 | --- | --- | --- |
 | `k3s_install_script_url` | `https://get.k3s.io` | `k3s` |
-| `opentofu_binary` | `/usr/local/bin/tofu` | `opentofu` |
+| `opentofu_binary` | `/usr/bin/tofu` | `opentofu` |
 | `opentofu_secrets_dir` | `~/.config/data_science_cluster` | `opentofu` |
 | `opentofu_secrets_wo_version_file` | `{{ opentofu_secrets_dir }}/openbao-secrets-wo-version` | `opentofu` |
 | `opentofu_rotate_secrets_marker` | `{{ opentofu_secrets_dir }}/rotate-openbao-secrets` | `opentofu` |
