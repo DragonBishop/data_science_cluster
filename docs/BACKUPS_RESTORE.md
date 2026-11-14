@@ -90,7 +90,7 @@ metadata:
   namespace: databases
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgis:18.6-3.7.0-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgis:18.7-3.7.0-system-trixie
   storage:
     size: 100Gi
     storageClass: local-path
