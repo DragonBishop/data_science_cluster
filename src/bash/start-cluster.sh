@@ -164,6 +164,16 @@ resume_scheduled_backups() {
 
 }
 
+# Runs preflight's version checks in a subshell, keeping preflight's shell options out of this script
+check_host_tools() {
+    echo "== Host tools =="
+    (
+        # shellcheck source=src/bash/preflight.sh
+        source "$(dirname "${BASH_SOURCE[0]}")/preflight.sh"
+        check_kubectl_versions
+    )
+}
+
 report_summary() {
     local had_warnings="$1"
     if [ "$had_warnings" = true ]; then
@@ -189,6 +199,9 @@ main() {
 
     resume_databases || had_warnings=true
     resume_scheduled_backups
+
+    check_host_tools || had_warnings=true
+    echo ""
 
     report_summary "$had_warnings"
 }

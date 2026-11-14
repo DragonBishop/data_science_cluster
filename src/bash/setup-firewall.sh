@@ -5,6 +5,8 @@
 #
 set -euo pipefail
 
+firewall_mode=setup
+
 detect_distro() {
     local distro_id=unknown distro_family=unknown
 
@@ -75,6 +77,9 @@ parse_args() {
     local argument
     for argument in "$@"; do
         case "$argument" in
+            --check)
+                firewall_mode=check
+                ;;
             -h|--help)
                 echo "Usage: $0 [options]"
                 echo ""
@@ -82,6 +87,7 @@ parse_args() {
                 echo "Supports Fedora/RHEL (firewalld) and Ubuntu/Debian (ufw)."
                 echo ""
                 echo "Options:"
+                echo "  --check       Check the rules without changing them"
                 echo "  -h, --help    Show this help message"
                 exit 0
                 ;;
@@ -301,6 +307,107 @@ setup_fedora_firewall() {
     echo "✅ firewalld configured and reloaded successfully."
 }
 
+# Read-only checks of the rules the setup functions apply
+check_debian_firewall() {
+    if ! command -v ufw >/dev/null 2>&1; then
+        echo "⚠️  ufw not found on a Debian/Ubuntu host (expected on this distro family). Inspect the firewall's INPUT policy with:"
+        echo "   sudo iptables -L INPUT -n -v"
+        return 1
+    fi
+
+    if ! sudo ufw status 2>/dev/null | grep -q "Status: active"; then
+        echo "✅ ufw present and inactive: no rules to check"
+        return 0
+    fi
+
+    local forward_policy ufw_rules missing_interfaces=() interface
+    forward_policy=$(grep -E '^DEFAULT_FORWARD_POLICY' /etc/default/ufw 2>/dev/null | cut -d'"' -f2)
+    ufw_rules=$(sudo ufw status verbose 2>/dev/null)
+
+    for interface in cilium_host cilium_net cilium_vxlan "lxc+"; do
+        echo "$ufw_rules" | grep -q "ALLOW IN.*on $interface" || missing_interfaces+=("$interface")
+    done
+
+    if [ "$forward_policy" != "ACCEPT" ] || [ ${#missing_interfaces[@]} -gt 0 ]; then
+        echo "⚠️  ufw is active but not configured for Cilium:"
+        [ "$forward_policy" != "ACCEPT" ] && echo "   - DEFAULT_FORWARD_POLICY is '${forward_policy:-unset}', expected ACCEPT"
+        [ ${#missing_interfaces[@]} -gt 0 ] && echo "   - missing ALLOW IN rules for: ${missing_interfaces[*]}"
+        echo "   Apply the rules with:"
+        echo "   just setup-firewall"
+        return 1
+    fi
+
+    echo "✅ ufw active and configured for Cilium"
+    return 0
+}
+
+firewalld_policy_matches() {
+    local policy_name="$1" ingress_zone="$2" egress_zone="$3" policy_config
+    policy_config=$(sudo firewall-cmd --policy="$policy_name" --list-all 2>/dev/null) || return 1
+    echo "$policy_config" | grep -qx "  ingress-zones: $ingress_zone" || return 1
+    echo "$policy_config" | grep -qx "  egress-zones: $egress_zone" || return 1
+    echo "$policy_config" | grep -qx "  target: ACCEPT" || return 1
+    echo "$policy_config" | grep -qx "  priority: -1"
+}
+
+report_missing_firewalld_rules() {
+    [ "$#" -gt 0 ] || return 0
+    local missing_rule
+    echo "⚠️  firewalld is missing required rules for Kubernetes/Cilium:"
+    for missing_rule in "$@"; do
+        echo "   - $missing_rule"
+    done
+    echo "   Apply them with: just setup-firewall"
+    return 1
+}
+
+check_firewalld_lan_rules() {
+    local lan_zone="$1" zone_config missing_rules=()
+    zone_config=$(sudo firewall-cmd --zone="$lan_zone" --list-all) || return 1
+
+    if echo "$zone_config" | grep -qE '1025-65535/(tcp|udp)'; then
+        echo "❌ LAN zone '$lan_zone' still allows unrestricted high ports; run just setup-firewall"
+        return 1
+    fi
+
+    echo "$zone_config" | grep -q 'forward: yes' || missing_rules+=("forwarding in LAN zone '$lan_zone'")
+    sudo firewall-cmd --zone="$lan_zone" --query-port=443/tcp >/dev/null || missing_rules+=("443/tcp in LAN zone '$lan_zone'")
+    sudo firewall-cmd --zone="$lan_zone" --query-port=5432/tcp >/dev/null || missing_rules+=("5432/tcp in LAN zone '$lan_zone'")
+    sudo firewall-cmd --zone="$lan_zone" --query-service=dns >/dev/null || missing_rules+=("DNS in LAN zone '$lan_zone'")
+    report_missing_firewalld_rules "${missing_rules[@]}"
+}
+
+check_firewalld_trusted_rules() {
+    local pod_cidr="$1" interface missing_rules=()
+    sudo firewall-cmd --zone=trusted --query-source="$pod_cidr" >/dev/null || missing_rules+=("$pod_cidr source in trusted zone")
+    sudo firewall-cmd --zone=trusted --query-service=dns >/dev/null || missing_rules+=("DNS in trusted zone")
+    for interface in cilium_host cilium_net cilium_vxlan; do
+        sudo firewall-cmd --zone=trusted --query-interface="$interface" >/dev/null || missing_rules+=("$interface in trusted zone")
+    done
+    report_missing_firewalld_rules "${missing_rules[@]}"
+}
+
+check_firewalld_policies() {
+    local missing_rules=()
+    firewalld_policy_matches k8s-forwarding-in ANY trusted || missing_rules+=("ANY -> trusted forwarding policy")
+    firewalld_policy_matches k8s-forwarding-out trusted ANY || missing_rules+=("trusted -> ANY forwarding policy")
+    firewalld_policy_matches k8s-forwarding-host HOST ANY || missing_rules+=("HOST -> ANY forwarding policy")
+    firewalld_policy_matches k8s-containers-to-host trusted HOST || missing_rules+=("trusted -> HOST input policy")
+    report_missing_firewalld_rules "${missing_rules[@]}"
+}
+
+check_fedora_firewall() {
+    local lan_zone pod_cidr
+    require_firewalld || return 1
+    lan_zone=$(get_firewalld_lan_zone) || return 1
+    pod_cidr=$(get_cluster_config_value POD_CIDR) || return 1
+
+    check_firewalld_lan_rules "$lan_zone" || return 1
+    check_firewalld_trusted_rules "$pod_cidr" || return 1
+    check_firewalld_policies || return 1
+    echo "✅ firewalld active and configured for Cilium (LAN zone: $lan_zone)"
+}
+
 # Dynamic dispatch
 dispatch_firewall_setup() {
     local distro_family="$1" distro_id="$2" pod_cidr="$3"
@@ -314,6 +421,18 @@ dispatch_firewall_setup() {
     "$setup_function" "$pod_cidr"
 }
 
+dispatch_firewall_check() {
+    local distro_family="$1" distro_id="$2"
+    local check_function="check_${distro_family}_firewall"
+
+    if ! declare -f "$check_function" >/dev/null 2>&1; then
+        echo "⚠️  Unrecognized distro '$distro_id'; inspect the host firewall manually."
+        return 1
+    fi
+
+    "$check_function"
+}
+
 # Main entrypoint
 main() {
     local distro_info
@@ -322,10 +441,16 @@ main() {
     local pod_cidr
 
     parse_args "$@"
-    print_header
     distro_info=$(detect_distro)
     distro_family="${distro_info%% *}"
     distro_id="${distro_info#* }"
+
+    if [ "$firewall_mode" = check ]; then
+        dispatch_firewall_check "$distro_family" "$distro_id"
+        return
+    fi
+
+    print_header
     pod_cidr=$(get_cluster_config_value POD_CIDR)
     print_detected_os "$distro_family" "$distro_id"
     acquire_sudo

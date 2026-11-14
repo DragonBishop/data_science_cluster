@@ -258,8 +258,8 @@ The directory tree of this repository, then what each directory and file does.
 ├── src/
 │   ├── bash/
 │   │   ├── preflight.sh                 # Read-only host readiness checks
-│   │   ├── setup-firewall.sh            # Host firewall rules for Kubernetes and Cilium (firewalld or ufw)
-│   │   ├── start-cluster.sh             # Boot sequence: API, in-cluster OpenBao check, readiness checks
+│   │   ├── setup-firewall.sh            # Host firewall rules for Kubernetes and Cilium (firewalld or ufw); --check verifies them
+│   │   ├── start-cluster.sh             # Boot sequence: API, in-cluster OpenBao check, readiness checks, host CLI check
 │   │   ├── stop-cluster.sh              # Graceful shutdown via CNPG declarative hibernation
 │   │   └── uninstall-cluster.sh         # Tears down k3s and clears stale local cluster state
 │   └── data_science_cluster/
@@ -400,9 +400,9 @@ The directory tree of this repository, then what each directory and file does.
   * **`trust-manager/`**: `kustomization.yaml`, `trust-manager-release.yaml`, `trust-manager-values.yaml` (the Helm values the `trust_manager` role and the HelmRelease share, through ConfigMap `trust-manager-values`). trust-manager in `cert-manager`, which copies CA certificates from Secrets there into ConfigMaps and Secrets in every namespace labelled `data-cluster/ca-bundles`.
 * **`src/`**
   * **`src/bash/`**:
-    * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions). Prints install commands for missing or mismatched tools and fix commands for firewall rules.
-    * **`setup-firewall.sh`**: Host firewall rules for Kubernetes and Cilium, for Fedora/RHEL (`firewalld`) or Ubuntu/Debian (`ufw`).
-    * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, checking that the in-cluster OpenBao unsealed itself, and reactivating hibernated workloads.
+    * **`preflight.sh`**: Read-only host readiness checks (tooling, `gh` auth, firewall state, LAN IP collisions). Prints the shortest dnf or apt commands that install or update each missing or mismatched tool, and runs `setup-firewall.sh --check` for the firewall.
+    * **`setup-firewall.sh`**: Host firewall rules for Kubernetes and Cilium, for Fedora/RHEL (`firewalld`) or Ubuntu/Debian (`ufw`). `--check` reads the same rules without changing them and names any that are missing.
+    * **`start-cluster.sh`**: Boot sequence: starting k3s systemd unit, waiting for API/node readiness, checking that the in-cluster OpenBao unsealed itself, reactivating hibernated workloads, and running `preflight.sh`'s version checks for kubectl and the cnpg plugin.
     * **`stop-cluster.sh`**: Graceful shutdown: declaratively hibernating the CNPG cluster, waiting for pod termination, and stopping the k3s systemd unit.
     * **`uninstall-cluster.sh`**: Tears down k3s and clears stale local cluster state: Cilium's persistent host files, `.local/openbao` and `terraform/openbao` state. Asks for a reboot before reinstalling.
   * **`src/data_science_cluster/__init__.py`**: The project package and its `__version__`, which release-please bumps.

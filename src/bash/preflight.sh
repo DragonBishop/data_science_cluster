@@ -4,30 +4,15 @@
 #
 set -euo pipefail
 
-detect_distro() {
-    local distro_id=unknown distro_family=unknown
-
-    if [ ! -f /etc/os-release ]; then
-        echo "$distro_family $distro_id"
-        return 0
-    fi
-
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    distro_id="${ID:-unknown}"
-    case " ${ID:-} ${ID_LIKE:-} " in
-        *" ubuntu "*|*" debian "*) distro_family=debian ;;
-        *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) distro_family=fedora ;;
-    esac
-
-    echo "$distro_family $distro_id"
+get_repo_path() {
+    local relative_path="$1"
+    printf '%s/../../%s\n' "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" "$relative_path"
 }
 
 # Read the configuration Flux will use, before the cluster exists.
 get_cluster_config_value() {
-    local config_key="$1" script_directory config_value
-    script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    config_value=$(kubectl kustomize "$script_directory/../../infrastructure/cluster-config" 2>/dev/null \
+    local config_key="$1" config_value
+    config_value=$(kubectl kustomize "$(get_repo_path infrastructure/cluster-config)" 2>/dev/null \
         | awk -v config_prefix="  $config_key: " 'index($0, config_prefix) == 1 { config_value = substr($0, length(config_prefix) + 1); gsub(/"/, "", config_value); print config_value; exit }') || return 1
 
     if [ -z "$config_value" ]; then
@@ -38,190 +23,158 @@ get_cluster_config_value() {
     printf '%s\n' "$config_value"
 }
 
-require_firewalld() {
-    if ! command -v firewall-cmd >/dev/null 2>&1; then
-        echo "❌ firewall-cmd is not installed. Install and enable firewalld first." >&2
-        return 1
-    fi
-
-    if ! firewall-cmd --state >/dev/null 2>&1; then
-        echo "❌ firewalld is inactive. Enable it before configuring the firewall." >&2
-        return 1
+get_package_manager() {
+    if command -v dnf >/dev/null 2>&1; then
+        echo dnf
+    elif command -v apt-get >/dev/null 2>&1; then
+        echo apt
+    else
+        echo unknown
     fi
 }
 
-get_firewalld_lan_zone() {
-    local lan_interface lan_zone zone_config
-    lan_interface=$(get_cluster_config_value LAN_INTERFACE) || return 1
-    ip link show dev "$lan_interface" >/dev/null || return 1
-    lan_zone=$(firewall-cmd --get-zone-of-interface="$lan_interface" 2>/dev/null || true)
-
-    if [ -z "$lan_zone" ] || [ "$lan_zone" = "no zone" ]; then
-        lan_zone=$(firewall-cmd --get-default-zone) || return 1
-    fi
-
-    zone_config=$(firewall-cmd --zone="$lan_zone" --list-all) || return 1
-    if echo "$zone_config" | grep -qx '  target: ACCEPT'; then
-        echo "❌ LAN interface $lan_interface uses an ACCEPT zone ($lan_zone). Assign it a filtering zone first." >&2
-        return 1
-    fi
-
-    printf '%s\n' "$lan_zone"
+# Reads versions.yaml directly; kubectl kustomize is unavailable when kubectl itself is missing
+get_kubectl_minor_version() {
+    awk -F'"' '/^  KUBECTL_VERSION:/ {split($2, part, "."); print substr(part[1], 2) "." part[2]}' \
+        "$(get_repo_path infrastructure/cluster-config/versions.yaml)"
 }
 
-get_project_name() {
-    case "$1" in
-        tofu) echo "OpenTofu" ;;
-        helm) echo "Helm" ;;
-        flux) echo "the Flux CLI" ;;
-        gh) echo "the GitHub CLI (gh)" ;;
-        git) echo "Git" ;;
-        kubectl-cnpg) echo "the CloudNativePG kubectl plugin (kubectl-cnpg)" ;;
-        tkn) echo "the Tekton CLI (tkn)" ;;
-        *) echo "$1" ;;
-    esac
+print_third_party_note() {
+    echo "   (Third-party repository. docs/INSTALLATION.md also lists the project's own install.)"
 }
 
-# The install commands from docs/INSTALLATION.md Requirements, for the detected distro family
-print_install_command() {
-    local tool="$1"
-    local distro_info distro_family distro_id
-    distro_info=$(detect_distro)
-    distro_family="${distro_info%% *}"
-    distro_id="${distro_info#* }"
+print_krouma_copr_setup() {
+    print_third_party_note
+    cat <<'EOF'
+   sudo dnf copr enable -y krouma/kubernetes
+   sudo dnf config-manager setopt 'copr:copr.fedorainfracloud.org:krouma:kubernetes.includepkgs=flux2-cli,tektoncd-cli'
+EOF
+}
 
-    if [ "$distro_family" = unknown ]; then
-        echo "   Preflight has no install command for '$distro_id'. Install $(get_project_name "$tool") following its documentation for your distribution."
+print_wakemeops_setup() {
+    print_third_party_note
+    cat <<'EOF'
+   curl -sSL https://raw.githubusercontent.com/upciti/wakemeops/main/assets/install_repository | sudo bash -s -- devops
+   printf 'Package: flux krew\nPin: origin deb.wakemeops.com\nPin-Priority: 500\n\nPackage: *\nPin: origin deb.wakemeops.com\nPin-Priority: -1\n' | sudo tee /etc/apt/preferences.d/wakemeops > /dev/null
+EOF
+}
+
+print_kubernetes_apt_setup() {
+    local kubectl_minor="$1"
+    cat <<EOF
+   curl -fsSL https://pkgs.k8s.io/core:/stable:/v${kubectl_minor}/deb/Release.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+   echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${kubectl_minor}/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+   sudo apt update && sudo apt install -y kubectl
+EOF
+}
+
+# The shortest install for each tool, matching docs/INSTALLATION.md Host Tooling
+print_install_commands() {
+    local tool="$1" package_manager
+    package_manager=$(get_package_manager)
+    if [ "$package_manager" = unknown ]; then
+        echo "   Install $tool following docs/INSTALLATION.md (Host Tooling)."
         return 0
     fi
 
     echo "   Install it with:"
-    case "$tool:$distro_family" in
-        tofu:*)
+    case "$tool:$package_manager" in
+        tofu:dnf)
             cat <<'EOF'
-   curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
-   chmod +x install-opentofu.sh
-   sudo ./install-opentofu.sh --install-method standalone --opentofu-version 1.13.1
-   rm install-opentofu.sh
+   curl -fsSL https://get.opentofu.org/install-opentofu.sh | sudo sh -s -- --install-method rpm
+   sudo sed -i '/^sslcacert=/d' /etc/yum.repos.d/opentofu.repo
+   sudo dnf swap -y opentofu tofu
 EOF
             ;;
-        helm:*)
+        tofu:apt) echo "   curl -fsSL https://get.opentofu.org/install-opentofu.sh | sudo sh -s -- --install-method deb" ;;
+        helm:apt)
             cat <<'EOF'
-   curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
-   chmod +x get_helm.sh
-   ./get_helm.sh
-   rm get_helm.sh
+   curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+   echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+   sudo apt update && sudo apt install -y helm
 EOF
             ;;
-        flux:*)
-            echo "   curl -s https://fluxcd.io/install.sh | sudo FLUX_VERSION=2.10.0 bash"
-            ;;
-        uv:*)
-            echo "   curl -LsSf https://astral.sh/uv/install.sh | sh"
-            ;;
-        kubectl:*)
+        flux:dnf) print_krouma_copr_setup; echo "   sudo dnf install -y flux2-cli" ;;
+        flux:apt) print_wakemeops_setup; echo "   sudo apt install -y flux" ;;
+        tkn:dnf) print_krouma_copr_setup; echo "   sudo dnf install -y tektoncd-cli" ;;
+        tkn:apt)
             cat <<'EOF'
-   KUBECTL_VERSION=v1.37.1
-   KUBECTL_ARCH=amd64
-   if [ "$(uname -m)" = "aarch64" ]; then KUBECTL_ARCH=arm64; fi
-   curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl"
-   sudo install -m 0755 kubectl /usr/local/bin/kubectl
-   rm kubectl
+   TKN_DEB=$(curl -fsSL https://api.github.com/repos/tektoncd/cli/releases/latest | grep -o 'https://[^"]*_Linux-64bit\.deb')
+   curl -fsSLo /tmp/tektoncd-cli.deb "$TKN_DEB" && sudo apt install -y /tmp/tektoncd-cli.deb
 EOF
             ;;
-        gh:debian)
+        kubectl:dnf) echo "   sudo dnf install -y kubernetes$(get_kubectl_minor_version)-client" ;;
+        kubectl:apt) print_kubernetes_apt_setup "$(get_kubectl_minor_version)" ;;
+        kubectl-cnpg:dnf)
+            print_third_party_note
+            cat <<'EOF'
+   sudo dnf copr enable -y shdwchn10/AllTheTools
+   sudo dnf config-manager setopt 'copr:copr.fedorainfracloud.org:shdwchn10:AllTheTools.includepkgs=kubectl-cnpg'
+   sudo dnf install -y kubectl-cnpg
+EOF
+            ;;
+        kubectl-cnpg:apt) print_wakemeops_setup; echo "   sudo apt install -y krew && krew install cnpg" ;;
+        gh:apt)
             cat <<'EOF'
    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /usr/share/keyrings/githubcli-archive-keyring.gpg > /dev/null
-   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+   echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
    sudo apt update && sudo apt install -y gh
 EOF
             ;;
-        gh:fedora)
-            cat <<'EOF'
-   sudo dnf install -y 'dnf-command(config-manager)' 2>/dev/null || sudo dnf install -y dnf-plugins-core
-   sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
-   sudo dnf install -y gh
-EOF
-            ;;
-        git:debian) echo "   sudo apt update && sudo apt install -y git" ;;
-        git:fedora) echo "   sudo dnf install -y git" ;;
-        just:debian) echo "   sudo apt update && sudo apt install -y just" ;;
-        just:fedora) echo "   sudo dnf install -y just" ;;
-        fzf:debian) echo "   sudo apt update && sudo apt install -y fzf" ;;
-        fzf:fedora) echo "   sudo dnf install -y fzf" ;;
-        tkn:debian)
-            cat <<'EOF'
-   sudo apt update && sudo apt install -y gnupg
-   sudo mkdir -p /etc/apt/keyrings/
-   sudo gpg --no-default-keyring --keyring /etc/apt/keyrings/tektoncd.gpg --keyserver keyserver.ubuntu.com --recv-keys 3EFE0E0A2F2F60AA
-   echo "deb [signed-by=/etc/apt/keyrings/tektoncd.gpg] http://ppa.launchpad.net/tektoncd/cli/ubuntu eoan main" | sudo tee /etc/apt/sources.list.d/tektoncd-ubuntu-cli.list
-   sudo apt update && sudo apt install -y tektoncd-cli
-EOF
-            ;;
-        tkn:fedora)
-            cat <<'EOF'
-   sudo dnf copr enable -y krouma/kubernetes
-   sudo dnf install -y tektoncd-cli
-EOF
-            ;;
-        kubectl-cnpg:debian)
-            cat <<'EOF'
-   CNPG_PLUGIN_VERSION=1.30.1
-   CNPG_ARCH=x86_64
-   if [ "$(uname -m)" = "aarch64" ]; then CNPG_ARCH=arm64; fi
-   curl -LO "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${CNPG_PLUGIN_VERSION}/kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}.deb"
-   sudo apt install -y "./kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}.deb"
-   rm "kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}.deb"
-EOF
-            ;;
-        kubectl-cnpg:fedora)
-            cat <<'EOF'
-   CNPG_PLUGIN_VERSION=1.30.1
-   CNPG_ARCH=x86_64
-   if [ "$(uname -m)" = "aarch64" ]; then CNPG_ARCH=arm64; fi
-   sudo dnf install -y "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${CNPG_PLUGIN_VERSION}/kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}.rpm"
-EOF
-            ;;
+        uv:*) echo "   curl -LsSf https://astral.sh/uv/install.sh | sh" ;;
+        *:dnf) echo "   sudo dnf install -y $tool" ;;
+        *:apt) echo "   sudo apt update && sudo apt install -y $tool" ;;
     esac
+}
+
+# Moves kubectl to the minor version KUBECTL_VERSION pins
+print_kubectl_switch_commands() {
+    local installed_minor="$1" target_minor
+    target_minor=$(get_kubectl_minor_version)
+    echo "   Switch to kubectl $target_minor with:"
+    case "$(get_package_manager)" in
+        dnf) echo "   sudo dnf swap -y kubernetes${installed_minor}-client kubernetes${target_minor}-client" ;;
+        apt) print_kubernetes_apt_setup "$target_minor" ;;
+        *) echo "   Follow docs/INSTALLATION.md (Host Tooling, kubectl)." ;;
+    esac
+}
+
+print_cnpg_plugin_upgrade_commands() {
+    echo "   Upgrade the plugin with:"
+    case "$(get_package_manager)" in
+        dnf) echo "   sudo dnf upgrade -y --refresh kubectl-cnpg" ;;
+        apt) echo "   krew upgrade cnpg" ;;
+        *) echo "   Follow docs/INSTALLATION.md (Host Tooling, kubectl cnpg Plugin)." ;;
+    esac
+}
+
+# Reports each missing command with its install commands, marking it with the given symbol
+check_commands_present() {
+    local missing_marker="$1" tool all_present=true
+    shift
+    for tool in "$@"; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            echo "✅ $tool"
+        else
+            echo "$missing_marker $tool not found."
+            print_install_commands "$tool"
+            all_present=false
+        fi
+    done
+    [ "$all_present" = true ]
 }
 
 check_host_tooling() {
     echo "🔎 Running preflight checks..."
     echo ""
     echo "== Host tooling =="
-    local has_errors=false
-    local tool
-
-    for tool in tofu helm flux git uv just; do
-        if command -v "$tool" >/dev/null 2>&1; then
-            echo "✅ $tool"
-        else
-            echo "❌ $tool not found."
-            print_install_command "$tool"
-            has_errors=true
-        fi
-    done
-
-    [ "$has_errors" = false ]
+    check_commands_present "❌" tofu helm flux git uv just
 }
 
 # Tools the bootstrap runs without; a recipe or workflow needs them later
 check_optional_tooling() {
     echo "== Optional tooling =="
-    local has_warnings=false
-    local tool
-
-    for tool in fzf tkn; do
-        if command -v "$tool" >/dev/null 2>&1; then
-            echo "✅ $tool"
-        else
-            echo "⚠️  $tool not found."
-            print_install_command "$tool"
-            has_warnings=true
-        fi
-    done
-
-    [ "$has_warnings" = false ]
+    check_commands_present "⚠️ " fzf tkn
 }
 
 get_minor_version() {
@@ -230,21 +183,20 @@ get_minor_version() {
     printf '%s\n' "${version%%.*}"
 }
 
+get_major_minor_version() {
+    local version="${1#v}"
+    printf '%s\n' "${version%.*}"
+}
+
+version_is_older() {
+    local version="$1" other_version="$2"
+    [ "$version" != "$other_version" ] \
+        && [ "$(printf '%s\n' "$version" "$other_version" | sort -V | head -n 1)" = "$version" ]
+}
+
 check_kubectl_tooling() {
     echo "== kubectl and plugins =="
-    if ! command -v kubectl >/dev/null 2>&1; then
-        echo "❌ kubectl not found."
-        print_install_command kubectl
-        return 1
-    fi
-    echo "✅ kubectl"
-
-    if ! kubectl cnpg version >/dev/null 2>&1; then
-        echo "❌ kubectl cnpg plugin not found."
-        print_install_command kubectl-cnpg
-        return 1
-    fi
-    echo "✅ kubectl cnpg"
+    check_commands_present "❌" kubectl kubectl-cnpg
 }
 
 # kubectl supports one minor version of skew from the cluster
@@ -256,30 +208,48 @@ check_kubectl_skew() {
 
     if [ "${minor_gap#-}" -gt 1 ]; then
         echo "⚠️  kubectl $kubectl_version is more than one minor version from k3s $k3s_version"
-        print_install_command kubectl
+        print_kubectl_switch_commands "$(get_major_minor_version "$kubectl_version")"
         return 1
     fi
     echo "✅ kubectl $kubectl_version is within one minor version of k3s $k3s_version"
 }
 
-# The cnpg plugin must match the operator, whose version is the chart's appVersion
+# The CNPG operator's version is the appVersion of the chart CNPG_VERSION pins
+get_cnpg_operator_version() {
+    local chart_version="$1"
+    helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts --version "$chart_version" 2>/dev/null \
+        | awk '/^appVersion:/ {print $2}'
+}
+
+get_cnpg_plugin_version() {
+    kubectl cnpg version 2>/dev/null | sed -n 's/.*Version:\([0-9.]*\).*/\1/p'
+}
+
+# The cnpg plugin must share the operator's minor version
 check_cnpg_plugin_version() {
-    local chart_version operator_version plugin_version
+    local chart_version operator_version plugin_version plugin_minor operator_minor
     chart_version=$(get_cluster_config_value CNPG_VERSION) || return 1
-    operator_version=$(helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts \
-        --version "$chart_version" 2>/dev/null | awk '/^appVersion:/ {print $2}')
-    plugin_version=$(kubectl cnpg version 2>/dev/null | sed -n 's/.*Version:\([0-9.]*\).*/\1/p')
+    operator_version=$(get_cnpg_operator_version "$chart_version")
+    plugin_version=$(get_cnpg_plugin_version)
 
     if [ -z "$operator_version" ]; then
         echo "⚠️  Could not read the CNPG operator version for chart $chart_version (helm show chart failed)"
         return 1
     fi
-    if [ "$plugin_version" != "$operator_version" ]; then
-        echo "⚠️  kubectl cnpg ${plugin_version:-unknown} differs from the CNPG operator $operator_version (chart $chart_version)"
-        print_install_command kubectl-cnpg
-        return 1
+    plugin_minor=$(get_major_minor_version "$plugin_version")
+    operator_minor=$(get_major_minor_version "$operator_version")
+    if [ "$plugin_minor" = "$operator_minor" ]; then
+        echo "✅ kubectl cnpg $plugin_version shares the CNPG operator's minor version ($operator_version)"
+        return 0
     fi
-    echo "✅ kubectl cnpg $plugin_version matches the CNPG operator"
+
+    echo "⚠️  kubectl cnpg ${plugin_version:-unknown} is on a different minor version than the CNPG operator $operator_version (chart $chart_version)"
+    if version_is_older "$plugin_minor" "$operator_minor"; then
+        print_cnpg_plugin_upgrade_commands
+    else
+        echo "   The operator moves to $plugin_minor when Renovate bumps CNPG_VERSION to a chart with that appVersion."
+    fi
+    return 1
 }
 
 check_github_auth() {
@@ -291,7 +261,7 @@ check_github_auth() {
 
     if ! command -v gh >/dev/null 2>&1; then
         echo "❌ No GitHub App provided and gh not found."
-        print_install_command gh
+        print_install_commands gh
         echo "   Then authenticate gh with: gh auth login"
         return 1
     fi
@@ -305,120 +275,9 @@ check_github_auth() {
     echo "✅ gh authenticated (fallback)"
 }
 
-check_debian_firewall() {
-    if ! command -v ufw >/dev/null 2>&1; then
-        echo "⚠️  ufw not found on a Debian/Ubuntu host (expected on this distro family). Inspect the firewall's INPUT policy with:"
-        echo "   sudo iptables -L INPUT -n -v"
-        return 1
-    fi
-
-    if ! sudo ufw status 2>/dev/null | grep -q "Status: active"; then
-        echo "✅ ufw present and inactive: no rules to check"
-        return 0
-    fi
-
-    local forward_policy ufw_rules missing_interfaces=() interface
-    forward_policy=$(grep -E '^DEFAULT_FORWARD_POLICY' /etc/default/ufw 2>/dev/null | cut -d'"' -f2)
-    ufw_rules=$(sudo ufw status verbose 2>/dev/null)
-
-    for interface in cilium_host cilium_net cilium_vxlan "lxc+"; do
-        echo "$ufw_rules" | grep -q "ALLOW IN.*on $interface" || missing_interfaces+=("$interface")
-    done
-
-    if [ "$forward_policy" != "ACCEPT" ] || [ ${#missing_interfaces[@]} -gt 0 ]; then
-        echo "⚠️  ufw is active but not configured for Cilium:"
-        [ "$forward_policy" != "ACCEPT" ] && echo "   - DEFAULT_FORWARD_POLICY is '${forward_policy:-unset}', expected ACCEPT"
-        [ ${#missing_interfaces[@]} -gt 0 ] && echo "   - missing ALLOW IN rules for: ${missing_interfaces[*]}"
-        echo "   Apply the rules with:"
-        echo "   just setup-firewall"
-        return 1
-    fi
-
-    echo "✅ ufw active and configured for Cilium"
-    return 0
-}
-
-firewalld_policy_matches() {
-    local policy_name="$1" ingress_zone="$2" egress_zone="$3" policy_config
-    policy_config=$(firewall-cmd --policy="$policy_name" --list-all 2>/dev/null) || return 1
-    echo "$policy_config" | grep -qx "  ingress-zones: $ingress_zone" || return 1
-    echo "$policy_config" | grep -qx "  egress-zones: $egress_zone" || return 1
-    echo "$policy_config" | grep -qx "  target: ACCEPT" || return 1
-    echo "$policy_config" | grep -qx "  priority: -1"
-}
-
-report_missing_firewalld_rules() {
-    [ "$#" -gt 0 ] || return 0
-    local missing_rule
-    echo "⚠️  firewalld is missing required rules for Kubernetes/Cilium:"
-    for missing_rule in "$@"; do
-        echo "   - $missing_rule"
-    done
-    echo "   Apply them with: just setup-firewall"
-    return 1
-}
-
-check_firewalld_lan_rules() {
-    local lan_zone="$1" zone_config missing_rules=()
-    zone_config=$(firewall-cmd --zone="$lan_zone" --list-all) || return 1
-
-    if echo "$zone_config" | grep -qE '1025-65535/(tcp|udp)'; then
-        echo "❌ LAN zone '$lan_zone' still allows unrestricted high ports; run just setup-firewall"
-        return 1
-    fi
-
-    echo "$zone_config" | grep -q 'forward: yes' || missing_rules+=("forwarding in LAN zone '$lan_zone'")
-    firewall-cmd --zone="$lan_zone" --query-port=443/tcp >/dev/null || missing_rules+=("443/tcp in LAN zone '$lan_zone'")
-    firewall-cmd --zone="$lan_zone" --query-port=5432/tcp >/dev/null || missing_rules+=("5432/tcp in LAN zone '$lan_zone'")
-    firewall-cmd --zone="$lan_zone" --query-service=dns >/dev/null || missing_rules+=("DNS in LAN zone '$lan_zone'")
-    report_missing_firewalld_rules "${missing_rules[@]}"
-}
-
-check_firewalld_trusted_rules() {
-    local pod_cidr="$1" interface missing_rules=()
-    firewall-cmd --zone=trusted --query-source="$pod_cidr" >/dev/null || missing_rules+=("$pod_cidr source in trusted zone")
-    firewall-cmd --zone=trusted --query-service=dns >/dev/null || missing_rules+=("DNS in trusted zone")
-    for interface in cilium_host cilium_net cilium_vxlan; do
-        firewall-cmd --zone=trusted --query-interface="$interface" >/dev/null || missing_rules+=("$interface in trusted zone")
-    done
-    report_missing_firewalld_rules "${missing_rules[@]}"
-}
-
-check_firewalld_policies() {
-    local missing_rules=()
-    firewalld_policy_matches k8s-forwarding-in ANY trusted || missing_rules+=("ANY -> trusted forwarding policy")
-    firewalld_policy_matches k8s-forwarding-out trusted ANY || missing_rules+=("trusted -> ANY forwarding policy")
-    firewalld_policy_matches k8s-forwarding-host HOST ANY || missing_rules+=("HOST -> ANY forwarding policy")
-    firewalld_policy_matches k8s-containers-to-host trusted HOST || missing_rules+=("trusted -> HOST input policy")
-    report_missing_firewalld_rules "${missing_rules[@]}"
-}
-
-check_fedora_firewall() {
-    local lan_zone pod_cidr
-    require_firewalld || return 1
-    lan_zone=$(get_firewalld_lan_zone) || return 1
-    pod_cidr=$(get_cluster_config_value POD_CIDR) || return 1
-
-    check_firewalld_lan_rules "$lan_zone" || return 1
-    check_firewalld_trusted_rules "$pod_cidr" || return 1
-    check_firewalld_policies || return 1
-    echo "✅ firewalld active and configured for Cilium (LAN zone: $lan_zone)"
-}
-
 check_host_firewall() {
-    local distro_info distro_family distro_id check_function
     echo "== Host firewall =="
-    distro_info=$(detect_distro)
-    distro_family="${distro_info%% *}"
-    distro_id="${distro_info#* }"
-    check_function="check_${distro_family}_firewall"
-
-    if ! declare -f "$check_function" >/dev/null 2>&1; then
-        echo "⚠️  Unrecognized distro '$distro_id'; inspect the host firewall manually."
-        return 1
-    fi
-
-    "$check_function"
+    "$(get_repo_path src/bash/setup-firewall.sh)" --check
 }
 
 check_reserved_ips() {
@@ -460,7 +319,7 @@ report_summary() {
 check_kubectl_versions() {
     # Missing tools are reported as errors by check_kubectl_tooling.
     command -v kubectl >/dev/null 2>&1 || return 0
-    kubectl cnpg version >/dev/null 2>&1 || return 0
+    command -v kubectl-cnpg >/dev/null 2>&1 || return 0
     local had_warnings=false
     check_kubectl_skew || had_warnings=true
     check_cnpg_plugin_version || had_warnings=true
