@@ -48,10 +48,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - &setup_uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - &read_flux_version
+        name: Read the Flux version gotk-components pins
+        id: flux_version
+        run: |
+          flux_version="$(awk '/^# Flux Version: v/ {sub(/^v/, "", $4); print $4; exit}' clusters/local/flux-system/gotk-components.yaml)"
+          echo "version=$flux_version" >> "$GITHUB_OUTPUT"
       - &setup_flux
         uses: fluxcd/flux2/action@3fa784edd773d56630bb9f62645e08f70c2cff0a # v2.10.0
         with:
-          version: 2.10.0
+          version: ${{ steps.flux_version.outputs.version }}
       - &setup_opentofu
         uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
@@ -143,6 +149,7 @@ jobs:
     steps:
       - *checkout
       - *setup_uv
+      - *read_flux_version
       - *setup_flux
       - *setup_opentofu
       - uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0

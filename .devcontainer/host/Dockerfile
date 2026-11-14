@@ -8,10 +8,6 @@ ARG REPO_REF=main
 ENV REPOSITORY=${REPOSITORY} \
     REPO_REF=${REPO_REF}
 
-# Versions cluster-config doesn't pin; see docs/INSTALLATION.md.
-ARG FLUX_VERSION=2.10.0
-ARG OPENTOFU_VERSION=1.13.1
-
 # Install prerequisites, plus just, fzf, gnupg, openssl, unzip and sudo.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates curl just fzf gnupg openssl unzip sudo \
@@ -77,14 +73,17 @@ RUN CILIUM_CLI_VERSION=$(curl -LsSf https://raw.githubusercontent.com/cilium/cil
  && rm /tmp/cilium-linux-amd64.tar.gz \
  && cilium version --client
 
-# Flux CLI, matching gotk-components.yaml.
-RUN curl -s https://fluxcd.io/install.sh | FLUX_VERSION=${FLUX_VERSION} bash \
+# Flux CLI, at the version gotk-components.yaml pins at REPO_REF.
+ADD https://raw.githubusercontent.com/${REPOSITORY}/${REPO_REF}/clusters/local/flux-system/gotk-components.yaml \
+    /tmp/gotk-components.yaml
+RUN FLUX_VERSION=$(awk '/^# Flux Version: v/ {sub(/^v/, "", $4); print $4; exit}' /tmp/gotk-components.yaml) \
+ && curl -s https://fluxcd.io/install.sh | FLUX_VERSION="${FLUX_VERSION}" bash \
  && flux version --client
 
-# OpenTofu, standalone.
+# OpenTofu, from OpenTofu's apt repository.
 RUN curl --proto '=https' --tlsv1.2 -fsSLo /tmp/install-opentofu.sh https://get.opentofu.org/install-opentofu.sh \
  && chmod +x /tmp/install-opentofu.sh \
- && /tmp/install-opentofu.sh --install-method standalone --opentofu-version ${OPENTOFU_VERSION} \
+ && /tmp/install-opentofu.sh --install-method deb \
  && rm /tmp/install-opentofu.sh \
  && tofu version
 
