@@ -5,7 +5,7 @@
 ## Table of Contents
 
 * [Verify Database Deployment](#verify-database-deployment)
-  * [Cluster Status & WAL Archiving](#cluster-status--wal-archiving)
+  * [Cluster Status and WAL Archiving](#cluster-status-and-wal-archiving)
   * [CNPG Database Resource](#cnpg-database-resource)
   * [PostGIS Extensions](#postgis-extensions)
   * [Database Ownership](#database-ownership)
@@ -25,7 +25,7 @@
 
 ## Verify Database Deployment
 
-### Cluster Status & WAL Archiving
+### Cluster Status and WAL Archiving
 
 > [!TIP]
 > **Just Recipe (bundled into the full health check):**
@@ -162,8 +162,8 @@ Run these checks before changing the firewall and repeat them afterward. Compare
 | Path | Service check | Expected result |
 | --- | --- | --- |
 | Host to LAN DNS address | `dig @<COREDNS_LAN_IP> databases.<INTERNAL_DOMAIN> A +short`, then repeat with `+tcp` | Both return `GATEWAY_IP` |
-| Host through Gateway to PostgreSQL | `pg_isready -h <GATEWAY_IP> -p 5432 -t 5` | Accepting connections; also repeat a normal authenticated database query using the existing client |
-| Host through HTTPS Gateway to a workload | `just gateway-check <existing-route-hostname>` | Valid TLS and the workload's expected response; requires an actual HTTPRoute |
+| Host through Gateway to PostgreSQL | `pg_isready -h <GATEWAY_IP> -p 5432 -t 5` | Accepting connections. Also repeat a normal authenticated database query with the existing client |
+| Host through HTTPS Gateway to a workload | `just gateway-check <existing-route-hostname>` | Valid TLS and the workload's expected response. Requires an HTTPRoute |
 | Metrics-server pod to host kubelet | `kubectl top nodes` | Current metrics for the node |
 | Hubble Relay pod to host agent | Commands below | Relay Ready and recent forwarded traffic to 4244 |
 | Host to Kubernetes API | `kubectl get --raw /readyz` | `ok` |
@@ -189,7 +189,7 @@ nc -vz -w 3 <NODE_LAN_IP> 10250
 nc -vz -w 3 <NODE_LAN_IP> 4244
 ```
 
-Also check the allocated NodePorts (`kubectl get svc -A`) from that client. Cilium handles these paths in eBPF, so removing a firewalld port range alone does not establish that NodePorts are closed. Confirm every reachable NodePort serves an intended published service. Checks from the node itself cannot establish LAN isolation.
+Also check the allocated NodePorts (`kubectl get svc -A`) from that client. Cilium handles these paths in eBPF, outside firewalld's port ranges. Confirm every reachable NodePort serves an intended published service. LAN isolation needs a check from another machine on the LAN.
 
 ## Verify Certificate Issuance
 

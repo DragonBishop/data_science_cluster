@@ -16,9 +16,9 @@ Organized to match the justfile's own section layout (`just --list --unsorted` s
 | `just update` | Update packages and the lockfile |
 | `just git-setup` | Install the pre-commit hooks with `prek` |
 | `flux build kustomization <name> --path ./<path> --kustomization-file ./clusters/local/<name>.yaml` | Render a Kustomization the way Flux applies it, with cluster-config values from the running cluster |
-| `flux build kustomization <name> --path ./<path> --kustomization-file ./clusters/local/<name>.yaml --dry-run` | Render a Kustomization the cluster doesn't have yet, leaving `${VAR}` placeholders in place |
+| `flux build kustomization <name> --path ./<path> --kustomization-file ./clusters/local/<name>.yaml --dry-run` | Render a Kustomization before the cluster has it, leaving `${VAR}` placeholders in place |
 
-Render manifests with `flux build` before pushing a change. `kubectl kustomize` can't build `apps/databases/objectstore/`, because its generator reads `../cluster/databases-cluster.yaml` ([Troubleshooting](TROUBLESHOOTING.md#gitops)).
+Render manifests with `flux build` before pushing a change. `kubectl kustomize` refuses `apps/databases/objectstore/`, because its generator reads `../cluster/databases-cluster.yaml` ([Troubleshooting](TROUBLESHOOTING.md#gitops)).
 
 ## Bootstrap
 
@@ -26,8 +26,8 @@ One-time, first-install setup: see [Installation](INSTALLATION.md) for Requireme
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just setup-firewall` | Configure host firewall rules | Before install; opens what Kubernetes and Cilium need in firewalld (Fedora) or ufw (Ubuntu) |
-| `just preflight` | Run host readiness check | Verify host tooling, `gh` auth, firewall rules, and reserved IP range before install; prints install commands for missing or mismatched tools and fix commands for firewall rules |
+| `just setup-firewall` | Configure host firewall rules | Before install. Opens what Kubernetes and Cilium need in firewalld (Fedora) or ufw (Ubuntu) |
+| `just preflight` | Run host readiness check | Before install. Verifies host tooling, `gh` auth, firewall rules and the reserved IP range. Prints the shortest install or update commands for missing or mismatched tools, and the fix command for firewall rules |
 | `just bootstrap` (accepts flags like `--tags`, `--check`, `-v`) | Run full cluster bootstrap via Ansible | Install k3s, Cilium, cert-manager, trust-manager and OpenBao, apply `terraform/openbao`, then install SPIRE and Flux |
 
 `just bootstrap` prompts for the OpenBao root token, state-encryption passphrase and PostgreSQL superuser password. See [Access Policy](ACCESSPOLICY.md#provisioning-credentials) for credential handling.
@@ -38,11 +38,11 @@ Start and stop the cluster each work session, check its health, and inspect or r
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just start` | Start the cluster | Each work session; starts k3s, checks that OpenBao unsealed itself, wakes `postgres-cluster` from hibernation and resumes its scheduled backups |
+| `just start` | Start the cluster | Each work session. Starts k3s, checks that OpenBao unsealed itself, wakes `postgres-cluster` from hibernation, resumes its scheduled backups, and checks the kubectl and cnpg plugin versions |
 | `just status` | Check overall cluster health | Post-install verification or periodic health check across Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, and Hubble |
-| `just stop` (`just stop --force` if a stuck stop needs it) | Stop the cluster | Each work session; gracefully hibernates CNPG PostgreSQL before shutting down k3s |
-| `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch; runs `k3s-uninstall.sh` and clears `.local/openbao`, orphaned `terraform/openbao` state, and Cilium's persistent host files; reboot before the next `just bootstrap` |
-| `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting; fuzzy-select a pod from all namespaces and describe it |
+| `just stop` (`just stop --force` if a stuck stop needs it) | Stop the cluster | Each work session. Gracefully hibernates CNPG PostgreSQL before shutting down k3s |
+| `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch. Runs `k3s-uninstall.sh` and clears `.local/openbao`, orphaned `terraform/openbao` state, and Cilium's persistent host files. Reboot before the next `just bootstrap` |
+| `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting. Fuzzy-selects a pod from all namespaces and describes it |
 | `just gateway-check` (`just gateway-check <DOMAIN> [HOST]`) | Verify Gateway routing | Post-install verification or testing Gateway HTTPRoute and TLS edge certificates |
 | `just hubble` (runs `hubble status`) / `just hubble observe --follow` | Run the Hubble CLI inside the Cilium agent | Hubble status, or real-time network and security flow inspection |
 | `just bao-shell` | Open interactive OpenBao shell | Direct `bao` CLI access inside `openbao-0` for interactive OpenBao administration |
@@ -54,6 +54,6 @@ Restoring from a backup is in [Backups and Restore](BACKUPS_RESTORE.md).
 | Command | Operation | When |
 | --- | --- | --- |
 | `kubectl cnpg psql postgres-cluster -n databases` | Connect via psql (superuser, in-cluster) | Ad hoc direct administrative query access as `postgres` superuser |
-| `just backup` | Trigger a manual DB backup | Before schema changes or risky migrations; writes backup to SeaweedFS S3 |
+| `just backup` | Trigger a manual DB backup | Before schema changes or risky migrations. Writes a backup to SeaweedFS S3 |
 | `kubectl get scheduledbackup -n databases -o yaml \| grep -i suspend` | Check scheduled backup status | Confirming automated nightly backups are active (`suspend: false`) |
 | `kubectl cnpg status postgres-cluster -n databases` | Verify CNPG cluster state | Detailed PostgreSQL replication, WAL archiving, and instance diagnostics |

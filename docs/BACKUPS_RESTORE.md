@@ -5,7 +5,7 @@ The cluster supports two backup paths:
 * **Logical exports:** `pg_dump --format=custom` writes a compressed archive of one database to a location the administrator chooses. Restore it with `pg_restore`.
 * **Physical recovery:** CNPG archives WAL continuously and writes scheduled base backups to SeaweedFS through the Barman Cloud Plugin. A new CNPG Cluster can recover all databases and roles from a base backup and its archived WAL.
 
-OpenBao has its own hourly Raft snapshot, kept only for rolling back a bad upgrade (see [OpenBao Raft Snapshots](#openbao-raft-snapshots)).
+OpenBao has its own Raft snapshot on `OPENBAO_SNAPSHOT_SCHEDULE`, kept for rolling back a bad upgrade (see [OpenBao Raft Snapshots](#openbao-raft-snapshots)).
 
 Workstation-specific command notebooks, dump files and saved recovery manifests belong outside this repository.
 
@@ -31,7 +31,7 @@ kubectl exec -i -n databases "$primary" -c postgres -- \
 
 This listing checks that the archive header and table of contents are readable. A test restore followed by data checks establishes recoverability.
 
-A logical dump covers only the named database. Cluster roles are provisioned separately through CNPG and OpenBao. When restoring into a newly provisioned database, use `--no-owner --no-privileges --role=app_readwrite` and explicitly select application schemas or a reviewed archive list. CNPG already manages the PostGIS extensions and their schemas. Dumped event triggers require superuser privileges and should be reviewed separately from application data. `--single-transaction --exit-on-error` makes a selected logical restore roll back if a statement fails.
+A logical dump covers the named database. Cluster roles are provisioned separately through CNPG and OpenBao. When restoring into a newly provisioned database, use `--no-owner --no-privileges --role=app_readwrite` and explicitly select application schemas or a reviewed archive list. CNPG manages the PostGIS extensions and their schemas. Dumped event triggers require superuser privileges and should be reviewed separately from application data. `--single-transaction --exit-on-error` makes a selected logical restore roll back if a statement fails.
 
 ## Physical Backups to SeaweedFS
 
@@ -198,13 +198,13 @@ These commands delete the recovery cluster's local data. They leave the source c
 
 The OpenBao chart's snapshot agent, the CronJob `openbao-snapshot`, runs every `OPENBAO_SNAPSHOT_SCHEDULE`:
 
-1. It logs in to OpenBao as `openbao-snapshot-role`, whose policy can only read `sys/storage/raft/snapshot`.
+1. It logs in to OpenBao as `openbao-snapshot-role`, whose policy grants read on `sys/storage/raft/snapshot`.
 2. It saves a Raft snapshot and uploads it to the SeaweedFS bucket `openbao-snapshots` as `bao_<date>-<time>.snapshot`.
 3. It deletes snapshots older than `OPENBAO_SNAPSHOT_RETENTION_DAYS`.
 
-These snapshots exist to roll back an OpenBao upgrade that damages its data. Flux replaces `openbao-0` as soon as an upgrade merges, so the newest snapshot is at most one schedule interval old. OpenBao's other contents (PKI, auth roles, policies, engine configuration) are specific to this cluster, and a rebuild recreates them from Terraform, not from a snapshot.
+These snapshots exist to roll back an OpenBao upgrade that damages its data. Flux replaces `openbao-0` as soon as an upgrade merges. The newest snapshot is at most one schedule interval old at that point. OpenBao's other contents (PKI, auth roles, policies, engine configuration) are specific to this cluster, and a rebuild recreates them from Terraform.
 
-Take a snapshot on demand with `kubectl create job -n openbao --from=cronjob/openbao-snapshot openbao-snapshot-manual`. To roll back, copy the chosen snapshot from the bucket into `openbao-0` and run `bao operator raft snapshot restore <file>` there with a root token. A snapshot only restores onto an OpenBao that unseals with the same seal key.
+Take a snapshot on demand with `kubectl create job -n openbao --from=cronjob/openbao-snapshot openbao-snapshot-manual`. To roll back, copy the chosen snapshot from the bucket into `openbao-0` and run `bao operator raft snapshot restore <file>` there with a root token. A snapshot restores onto an OpenBao that unseals with the same seal key.
 
 ## Recovery Limits and Image Updates
 
