@@ -57,10 +57,10 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
 | Ansible | `ansible` `14.5.0` (`ansible-core` `2.21.5`), from `uv.lock` | Idempotent cluster bootstrap playbook and host setup (`dragonbishop.cluster.data_cluster`). `just bootstrap` runs it through `uv run` and first installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on. |
-| Flux CLI | `v2.10.0` (`fluxcd.io`) | Creates Flux's Git credentials during bootstrap (`flux create secret`), and inspects and reconciles Flux afterwards. |
+| Flux CLI | `flux2-cli` / `flux` (the `gotk-components.yaml` Flux Version) | Creates Flux's Git credentials during bootstrap (`flux create secret`), and inspects and reconciles Flux afterwards. |
 | GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |
-| Helm | `v4.x` (`get-helm-4`) | Installs Cilium during bootstrap, before Flux exists, and reads chart metadata for `just preflight`. |
-| OpenTofu | `1.13.1` (standalone binary) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
+| Helm | `helm` | Installs Cilium during bootstrap, before Flux exists, and reads chart metadata for `just preflight`. |
+| OpenTofu | `tofu` (OpenTofu's package repository) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
 | uv | `astral-sh/uv` | Builds `.venv` from `uv.lock`, Python included; `just bootstrap` and the dev recipes run through it. |
 
 **Git** initializes a source download for `just setup`:
@@ -76,8 +76,8 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | fzf | `fzf` | Interactive pod picker for `just fuzzypods`. |
 | Headlamp | `0.45.0` (desktop app) | Cluster GUI on the host, reading `~/.kube/config`. Its plugins assist with cluster management. |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
-| kubectl | `v1.37.2` <!-- renovate: datasource=github-releases depName=kubernetes/kubernetes --> (`KUBECTL_VERSION`, matching `K3S_VERSION`) | Kubernetes CLI for every cluster operation and recipe. |
-| kubectl cnpg plugin | `1.30.1` (the CNPG operator version) | CloudNativePG status, backups, restarts, and `psql` sessions inside the primary pod (`kubectl cnpg ...`), so the host needs no PostgreSQL client. |
+| kubectl | `v1.37.2` <!-- renovate: datasource=github-releases depName=kubernetes/kubernetes --> (`KUBECTL_VERSION`, matching `K3S_VERSION`; packaged per minor version) | Kubernetes CLI for every cluster operation and recipe. |
+| kubectl cnpg plugin | `kubectl-cnpg` / krew (the CNPG operator's minor version) | CloudNativePG status, backups, restarts, and `psql` sessions that run inside the primary pod (`kubectl cnpg ...`). |
 | Tekton CLI (`tkn`) | `tektoncd-cli` | Lists and follows PipelineRuns, TaskRuns and their logs. |
 
 **pgiscluster** reaches the database from the host:

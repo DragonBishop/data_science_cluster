@@ -26,16 +26,51 @@ Once host-side prerequisites are met, running `just bootstrap` orchestrates the 
 
 ### Host Tooling
 
-`just preflight` checks for each tool below and prints its install command on Debian and Fedora when it is missing. A missing fzf or Tekton CLI is a warning, and the GitHub CLI is checked only when no GitHub App is configured.
+Most tools below install from a package repository that the system's regular `dnf upgrade` or `apt upgrade` keeps current. Each tool also lists the project's own install. `just preflight` checks for each tool and prints the shortest dnf or apt commands that install a missing one. A missing fzf or Tekton CLI is a warning, and preflight checks the GitHub CLI when `GITHUB_APP_ID` is unset. `just start` reports a kubectl that has fallen more than one minor version behind k3s and a cnpg plugin on a different minor version than the CNPG operator.
+
+#### Shared Package Repositories
+
+Some tools come from third-party repositories, each run by one maintainer. The two COPRs build each tool from the project's tagged source. WakeMeOps repackages each project's release binaries and records their checksums in [its public lock files](https://github.com/upciti/wakemeops/tree/main/blueprints). Installing from one of them trusts its maintainer with root on the host. The install labelled as the project's own under each tool avoids that trust and updates when you run it again.
+
+Each repository is limited to the packages this page installs from it. The distribution and the official repositories supply everything else.
+
+* **Fedora**: the [krouma/kubernetes](https://copr.fedorainfracloud.org/coprs/krouma/kubernetes/) COPR provides the Flux CLI and the Tekton CLI.
+
+  ```bash
+  sudo dnf copr enable -y krouma/kubernetes
+  sudo dnf config-manager setopt 'copr:copr.fedorainfracloud.org:krouma:kubernetes.includepkgs=flux2-cli,tektoncd-cli'
+  ```
+
+* **Ubuntu / Debian**: [WakeMeOps](https://docs.wakemeops.com/) provides the Flux CLI and krew.
+
+  ```bash
+  curl -sSL https://raw.githubusercontent.com/upciti/wakemeops/main/assets/install_repository | sudo bash -s -- devops
+  printf 'Package: flux krew\nPin: origin deb.wakemeops.com\nPin-Priority: 500\n\nPackage: *\nPin: origin deb.wakemeops.com\nPin-Priority: -1\n' \
+    | sudo tee /etc/apt/preferences.d/wakemeops > /dev/null
+  ```
 
 #### Flux CLI
 
-Install the version the committed `clusters/local/flux-system/gotk-components.yaml` pins:
+The CLI renders the bootstrap manifests with `flux envsubst` and matches the `# Flux Version:` header of `clusters/local/flux-system/gotk-components.yaml`. Both third-party repositories publish each Flux release within days. After [enabling the shared repository](#shared-package-repositories):
 
-```bash
-curl -s https://fluxcd.io/install.sh | sudo FLUX_VERSION=2.10.0 bash
-flux version --client
-```
+* **Ubuntu / Debian** (third-party, WakeMeOps):
+
+  ```bash
+  sudo apt install -y flux
+  ```
+
+* **Fedora** (third-party, krouma/kubernetes COPR):
+
+  ```bash
+  sudo dnf install -y flux2-cli
+  ```
+
+* **Project's own install** ([Flux's install script](https://fluxcd.io/flux/installation/#install-the-flux-cli)), at the pinned version, from the repository root. It updates when you run it again:
+
+  ```bash
+  FLUX_VERSION=$(awk '/^# Flux Version: v/ {sub(/^v/, "", $4); print $4; exit}' clusters/local/flux-system/gotk-components.yaml)
+  curl -s https://fluxcd.io/install.sh | sudo FLUX_VERSION="$FLUX_VERSION" bash
+  ```
 
 #### fzf
 
@@ -89,13 +124,28 @@ Used by `just fuzzypods`.
 
 #### Helm
 
-```bash
-curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
-chmod +x get_helm.sh
-./get_helm.sh
-rm get_helm.sh
-helm version
-```
+* **Ubuntu / Debian**:
+
+  ```bash
+  curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+  echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+  sudo apt update && sudo apt install -y helm
+  ```
+
+* **Fedora**:
+
+  ```bash
+  sudo dnf install -y helm
+  ```
+
+* **Project's own install script** ([Helm's install script](https://helm.sh/docs/intro/install/)). It updates when you run it again:
+
+  ```bash
+  curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+  chmod +x get_helm.sh
+  ./get_helm.sh
+  rm get_helm.sh
+  ```
 
 #### Just
 
@@ -113,72 +163,120 @@ helm version
 
 #### kubectl
 
-Install the release `KUBECTL_VERSION` pins in `infrastructure/cluster-config/versions.yaml`, which matches `K3S_VERSION` without the `+k3s` suffix:
+Both distributions package kubectl per Kubernetes minor version. Install the minor version of `KUBECTL_VERSION` in `infrastructure/cluster-config/versions.yaml`, which follows `K3S_VERSION`. From the repository root:
 
 ```bash
-KUBECTL_VERSION=v1.37.1
-KUBECTL_ARCH=amd64
-if [ "$(uname -m)" = "aarch64" ]; then KUBECTL_ARCH=arm64; fi
-curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl"
-sudo install -m 0755 kubectl /usr/local/bin/kubectl
-rm kubectl
-kubectl version --client
-```
-
-#### kubectl cnpg Plugin
-
-Install the release matching the CNPG operator, which is the `appVersion` of the chart pinned by `CNPG_VERSION` (`helm show chart cloudnative-pg --repo https://cloudnative-pg.github.io/charts --version <CNPG_VERSION>`). `preflight.sh` checks the match.
-
-```bash
-CNPG_PLUGIN_VERSION=1.30.1
-CNPG_ARCH=x86_64
-if [ "$(uname -m)" = "aarch64" ]; then CNPG_ARCH=arm64; fi
-CNPG_URL=https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${CNPG_PLUGIN_VERSION}/kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}
+KUBECTL_MINOR=$(awk -F'"' '/^  KUBECTL_VERSION:/ {split($2, part, "."); print substr(part[1], 2) "." part[2]}' infrastructure/cluster-config/versions.yaml)
 ```
 
 * **Ubuntu / Debian**:
 
   ```bash
-  curl -LO "${CNPG_URL}.deb"
-  sudo apt install -y "./kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}.deb"
-  rm "kubectl-cnpg_${CNPG_PLUGIN_VERSION}_linux_${CNPG_ARCH}.deb"
+  sudo mkdir -p -m 755 /etc/apt/keyrings
+  curl -fsSL "https://pkgs.k8s.io/core:/stable:/v${KUBECTL_MINOR}/deb/Release.key" | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBECTL_MINOR}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+  sudo apt update && sudo apt install -y kubectl
   ```
 
-* **Fedora / RHEL / Red Hat**:
+* **Fedora**:
 
   ```bash
-  sudo dnf install -y "${CNPG_URL}.rpm"
+  sudo dnf install -y "kubernetes${KUBECTL_MINOR}-client"
+  ```
+
+* **Binary download** ([the Kubernetes binary download](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/)), at the exact `KUBECTL_VERSION`. It updates when you run it again:
+
+  ```bash
+  KUBECTL_VERSION=$(awk -F'"' '/^  KUBECTL_VERSION:/ {print $2}' infrastructure/cluster-config/versions.yaml)
+  KUBECTL_ARCH=amd64
+  if [ "$(uname -m)" = "aarch64" ]; then KUBECTL_ARCH=arm64; fi
+  curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl"
+  sudo install -m 0755 kubectl /usr/local/bin/kubectl
+  rm kubectl
+  ```
+
+Patch releases arrive with the regular upgrade. When `KUBECTL_VERSION` moves to a new minor version, run the Ubuntu commands again, or on Fedora replace the package with `sudo dnf swap kubernetes<old>-client "kubernetes${KUBECTL_MINOR}-client"`.
+
+#### kubectl cnpg Plugin
+
+The plugin should be on the same minor version as the CNPG operator, which is the `appVersion` of the chart `CNPG_VERSION` pins. `just preflight` and `just start` check it.
+
+* **Ubuntu / Debian** (third-party, krew from WakeMeOps): krew installs the plugin from krew's plugin index, after [enabling the shared repository](#shared-package-repositories). `krew upgrade` updates it.
+
+  ```bash
+  sudo apt install -y krew
+  krew install cnpg
+  echo 'export PATH="$HOME/.krew/bin:$PATH"' >> ~/.bashrc
+  ```
+
+* **Fedora** (third-party, the [shdwchn10/AllTheTools](https://copr.fedorainfracloud.org/coprs/shdwchn10/AllTheTools/) COPR), limited to the plugin:
+
+  ```bash
+  sudo dnf copr enable -y shdwchn10/AllTheTools
+  sudo dnf config-manager setopt 'copr:copr.fedorainfracloud.org:shdwchn10:AllTheTools.includepkgs=kubectl-cnpg'
+  sudo dnf install -y kubectl-cnpg
+  ```
+
+* **Project's own install** ([CloudNativePG's install script](https://cloudnative-pg.io/documentation/current/kubectl-plugin/)), which verifies the release checksum. It updates when you run it again:
+
+  ```bash
+  curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/install-cnpg-plugin.sh | sudo sh -s -- -b /usr/local/bin
   ```
 
 #### OpenTofu
 
+OpenTofu's installer adds OpenTofu's package repository and installs `tofu` at `/usr/bin/tofu`, where the `opentofu` role runs it.
+
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
 chmod +x install-opentofu.sh
-sudo ./install-opentofu.sh --install-method standalone --opentofu-version 1.13.1
-rm install-opentofu.sh
-tofu version
 ```
+
+* **Ubuntu / Debian**:
+
+  ```bash
+  sudo ./install-opentofu.sh --install-method deb
+  rm install-opentofu.sh
+  ```
+
+* **Fedora**: the installer writes `sslcacert=/etc/pki/tls/certs/ca-bundle.crt` into the repository file, a path Fedora 44 removed. On Fedora 44 and later, dnf then reports `Curl error (77)` and installs Fedora's older `opentofu` package. The `sed` line removes that setting, and dnf verifies the repository against the system trust store. `dnf swap` replaces `opentofu` with OpenTofu's `tofu` package, and installs `tofu` when `opentofu` is absent.
+
+  ```bash
+  sudo ./install-opentofu.sh --install-method rpm
+  rm install-opentofu.sh
+  sudo sed -i '/^sslcacert=/d' /etc/yum.repos.d/opentofu.repo
+  sudo dnf swap -y opentofu tofu
+  ```
+
+* **Standalone binary** (the installer's standalone method). It updates when you run it again. It installs at `/usr/local/bin/tofu`, which the bootstrap takes as `just bootstrap -e opentofu_binary=/usr/local/bin/tofu`:
+
+  ```bash
+  sudo ./install-opentofu.sh --install-method standalone
+  rm install-opentofu.sh
+  ```
 
 #### Tekton CLI (`tkn`)
 
 Lists and follows PipelineRuns, TaskRuns and their logs.
 
-* **Ubuntu / Debian**:
+* **Ubuntu / Debian** (project's own install, [Tekton's release package](https://tekton.dev/docs/cli/)). It updates when you run it again:
 
   ```bash
-  sudo apt update && sudo apt install -y gnupg
-  sudo mkdir -p /etc/apt/keyrings/
-  sudo gpg --no-default-keyring --keyring /etc/apt/keyrings/tektoncd.gpg --keyserver keyserver.ubuntu.com --recv-keys 3EFE0E0A2F2F60AA
-  echo "deb [signed-by=/etc/apt/keyrings/tektoncd.gpg] http://ppa.launchpad.net/tektoncd/cli/ubuntu eoan main" | sudo tee /etc/apt/sources.list.d/tektoncd-ubuntu-cli.list
-  sudo apt update && sudo apt install -y tektoncd-cli
+  TKN_DEB=$(curl -fsSL https://api.github.com/repos/tektoncd/cli/releases/latest | grep -o 'https://[^"]*_Linux-64bit\.deb')
+  curl -fsSLo /tmp/tektoncd-cli.deb "$TKN_DEB" && sudo apt install -y /tmp/tektoncd-cli.deb
   ```
 
-* **Fedora / RHEL / Red Hat**:
+* **Fedora** (third-party, krouma/kubernetes COPR), after [enabling the shared repository](#shared-package-repositories):
 
   ```bash
-  sudo dnf copr enable -y krouma/kubernetes
   sudo dnf install -y tektoncd-cli
+  ```
+
+* **Fedora, project's own install** ([Tekton's release package](https://tekton.dev/docs/cli/)). It updates when you run it again:
+
+  ```bash
+  TKN_RPM=$(curl -fsSL https://api.github.com/repos/tektoncd/cli/releases/latest | grep -o 'https://[^"]*_Linux-64bit\.rpm')
+  sudo dnf install -y "$TKN_RPM"
   ```
 
 #### uv
@@ -285,7 +383,7 @@ Renovate runs as Mend's hosted Renovate App. Install it from <https://github.com
   just preflight
   ```
 
-  On Fedora/RHEL, firewalld must already be active. Setup finds the zone of `LAN_INTERFACE` from cluster-config. It retains named workstation services and explicit ports, opens DNS and the Gateway's 443/5432 listeners, removes the unrestricted `1025-65535` TCP/UDP ranges, and restricts `k8s-containers-to-host` to the trusted Cilium zone. Preflight checks the same restrictions and required forwarding directions.
+  On Fedora/RHEL, firewalld must already be active. Setup finds the zone of `LAN_INTERFACE` from cluster-config. It retains named workstation services and explicit ports, opens DNS and the Gateway's 443/5432 listeners, removes the unrestricted `1025-65535` TCP/UDP ranges, and restricts `k8s-containers-to-host` to the trusted Cilium zone. `setup-firewall.sh --check`, which preflight runs, checks the same restrictions and forwarding directions.
 
   Before applying this change to an existing host, inspect its configuration and save a copy:
 
@@ -406,8 +504,7 @@ flowchart TD
     security --> objectstore
     seaweedfs --> objectstore
     csidriver --> objectstore
-    openbao --> baosnapshot["openbao-snapshot"]
-    seaweedfs --> baosnapshot
+    seaweedfs --> baosnapshot["openbao-snapshot"]
     csidriver --> baosnapshot
     objectstore --> dbcluster["databases-cluster"]
     gw --> dbcluster
