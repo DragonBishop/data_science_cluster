@@ -9,7 +9,7 @@ Four tools roll out this cluster:
 * **OpenTofu:** Declares OpenBao's secrets engines, access policies, PKI and Kubernetes authentication (`terraform/openbao/`).
 * **Tekton:** Tests the core after every change Flux applies to it, including the paths into it that the workstation uses.
 
-Cluster secrets and security rely on an in-cluster OpenBao that unseals itself from a static seal key in a Kubernetes `Secret`, so Flux can replace it on an upgrade without anyone present. Keep the seal key, recovery keys and root token in an external secret store; bootstrap writes no local credential backups. Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, and its database and secrets-aws engines issue the short-lived logins the Secrets Store CSI driver mirrors into Kubernetes `Secret`s every day.
+Cluster secrets and security rely on an in-cluster OpenBao that unseals itself from a static seal key in a Kubernetes `Secret`. Flux can replace it on an upgrade unattended. Keep the seal key, recovery keys and root token in an external secret store. Bootstrap keeps every credential off the local disk. Integrated with `cert-manager`, OpenBao's multi-tier Public Key Infrastructure (PKI) engine dynamically issues and rotates X.509 TLS certificates, and its database and secrets-aws engines issue the short-lived logins the Secrets Store CSI driver mirrors into Kubernetes `Secret`s every day.
 
 Workloads are structured modularly to maximize compute efficiency on local hardware. The cluster maintains an always-on core database architecture, powered by PostgreSQL/PostGIS (CloudNativePG), Cilium eBPF networking and Gateway routing, and SeaweedFS S3-compatible storage. Specialized modules for testing, cluster observability, ETL data pipelines, and machine learning workflows can be deployed dynamically when performing specific data science tasks and torn down afterward to conserve memory and CPU.
 
@@ -61,13 +61,13 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | GitHub CLI (`gh`) | `gh` | Fallback GitHub authentication for automated repository access if a GitHub App is not configured. |
 | Helm | `helm` | Installs Cilium during bootstrap, before Flux exists, and reads chart metadata for `just preflight`. |
 | OpenTofu | `tofu` (OpenTofu's package repository) | Declarative secrets, PKI engine, and Kubernetes auth management in OpenBao (`terraform/openbao/`). |
-| uv | `astral-sh/uv` | Builds `.venv` from `uv.lock`, Python included; `just bootstrap` and the dev recipes run through it. |
+| uv | `astral-sh/uv` | Builds `.venv` from `uv.lock`, Python included. `just bootstrap` and the dev recipes run through it. |
 
 **Git** initializes a source download for `just setup`:
 
 | Tool | Version / Package | Purpose |
 | --- | --- | --- |
-| Git | `git` | `just setup` runs `git init` in a source download without `.git`; the GitHub CLI fallback reads the `origin` URL. |
+| Git | `git` | `just setup` runs `git init` in a source download that lacks `.git`. The GitHub CLI fallback reads the `origin` URL. |
 
 **just** runs every recipe, and **kubectl**, the **kubectl cnpg plugin**, the **Tekton CLI**, **Headlamp** and **fzf** inspect and operate the running cluster:
 
@@ -76,7 +76,7 @@ These tools must be installed or configured on the host machine to bootstrap, te
 | fzf | `fzf` | Interactive pod picker for `just fuzzypods`. |
 | Headlamp | `0.45.0` (desktop app) | Cluster GUI on the host, reading `~/.kube/config`. Its plugins assist with cluster management. |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
-| kubectl | `v1.37.2` <!-- renovate: datasource=github-releases depName=kubernetes/kubernetes --> (`KUBECTL_VERSION`, matching `K3S_VERSION`; packaged per minor version) | Kubernetes CLI for every cluster operation and recipe. |
+| kubectl | `v1.37.2` <!-- renovate: datasource=github-releases depName=kubernetes/kubernetes --> (`KUBECTL_VERSION`, matching `K3S_VERSION`, packaged per minor version) | Kubernetes CLI for every cluster operation and recipe. |
 | kubectl cnpg plugin | `kubectl-cnpg` / krew (the CNPG operator's minor version) | CloudNativePG status, backups, restarts, and `psql` sessions that run inside the primary pod (`kubectl cnpg ...`). |
 | Tekton CLI (`tkn`) | `tektoncd-cli` | Lists and follows PipelineRuns, TaskRuns and their logs. |
 
@@ -94,18 +94,18 @@ The core is always on and holds every piece of the cluster's state. It relies on
 
 | Component | Version | Description |
 | --- | --- | --- |
-| Flux | `v2.10.0` | GitOps controller; reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. Pinned by the committed `clusters/local/flux-system/gotk-components.yaml`, which `flux install --components=source-controller,kustomize-controller,helm-controller,notification-controller --network-policy=false --export` regenerates after a CLI upgrade. |
-| k3s | `v1.37.2+k3s1` <!-- renovate: datasource=github-releases depName=k3s-io/k3s --> | Core control plane and execution environment. `just bootstrap` installs `K3S_VERSION`; an existing node upgrades through the k3s installer with `INSTALL_K3S_VERSION`. k3s also bundles the Gateway API CRDs (its `gateway-api-crd` chart), so the vendored `infrastructure/gateway-api-crds/standard-install.yaml` follows k3s's bundled version. |
-| Prometheus Operator CRDs | `32.0.1` (chart, operator `v0.94.1`; planned for 3.0) | `ServiceMonitor`, `PodMonitor` and the other Prometheus Operator CRDs, installed in the core so the monitors beside core components keep resolving while observability is off. Pinned to the operator version kube-prometheus-stack ships. |
+| Flux | `v2.10.0` | GitOps controller. It reconciles every `Kustomization` under `clusters/local/`, `dependsOn`-chained starting Gateway API CRDs → Cilium. Pinned by the committed `clusters/local/flux-system/gotk-components.yaml`, which `flux install --components=source-controller,kustomize-controller,helm-controller,notification-controller --network-policy=false --export` regenerates after a CLI upgrade. |
+| k3s | `v1.37.2+k3s1` <!-- renovate: datasource=github-releases depName=k3s-io/k3s --> | Core control plane and execution environment. `just bootstrap` installs `K3S_VERSION`. An existing node upgrades through the k3s installer with `INSTALL_K3S_VERSION`. k3s also bundles the Gateway API CRDs (its `gateway-api-crd` chart). The vendored `infrastructure/gateway-api-crds/standard-install.yaml` follows k3s's bundled version. |
+| Prometheus Operator CRDs | `32.0.1` (chart, operator `v0.94.1`, planned for 3.0) | `ServiceMonitor`, `PodMonitor` and the other Prometheus Operator CRDs, installed in the core so the monitors beside core components keep resolving while observability is off. Pinned to the operator version kube-prometheus-stack ships. |
 
 **Cilium** carries the cluster's traffic, one shared **Gateway** built on the **Gateway API** takes every request from the LAN, **CoreDNS** resolves its names, and **Hubble** shows its flows:
 
 | Component | Version | Description |
 | --- | --- | --- |
-| Cilium | `1.20.4` <!-- renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io --> | CNI; replaces k3s's default networking, eBPF routing/load-balancing in place of kube-proxy, serves the Gateway API. |
+| Cilium | `1.20.4` <!-- renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io --> | CNI. It replaces k3s's default networking, routes and load-balances with eBPF in place of kube-proxy, and serves the Gateway API. |
 | DNS (CoreDNS) | `v1.14.6` | k3s's in-cluster CoreDNS in `kube-system`. ConfigMap `coredns-custom` (`infrastructure/cilium/coredns-config.yaml`) adds a `cluster.internal` zone that resolves `*.cluster.internal` to the shared Gateway's IP for LAN clients. Pods still resolve `*.svc.cluster.local` through it. |
-| Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`): HTTPS (443, wildcard cert) for web UIs and raw TCP (5432) for Postgres. [Adding an HTTPS service](docs/NETWORKPOLICY.md#adding-an-https-service) needs a route and a receiver rule; approve its namespace once. |
-| Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation (e.g. Cilium); `Gateway` defines listeners (ports, protocols, hostnames); `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services; `ReferenceGrant` allows routes to reference backends in another namespace; `BackendTLSPolicy` configures TLS to a backend; `ListenerSet` lets a listener be shared/delegated across teams. |
+| Gateway | `v1.6.1` (CRDs) | One shared `Gateway` (`internal-gateway`): HTTPS (443, wildcard cert) for web UIs and raw TCP (5432) for Postgres. [Adding an HTTPS service](docs/NETWORKPOLICY.md#adding-an-https-service) needs a route and a receiver rule. Approve its namespace once. |
+| Gateway API | `v1.6.1` (CRDs) | Kubernetes-native API for describing traffic routing. `GatewayClass` names an implementation, such as Cilium. `Gateway` defines listeners (ports, protocols, hostnames). `HTTPRoute`/`TCPRoute`/`TLSRoute`/`GRPCRoute`/`UDPRoute` attach to a Gateway and route traffic by protocol to backend Services. `ReferenceGrant` lets routes reference backends in another namespace. `BackendTLSPolicy` configures TLS to a backend. `ListenerSet` lets teams share or delegate a listener. |
 | Hubble | `v1.20.2` (Relay), `v0.13.6` (UI) | Cilium's network observability layer. Relay runs its own cert-manager mTLS trust domain. |
 
 **OpenBao** holds the cluster's secrets and issues its certificates and logins through its **Database & PKI Engines** and its **secrets-aws plugin**. **cert-manager** delivers the certificates into Kubernetes, and the **Secrets Store CSI Driver** with the **OpenBao CSI Provider** delivers the logins:
@@ -113,10 +113,10 @@ The core is always on and holds every piece of the cluster's state. It relies on
 | Component | Version | Description |
 | --- | --- | --- |
 | cert-manager | `v1.21.3` <!-- renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io --> | Manages local edge CA, provisions OpenBao TLS, and mints leaf certificates via `openbao-pki-issuer`. |
-| OpenBao (in-cluster) | `2.7.2` <!-- renovate: datasource=docker depName=openbao/openbao --> (chart `0.30.7` <!-- renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm -->) | Secrets backend on Integrated Storage (Raft). It unseals itself from the static seal key in Secret `openbao-seal-key`, so Flux replaces it on an upgrade with no one present, and its chart's snapshot agent saves an hourly Raft snapshot to the SeaweedFS bucket `openbao-snapshots`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
+| OpenBao (in-cluster) | `2.7.2` <!-- renovate: datasource=docker depName=openbao/openbao --> (chart `0.30.7` <!-- renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm -->) | Secrets backend on Integrated Storage (Raft). It unseals itself from the static seal key in Secret `openbao-seal-key`, and Flux replaces it on an upgrade unattended. Its chart's snapshot agent saves a Raft snapshot on `OPENBAO_SNAPSHOT_SCHEDULE` to the SeaweedFS bucket `openbao-snapshots`. Hosts KV secrets, Kubernetes Auth, 2-tier PKI engine (Root + Intermediate CA with RFC 5280 Name Constraints), and database secrets engine. |
 | OpenBao Database & PKI Engines | Same as OpenBao | Issues Postgres login roles on demand (3h default TTL / 24h max) and issues 30-day TLS certificates via cert-manager. |
 | OpenBao CSI Provider | `2.0.3` (via OpenBao chart `0.30.7` <!-- renovate: datasource=helm depName=openbao registryUrl=https://openbao.github.io/openbao-helm -->) | DaemonSet in `openbao` that logs in to OpenBao with each mounting pod's ServiceAccount token and reads the logins its `SecretProviderClass` names. |
-| OpenBao secrets-aws plugin | `v0.3.3` <!-- renovate: datasource=docker depName=ghcr.io/openbao/openbao-plugin-secrets-aws --> | Mounted at `seaweedfs/`; creates a SeaweedFS IAM user with a key pair scoped to the backup bucket for each read, with a 4-day lease. OpenBao downloads it at startup. |
+| OpenBao secrets-aws plugin | `v0.3.3` <!-- renovate: datasource=docker depName=ghcr.io/openbao/openbao-plugin-secrets-aws --> | Mounted at `seaweedfs/`. It creates a SeaweedFS IAM user with a key pair scoped to the backup bucket for each read, with a 4-day lease. OpenBao downloads it at startup. |
 | OpenBao snapshot agent | `0.4.5` <!-- renovate: datasource=docker depName=ghcr.io/openbao/openbao-snapshot-agent --> | The OpenBao chart's CronJob: every `OPENBAO_SNAPSHOT_SCHEDULE` it saves a Raft snapshot and uploads it to the SeaweedFS bucket `openbao-snapshots`, deleting copies older than `OPENBAO_SNAPSHOT_RETENTION_DAYS`. It's for rolling back a bad upgrade. |
 | Secrets Store CSI Driver | `1.6.2` <!-- renovate: datasource=helm depName=secrets-store-csi-driver registryUrl=https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts --> | DaemonSet in `kube-system` that mounts provider-fetched logins into pods, mirrors them into Kubernetes `Secret`s and reads them again every `CREDENTIAL_ROTATION_INTERVAL`. |
 
@@ -136,8 +136,8 @@ The **Tekton Operator** installs **Tekton Pipelines** and **Tekton Triggers**, w
 | `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, backups and Hubble drops. |
 | Tekton Operator | `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator --> | Installs Pipelines, Triggers and the pruner from one `TektonConfig`. |
 | Tekton Pipelines | `v1.15.3` (via Tekton Operator `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. |
-| Tekton Triggers | `v0.37.1` (via Tekton Operator `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | The `flux-events` EventListener (planned for 3.0) turns events from Flux's notification-controller into PipelineRuns, so a merge to `main` starts `core-test`. |
-| Zot | `v2.1.22` (chart `0.1.128`; planned for 3.0) | In-cluster OCI registry and pull-through cache for every public registry the node pulls from, storing images in the `zot` SeaweedFS bucket. The Tekton module builds images into it, and containerd pulls through it. |
+| Tekton Triggers | `v0.37.1` (via Tekton Operator `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | The `flux-events` EventListener (planned for 3.0) turns events from Flux's notification-controller into PipelineRuns. A merge to `main` then starts `core-test`. |
+| Zot | `v2.1.22` (chart `0.1.128`, planned for 3.0) | In-cluster OCI registry and pull-through cache for every public registry the node pulls from, storing images in the `zot` SeaweedFS bucket. The Tekton module builds images into it, and containerd pulls through it. |
 
 ### Tekton Module (TBD)
 
@@ -147,7 +147,7 @@ The Tekton module tests everything outside the core: a pushed branch against the
 | --- | --- | --- |
 | Buildah (`buildah-ns` catalog Task) | `0.8.0` (planned for 3.0) | Builds each `images/<name>/` into Zot in the `image-build` and `test` Pipelines. |
 | skopeo (`skopeo-copy` catalog Task) | `0.4.0` (planned for 3.0) | Copies a tested image digest from Zot to ghcr.io in the `image-publish` Pipeline. |
-| Trivy (`trivy-scanner` catalog Task) | `0.2.0` (planned for 3.0) | Scans each built image; `image-build` fails on a CRITICAL finding. |
+| Trivy (`trivy-scanner` catalog Task) | `0.2.0` (planned for 3.0) | Scans each built image. `image-build` fails on a CRITICAL finding. |
 | ZAP (`zaproxy/zap-stable`) | `2.17.0` (planned for 3.0) | Scans every HTTP route the test Pipelines reach: passive checks on each test run, and active attacks on the throwaway cluster `e2e.yml` builds. |
 
 ### Observability Module (TBD)
@@ -156,10 +156,10 @@ Metrics, logs and runtime security for the whole cluster, switched on when debug
 
 | Component | Version | Description |
 | --- | --- | --- |
-| Grafana Alloy | `v1.20.1` (chart `1.13.1`; planned for 3.0) | DaemonSet that tails pod logs through the Kubernetes API and ships them to Loki, TaskRun pod logs included. |
-| kube-prometheus-stack | `92.3.0` (chart, operator `v0.94.1`; planned for 3.0) | Deploys the industry-standard Prometheus, Grafana, and Alertmanager bundle for comprehensive metric aggregation and dashboarding, to debug resource spikes and workload bottlenecks. |
-| Loki | `v3.7.8` (chart `18.15.1`; planned for 3.0) | Log aggregation and processing, paired with kube-prometheus-stack to round out metrics + logs observability. |
-| Tetragon | `v1.7.1` (chart `1.7.1`; planned for 3.0) | Real-time, eBPF-based detection of anomalous behavior at the syscall level. Detects unexpected shell spawns inside a container, unauthorized reads of sensitive files, privilege escalation attempts. Shares the eBPF datapath Cilium uses, and comes from the same developer. |
+| Grafana Alloy | `v1.20.1` (chart `1.13.1`, planned for 3.0) | DaemonSet that tails pod logs through the Kubernetes API and ships them to Loki, TaskRun pod logs included. |
+| kube-prometheus-stack | `92.3.0` (chart, operator `v0.94.1`, planned for 3.0) | Deploys the industry-standard Prometheus, Grafana, and Alertmanager bundle for comprehensive metric aggregation and dashboarding, to debug resource spikes and workload bottlenecks. |
+| Loki | `v3.7.8` (chart `18.15.1`, planned for 3.0) | Log aggregation and processing, paired with kube-prometheus-stack to round out metrics + logs observability. |
+| Tetragon | `v1.7.1` (chart `1.7.1`, planned for 3.0) | Real-time, eBPF-based detection of anomalous behavior at the syscall level. Detects unexpected shell spawns inside a container, unauthorized reads of sensitive files, privilege escalation attempts. Shares the eBPF datapath Cilium uses, and comes from the same developer. |
 
 ### ETL Pipeline Module (TBD)
 
@@ -167,13 +167,13 @@ The ETL pipeline rollout focuses on data ingestion, declarative orchestration, a
 
 | Component | Version | Description |
 | --- | --- | --- |
-| dbt (dbt-core, dbt-postgres) | `1.12.5` (dbt-core), `1.11.0` (dbt-postgres); planned for 3.0 | Executes complex SQL-based transformations natively within the CloudNativePG database, ensuring compute remains close to the data. |
+| dbt (dbt-core, dbt-postgres) | `1.12.5` (dbt-core), `1.11.0` (dbt-postgres), planned for 3.0 | Executes complex SQL-based transformations natively within the CloudNativePG database, ensuring compute remains close to the data. |
 | dlt | `1.31.0` (planned for 3.0) | Open-source Python library (data load tool) for building declarative data pipelines that load data from REST APIs, databases, and other sources. |
 | Prefect | `3.8.8` (planned for 3.0) | Python-native, observable orchestration engine for triggering data pipelines. |
 
 ### Machine Learning Module (TBD)
 
-The ML expansion focuses on managing experiment tracking, environment provisioning, and model serving, utilizing strictly open-source (Apache 2.0) tooling. Not yet in the repo directory; ordered alphabetically by component name.
+The ML expansion focuses on managing experiment tracking, environment provisioning, and model serving, utilizing strictly open-source (Apache 2.0) tooling. These components are planned and listed alphabetically by component name.
 
 | Component | Version | Description |
 | --- | --- | --- |

@@ -4,13 +4,13 @@
 
 **Start closed, allow shared infrastructure in the baseline, and let each component declare its additional connections.**
 
-**One policy for the cluster, one per namespace.** `cluster-default` is the one policy for the whole cluster. Every other rule belongs to one namespace, and lives in the policy file of the component that deploys into that namespace, beside its resources. No component writes policy into another component's namespace. A caller from another namespace, or from a module, gets its rule in the receiver's file, where it stays while the module is off.
+**One policy for the cluster, one per namespace.** `cluster-default` is the one policy for the whole cluster. Every other rule belongs to one namespace, and lives in the policy file of the component that deploys into that namespace, beside its resources. Each component writes policy into its own namespace. A caller from another namespace, or from a module, gets its rule in the receiver's file, where it stays while the module is off.
 
 The cluster baseline, `cluster-default` in [`infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml):
 
 1. Every pod starts closed.
 2. The node reaches any pod.
-3. Any pod reaches any other pod; the receiver decides.
+3. Any pod reaches any other pod, and the receiver decides.
 4. Any pod reaches the Kubernetes API.
 5. Any pod reaches CoreDNS.
 6. The LAN and the node reach the Gateway.
@@ -32,13 +32,13 @@ The host firewall and Cilium have different jobs. The host firewall filters conn
 
 On Fedora/RHEL, the host firewall follows these rules:
 
-1. The LAN interface uses a filtering zone, not an `ACCEPT` zone. Read `LAN_INTERFACE` from cluster-config; do not assume the default zone owns it.
-2. Declare each host service explicitly. Keep named workstation services and individual port allowances; remove FedoraWorkstation's blanket TCP/UDP `1025-65535` allowances. Add a narrow exception before using a workstation application that previously relied on that range.
+1. The LAN interface uses a filtering zone. Read `LAN_INTERFACE` from cluster-config and look up the zone that owns it.
+2. Declare each host service explicitly. Keep named workstation services and individual port allowances. Remove FedoraWorkstation's blanket TCP/UDP `1025-65535` allowances. Add a narrow exception before using a workstation application that previously relied on that range.
 3. Keep DNS (53/TCP and UDP), Gateway HTTPS (443/TCP), and Gateway PostgreSQL (5432/TCP) available in the LAN zone. CoreDNS is the explicit exception to publishing services through Gateway.
-4. Pods in the trusted Cilium zone may reach the host. `k8s-containers-to-host` accepts `trusted -> HOST`, never `ANY -> HOST`. The pod's Cilium egress policy still names the host ports it needs, including API 6443, kubelet 10250, and Hubble 4244.
+4. Pods in the trusted Cilium zone may reach the host. `k8s-containers-to-host` accepts `trusted -> HOST`. The pod's Cilium egress policy still names the host ports it needs, including API 6443, kubelet 10250, and Hubble 4244.
 5. Keep Cilium interfaces and pod CIDR trusted, existing forwarding policies intact, and masquerading owned by Cilium.
 
-[`setup-firewall.sh`](../src/bash/setup-firewall.sh) applies these rules; [`preflight.sh`](../src/bash/preflight.sh) checks the LAN zone, port ranges, and policy directions. Neither changes k3s's listen addresses. The Ubuntu/Debian branch retains its existing UFW setup for Cilium; this Fedora correction does not establish equivalent UFW perimeter enforcement.
+[`setup-firewall.sh`](../src/bash/setup-firewall.sh) applies these rules. `setup-firewall.sh --check`, which [`preflight.sh`](../src/bash/preflight.sh) runs, checks the LAN zone, port ranges and policy directions. Both leave k3s's listen addresses as they are. These perimeter rules apply to firewalld on Fedora. On Ubuntu/Debian, the script keeps its existing UFW setup for Cilium.
 
 A local firewall configuration check does not prove LAN isolation. Cilium's eBPF service and NodePort paths can bypass ordinary host input filtering. Check service continuity and unwanted exposure from a separate LAN client as described in [Verification](VERIFICATION.md#host-firewall-network-checks). Adding a listener requires reviewing both the host firewall and the receiving Cilium policy.
 
@@ -46,7 +46,7 @@ A local firewall configuration check does not prove LAN isolation. Cilium's eBPF
 
 Cilium treats each pod as open until a policy selects it. Once a policy with an `ingress` section selects a pod, that pod accepts the traffic the policy lists and drops the rest. An `egress` section does the same for outgoing traffic.
 
-Policies add up. A pod selected by three policies accepts the traffic any of them allow. Nothing in this cluster subtracts traffic: there are no deny rules. Every rule you write opens one more path.
+Policies add up. A pod selected by three policies accepts the traffic any of them allow. Every rule in this cluster allows traffic. Each rule you write opens one more path.
 
 `cluster-default` selects every pod and has both sections. That one policy closes the whole cluster. Every other policy reopens a single path for a single workload.
 
@@ -58,7 +58,7 @@ Each numbered comment in the [baseline manifest](../infrastructure/cilium/cilium
 
 **2. The node reaches any pod.** The `host` entity is the node. It carries kubelet probes, and on k3s the apiserver's webhook calls also come from the host. Every pod needs those infrastructure calls. Gateway traffic has the separate `ingress` identity and needs a receiver rule on the backend's listening port.
 
-**3. Any pod reaches any other pod; the receiver decides.** The receiving pod's policy decides whether the call lands. Ownership stays in one place: the pod that listens on a port declares who may use it.
+**3. Any pod reaches any other pod, and the receiver decides.** The receiving pod's policy decides whether the call lands. Ownership stays in one place: the pod that listens on a port declares who may use it.
 
 **4. Any pod reaches the Kubernetes API.** Controllers and operators talk to the API on 6443. RBAC decides what they can do once connected.
 
@@ -109,7 +109,7 @@ flowchart LR
               protocol: TCP
 ```
 
-Name each host with `matchName`. Use `matchPattern` wildcards for vendor-owned domains, where one company owns every subdomain. Tenant domains such as `*.github.io` host many owners; list those by full name.
+Name each host with `matchName`. Use `matchPattern` wildcards for vendor-owned domains, where one company owns every subdomain. Tenant domains such as `*.github.io` host many owners. List those by full name.
 
 ### A pod calls a host port
 
@@ -139,7 +139,7 @@ flowchart LR
 
 Publishing a service has three declarations:
 
-1. **Once per namespace:** label it `data-cluster/gateway-access: "true"` in `infrastructure/namespaces/namespaces.yaml`. The Gateway's listeners only accept routes from namespaces with that label. Every service in an approved namespace reuses that approval.
+1. **Once per namespace:** label it `data-cluster/gateway-access: "true"` in `infrastructure/namespaces/namespaces.yaml`. The Gateway's listeners accept routes from namespaces with that label. Every service in an approved namespace reuses that approval.
 2. Add a Gateway route (`HTTPRoute` or `TCPRoute`) in that namespace.
 3. Allow `fromEntities: [ingress]` on the backend's listening port in the receiver's policy.
 
@@ -155,9 +155,9 @@ ingress:
             protocol: TCP
 ```
 
-Baseline rule 6 admits the LAN into the Gateway. Do not add public-listener port restrictions to that rule: Envoy's internal listener ports differ. Restrict the backend port in the receiver's policy instead. [Cilium documents these two policy enforcement points](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/#ciliums-ingress-config-and-ciliumnetworkpolicy); [Gateway API documents namespace selectors for route attachment](https://gateway-api.sigs.k8s.io/guides/user-guides/multiple-ns/).
+Baseline rule 6 admits the LAN into the Gateway. Envoy's internal listener ports differ from the public ones. Restrict the backend port in the receiver's policy. [Cilium documents these two policy enforcement points](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/#ciliums-ingress-config-and-ciliumnetworkpolicy). [Gateway API documents namespace selectors for route attachment](https://gateway-api.sigs.k8s.io/guides/user-guides/multiple-ns/).
 
-The namespace label permits route attachment. The receiver's policy permits the actual backend connection. Both are required; an accepted route does not open an undeclared backend port.
+The namespace label permits route attachment. The receiver's policy permits the actual backend connection. Both are required. The backend port opens through the receiver's policy.
 
 ```mermaid
 flowchart LR
@@ -170,7 +170,7 @@ CoreDNS is the direct LAN exception. Its policy in `kube-system-networkpolicy.ya
 
 ### Adding an HTTPS service
 
-Reuse the shared `https` listener on 443, its wildcard DNS, and its wildcard certificate. The configured domain is `cluster.internal`, so applications use names such as `example.cluster.internal` and the certificate covers `*.cluster.internal`. Adding a hostname under that wildcard needs no per-service edit to the Gateway, DNS, certificate, or host firewall.
+Reuse the shared `https` listener on 443, its wildcard DNS, and its wildcard certificate. The configured domain is `cluster.internal`. Applications use names such as `example.cluster.internal`, and the certificate covers `*.cluster.internal`. Adding a hostname under that wildcard leaves the Gateway, DNS, certificate and host firewall unchanged.
 
 Suppose namespace `tools` has a Service named `example` on port 80, targeting pods labelled `app.kubernetes.io/name: example` on port 8080. Approve `tools` once in the namespace file:
 
@@ -204,7 +204,7 @@ spec:
           port: 80
 ```
 
-In the namespace's existing network-policy file, add this permission to the workload's policy. Select only the receiving pods:
+In the namespace's existing network-policy file, add this permission to the workload's policy. Select the receiving pods:
 
 ```yaml
 apiVersion: cilium.io/v2
@@ -225,17 +225,17 @@ spec:
               protocol: TCP
 ```
 
-The route names the **Service port** (80); the receiver rule names the **pod port** (8080). Keep the route and backend in the same namespace. The component's Flux Kustomization must substitute cluster-config for `${INTERNAL_DOMAIN}`, as the existing components do. After reconciliation, run `just gateway-check example.<INTERNAL_DOMAIN>` with the configured domain.
+The route names the **Service port** (80). The receiver rule names the **pod port** (8080). Keep the route and backend in the same namespace. The component's Flux Kustomization must substitute cluster-config for `${INTERNAL_DOMAIN}`, as the existing components do. After reconciliation, run `just gateway-check example.<INTERNAL_DOMAIN>` with the configured domain.
 
 ### Adding a raw TCP service
 
-Reuse `databases-route.yaml` as the TCPRoute pattern. A different raw TCP service needs its own Gateway listener and port; raw TCP does not select backends by HTTP hostname. Add that port to the explicit allowances in `setup-firewall.sh` and the corresponding checks in `preflight.sh`. Then add the route and receiver permission as above. Adding another HTTPS application uses the existing 443 listener.
+Reuse `databases-route.yaml` as the TCPRoute pattern. A different raw TCP service needs its own Gateway listener and port, because raw TCP selects backends by port. Add that port to the explicit allowances and the matching `--check` checks in `setup-firewall.sh`. Then add the route and receiver permission as above. Adding another HTTPS application uses the existing 443 listener.
 
 ## Conventions
 
 * The cluster has one policy file, `infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`.
 * Each namespace that needs more than the baseline has one policy file, `<component>-networkpolicy.yaml`, holding every policy object for that namespace.
-* A namespace that needs nothing beyond the baseline has no policy file.
+* A namespace has a policy file when it needs more than the baseline.
 * A policy is named after the workload it selects, and holds that workload's incoming and outgoing rules.
 * Each rule carries a one-line comment saying what the traffic is.
 * Callers are named by namespace and `app.kubernetes.io/name`, or by the labels their chart sets.
@@ -248,7 +248,7 @@ Reuse `databases-route.yaml` as the TCPRoute pattern. A different raw TCP servic
 hubble observe --verdict DROPPED -f
 ```
 
-Each line shows the source, destination and port of a dropped connection. First confirm the connection is required. For a pod-to-pod call, inspect the receiver's caller/port rule; for an internet call, inspect the sender's domain rule. Add only the required permission in the owning component's file. [Troubleshooting](TROUBLESHOOTING.md) covers `toPorts` rules that don't match.
+Each line shows the source, destination and port of a dropped connection. First confirm the connection is required. For a pod-to-pod call, inspect the receiver's caller/port rule. For an internet call, inspect the sender's domain rule. Add the required permission in the owning component's file. [Troubleshooting](TROUBLESHOOTING.md) covers `toPorts` rules that miss their traffic.
 
 ## Bootstrap
 
@@ -259,13 +259,13 @@ Flux needs network access before it can deliver any policy, and so do the worklo
 | Policy | File | Allows |
 | --- | --- | --- |
 | `cluster-default` | [`infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml) | Baseline rules 1 to 6 |
-| `coredns` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | LAN and every pod on 53; CoreDNS to upstream resolvers on 53 |
+| `coredns` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | LAN and every pod on 53. CoreDNS to upstream resolvers on 53 |
 | `metrics-server` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | metrics-server to the kubelet on 10250 |
-| `hubble-relay` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | Hubble Relay to the agent's Hubble server on 4244; Tekton runs to Relay on 4245 |
-| `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090; Flux to its source hosts on 443 |
-| `openbao` | [`infrastructure/openbao/openbao-networkpolicy.yaml`](../infrastructure/openbao/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200; OpenBao to the secrets-aws plugin's registry on 443 |
+| `hubble-relay` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | Hubble Relay to the agent's Hubble server on 4244. Tekton runs to Relay on 4245 |
+| `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090. Flux to its source hosts on 443 |
+| `openbao` | [`infrastructure/openbao/openbao-networkpolicy.yaml`](../infrastructure/openbao/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200. OpenBao to the secrets-aws plugin's registry on 443 |
 | `plugin-barman-cloud` | [`apps/databases/plugin/cnpg-system-networkpolicy.yaml`](../apps/databases/plugin/cnpg-system-networkpolicy.yaml) | The CNPG operator to the plugin on 9090 |
-| `postgres-cluster` | [`apps/databases/security/databases-networkpolicy.yaml`](../apps/databases/security/databases-networkpolicy.yaml) | Gateway, instances, OpenBao and `core-test` on 5432; the CNPG operator on 8000 |
-| SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other; Postgres, OpenBao and `core-test` to S3 on `SEAWEEDFS_S3_PORT` |
+| `postgres-cluster` | [`apps/databases/security/databases-networkpolicy.yaml`](../apps/databases/security/databases-networkpolicy.yaml) | Gateway, instances, OpenBao and `core-test` on 5432. The CNPG operator on 8000 |
+| SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other. Postgres, OpenBao and `core-test` to S3 on `SEAWEEDFS_S3_PORT` |
 | `remote-resolvers` | [`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443 |
 | `taskrun` | [`infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443 |

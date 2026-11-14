@@ -17,7 +17,7 @@ Once host-side prerequisites are met, running `just bootstrap` orchestrates the 
 * [Cluster Bootstrap](#cluster-bootstrap)
   * [Step 1: Clone Repository](#step-1-clone-repository)
   * [Step 2: Execute Ansible Bootstrap](#step-2-execute-ansible-bootstrap)
-  * [Step 3: Secure OpenBao Credentials & Recovery Keys](#step-3-secure-openbao-credentials--recovery-keys)
+  * [Step 3: Secure OpenBao Credentials and Recovery Keys](#step-3-secure-openbao-credentials-and-recovery-keys)
 * [Flux Dependency Graph](#flux-dependency-graph)
 
 ---
@@ -296,7 +296,7 @@ Flux syncs the cluster from a GitHub repository you own. You install each GitHub
 
 Create your own copy of this repository on GitHub in one of two ways:
 
-* **Fork** it from its GitHub page. A fork is public and can pull later changes from this repository. GitHub turns workflows off in a new fork; turn them on under your fork's **Actions** tab.
+* **Fork** it from its GitHub page. A fork is public and can pull later changes from this repository. GitHub turns workflows off in a new fork. Turn them on under your fork's **Actions** tab.
 * **Push a clone** to a new, empty repository you create. The new repository can be private.
 
   ```bash
@@ -376,7 +376,7 @@ Renovate runs as Mend's hosted Renovate App. Install it from <https://github.com
 
 ### Host Firewall Configuration
 
-* [ ] **Host firewall configured for Cilium** — run from a local terminal on the node:
+* [ ] **Host firewall configured for Cilium.** Run from a local terminal on the node:
 
   ```bash
   just setup-firewall
@@ -394,13 +394,13 @@ Renovate runs as Mend's hosted Renovate App. Install it from <https://github.com
   sudo cp -a /etc/firewalld /etc/firewalld.before-cluster-hardening
   ```
 
-  Use a new backup path if that copy already exists. Add explicit narrow allowances for any workstation applications that relied on the high-port ranges. Setup writes permanent configuration and reloads firewalld, so retain a local terminal during the change. It preserves Cilium's forwarding policies and trusted interfaces; masquerading stays with Cilium.
+  Use a new backup path if that copy already exists. Add explicit narrow allowances for any workstation applications that relied on the high-port ranges. Setup writes permanent configuration and reloads firewalld. Keep a local terminal open during the change. Setup preserves Cilium's forwarding policies and trusted interfaces. Masquerading stays with Cilium.
 
   On Ubuntu/Debian, the existing UFW setup permits Cilium interfaces and pod routing and sets `DEFAULT_FORWARD_POLICY=ACCEPT`. The Fedora host-input correction does not change that branch.
 
-  See [Host and LAN Access](NETWORKPOLICY.md#host-and-lan-access) for the rules and [Host Firewall Network Checks](VERIFICATION.md#host-firewall-network-checks) for before/after service checks and LAN validation. If the Fedora change interrupts a required path, restore the saved `/etc/firewalld` directory from the local terminal and run `sudo firewall-cmd --reload`; do not stop the firewall or reopen all ports as the permanent fix.
+  See [Host and LAN Access](NETWORKPOLICY.md#host-and-lan-access) for the rules and [Host Firewall Network Checks](VERIFICATION.md#host-firewall-network-checks) for before/after service checks and LAN validation. If the Fedora change interrupts a required path, restore the saved `/etc/firewalld` directory from the local terminal and run `sudo firewall-cmd --reload`. The permanent fix is a narrow allowance for that path, with the firewall still running.
 
-* [ ] **Reserved IP range excluded from DHCP** — the cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (`GATEWAY_IP` through `LAN_LB_POOL_STOP`, plus `COREDNS_LAN_IP`, in `infrastructure/cluster-config/networking.yaml`; `just preflight` checks them). Confirm your router's DHCP pool doesn't hand these out, and that nothing already answers on them:
+* [ ] **Reserved IP range excluded from DHCP.** The cluster claims `192.0.2.240`–`192.0.2.250` on your LAN by default (`GATEWAY_IP` through `LAN_LB_POOL_STOP`, plus `COREDNS_LAN_IP`, in `infrastructure/cluster-config/networking.yaml`). `just preflight` checks them. Confirm your router's DHCP pool leaves these addresses out, and that every one of them is free:
 
   ```bash
   ping -c 2 -W 1 192.0.2.240
@@ -427,7 +427,7 @@ kubectl cnpg psql postgres-cluster -n databases --tty=false -- \
   -d data_science -c 'SET ROLE app_readwrite' -f - < /mnt/your/mount/path/data_science_backup.sql
 ```
 
-`kubectl cnpg psql` runs `psql` in the primary and passes it the file on stdin. `SET ROLE app_readwrite` runs first in the same session, so every restored object belongs to `app_readwrite`.
+`kubectl cnpg psql` runs `psql` in the primary and passes it the file on stdin. `SET ROLE app_readwrite` runs first in the same session. Every restored object then belongs to `app_readwrite`.
 
 ## Cluster Bootstrap
 
@@ -442,7 +442,7 @@ cd <your-repository>
 
 ### Step 2: Execute Ansible Bootstrap
 
-On a fresh installation with no OpenBao storage claims, Ansible generates a random static seal key automatically. You can optionally supply your own key as `OPENBAO_SEAL_KEY` (or Ansible variable `openbao_seal_key`): 32 random bytes encoded as base64, without a trailing newline. An existing `openbao-seal-key` Secret is reused. If that Secret is lost while storage exists, supply the **original** key; bootstrap refuses to generate a replacement for existing data.
+On a fresh installation, before OpenBao has storage claims, Ansible generates a random static seal key. You can optionally supply your own key as `OPENBAO_SEAL_KEY` (or Ansible variable `openbao_seal_key`): 32 random bytes encoded as base64, without a trailing newline. An existing `openbao-seal-key` Secret is reused. If that Secret is lost while storage exists, supply the **original** key. Bootstrap refuses to generate a replacement for existing data.
 
 Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on, then runs the full setup via the collection's playbook (`dragonbishop.cluster.data_cluster`): k3s, Cilium, cert-manager, trust-manager, OpenBao, `terraform/openbao`, SPIRE and Flux. On a fresh clone, `uv run` first builds `.venv` from `uv.lock`. Idempotent and accepts optional flags (e.g. `--tags`, `--check`, `-v`). When prompted for `BECOME password:`, enter your local user's `sudo` password to allow root-level setup of `/etc/rancher/k3s/` and systemd services.
 
@@ -461,18 +461,18 @@ Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on
 > uv run ansible-playbook dragonbishop.cluster.data_cluster --ask-become-pass
 > ```
 
-### Step 3: Secure OpenBao Credentials & Recovery Keys
+### Step 3: Secure OpenBao Credentials and Recovery Keys
 
 The bootstrap script prompts for an OpenTofu state-encryption passphrase and the Postgres superuser password. At the end of provisioning, it prints the generated seal key and any freshly initialized recovery keys and root token, including when a provisioning task fails.
 
 > [!IMPORTANT]
 > Store the seal key, generated recovery keys and root token in a secure password manager immediately. `generate-root` needs the recovery keys if the root token is lost.
 
-OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`, so `just start` only checks it. Bootstrap preserves an existing Secret. For a missing Secret it uses a supplied key, or generates one only when there are no OpenBao storage claims and the server is not known to be initialized. No GPG files are read or written, and no GPG passphrase or agent configuration is required.
+OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`. `just start` checks that it did. Bootstrap preserves an existing Secret. For a missing Secret it uses a supplied key, or generates one on a fresh installation, before any OpenBao storage claim exists and before the server is initialized. Bootstrap runs without GPG.
 
-An Ansible `always` block reports the available generated credentials even when provisioning fails, and the play still exits with a failure status. No local credential backup is written.
+An Ansible `always` block reports the available generated credentials even when provisioning fails, and the play still exits with a failure status. Bootstrap keeps every credential off the local disk.
 
-For an existing installation, save the current seal key from Secret `openbao-seal-key` in your external store, along with the recovery keys and root token. If the recovery keys exist only in an old `.local/openbao/recovery-keys.gpg` backup, decrypt that backup manually to migrate them. Existing GPG backups are left untouched; remove them yourself after verifying the external copies. Raft snapshots still need their original seal key for recovery.
+For an existing installation, save the current seal key from Secret `openbao-seal-key` in your external store, along with the recovery keys and root token. If an old `.local/openbao/recovery-keys.gpg` backup holds the one copy of the recovery keys, decrypt it by hand to migrate them. Bootstrap leaves existing GPG backups in place. Remove them yourself after verifying the external copies. Raft snapshots need their original seal key for recovery.
 
 ## Flux Dependency Graph
 
@@ -525,8 +525,8 @@ flowchart TD
 * `cnpg-operator` depends on `openbao`, and `databases-plugin` depends on `cnpg-operator`.
 * `hubble` depends on `gateway`.
 * `secrets-store-csi-driver` depends on `cluster-config`.
-* `seaweedfs` depends on `namespaces` and `openbao` and is Ready only after its install hook creates the `cnpg-backups` and `openbao-snapshots` buckets.
-* `openbao-snapshot` depends on `openbao`, `seaweedfs` and `secrets-store-csi-driver`. Its holder pod mounts the S3 key the chart's snapshot agent uploads with, and the key's IAM user exists only once SeaweedFS runs. It can't live in `openbao`, because `seaweedfs` depends on `openbao`.
+* `seaweedfs` depends on `namespaces` and `openbao` and turns Ready after its install hook creates the `cnpg-backups` and `openbao-snapshots` buckets.
+* `openbao-snapshot` depends on `openbao`, `seaweedfs` and `secrets-store-csi-driver`. Its holder pod mounts the S3 key the chart's snapshot agent uploads with, and the key's IAM user exists once SeaweedFS runs. It lives outside `openbao`, because `seaweedfs` depends on `openbao`.
 * `databases-security` depends on `openbao`, which creates the `openbao-selfsigned-bootstrap` issuer that self-signs Postgres's CA.
 * `databases-objectstore` depends on `openbao`, `databases-plugin`, `databases-security`, `seaweedfs` and `secrets-store-csi-driver`. Its objects need the `ObjectStore` CRD, the Job's RBAC and network policy, the `cnpg-backups` bucket and Barman's CSI-mounted key pair.
 * `databases-cluster` depends on `databases-objectstore`, which turns Ready when its `postgres-bootstrap` Job has created the Cluster. It also depends on `gateway`, which its TCPRoute attaches to.
