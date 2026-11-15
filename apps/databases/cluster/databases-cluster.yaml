@@ -23,9 +23,6 @@ spec:
 
   managed:
     roles:
-      # Delete the retired run-history owner after its database is gone.
-      - name: tekton_readwrite
-        ensure: absent
       - name: core_test
         ensure: present
         login: true
