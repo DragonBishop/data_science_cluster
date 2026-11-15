@@ -468,11 +468,11 @@ The bootstrap script prompts for an OpenTofu state-encryption passphrase and the
 > [!IMPORTANT]
 > Store the seal key, generated recovery keys and root token in a secure password manager immediately. `generate-root` needs the recovery keys if the root token is lost.
 
-OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`. `just start` checks that it did. Bootstrap preserves an existing Secret. For a missing Secret it uses a supplied key, or generates one on a fresh installation, before any OpenBao storage claim exists and before the server is initialized. Bootstrap runs without GPG.
+OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`. `just start` checks that it did. Bootstrap preserves an existing Secret. For a missing Secret it uses a supplied key, or generates one on a fresh installation, before any OpenBao storage claim exists and before the server is initialized.
 
 An Ansible `always` block reports the available generated credentials even when provisioning fails, and the play still exits with a failure status. Bootstrap keeps every credential off the local disk.
 
-For an existing installation, save the current seal key from Secret `openbao-seal-key` in your external store, along with the recovery keys and root token. If an old `.local/openbao/recovery-keys.gpg` backup holds the one copy of the recovery keys, decrypt it by hand to migrate them. Bootstrap leaves existing GPG backups in place. Remove them yourself after verifying the external copies. Raft snapshots need their original seal key for recovery.
+For an existing installation, save the current seal key from Secret `openbao-seal-key` in your external store, along with the recovery keys and root token. Raft snapshots need their original seal key for recovery.
 
 ## Flux Dependency Graph
 

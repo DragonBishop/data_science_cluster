@@ -1,8 +1,6 @@
 # OpenBao unseal and key material
-*.gpg
 openbao-keys*
 *-unseal*
-*recovery-keys*
 
 # Local secrets and certs (unseal keyfile, internal CA)
 .local/
