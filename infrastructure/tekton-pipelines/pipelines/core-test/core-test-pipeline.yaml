@@ -51,8 +51,25 @@ spec:
       runAfter: [flux-ready]
       taskRef:
         name: postgres-login
+    - name: postgres-database-applied
+      runAfter: [flux-ready]
+      taskRef:
+        name: postgres-database-applied
+      params:
+        - name: database
+          value: data-science
+        - name: namespace
+          value: databases
+    - name: workloads-ready
+      runAfter: [flux-ready]
+      taskRef:
+        name: workloads-ready
+      matrix:
+        params:
+          - name: kind
+            value: [deployments, statefulsets, daemonsets]
     - name: hubble-drops
-      runAfter: [ca-bundles, spire, flux-mtls, openbao-login, postgres-login]
+      runAfter: [ca-bundles, spire, flux-mtls, openbao-login, postgres-login, postgres-database-applied, workloads-ready]
       taskRef:
         name: hubble-drops
       params:

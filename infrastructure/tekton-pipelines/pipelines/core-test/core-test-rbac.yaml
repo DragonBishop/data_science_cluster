@@ -30,6 +30,54 @@ subjects:
     name: core-test
     namespace: tekton-pipelines
 ---
+# workloads-ready checks the rollout of every Deployment, StatefulSet and DaemonSet
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workloads-ready-role
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workloads-ready-role
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workloads-ready-role
+subjects:
+  - kind: ServiceAccount
+    name: core-test
+    namespace: tekton-pipelines
+---
+# postgres-database-applied waits on the Database
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: postgres-database-applied-role
+  namespace: databases
+rules:
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["databases"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: postgres-database-applied-role
+  namespace: databases
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: postgres-database-applied-role
+subjects:
+  - kind: ServiceAccount
+    name: core-test
+    namespace: tekton-pipelines
+---
 # fetch-source reads the GitRepository, and flux-ready waits on the Kustomizations
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

@@ -1,0 +1,40 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: postgres-database-applied
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: database
+      description: The name of a CNPG Database
+      type: string
+    - name: namespace
+      description: The Database's namespace
+      type: string
+    - name: timeout
+      description: How long kubectl wait may take
+      type: string
+      default: 5m
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+      - name: DATABASE
+        value: $(params.database)
+      - name: NAMESPACE
+        value: $(params.namespace)
+      - name: TIMEOUT
+        value: $(params.timeout)
+  steps:
+    - name: applied
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        if ! kubectl -n "$NAMESPACE" wait database "$DATABASE" --timeout="$TIMEOUT" \
+          --for=jsonpath='{.status.applied}'=true; then
+          kubectl -n "$NAMESPACE" get database "$DATABASE" -o jsonpath='{.status}'
+          exit 1
+        fi

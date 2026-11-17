@@ -7,6 +7,8 @@ resources:
   - flux-ready.yaml
   - hubble-drops.yaml
   - openbao-login.yaml
+  - postgres-database-applied.yaml
   - postgres-login.yaml
   - spire.yaml
   - stepactions
+  - workloads-ready.yaml
