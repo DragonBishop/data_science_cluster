@@ -47,3 +47,24 @@ spec:
         set -eu
         bao login -no-store -token-only -method=cert \
           -client-cert=/svid/svid.pem -client-key=/svid/svid.key name=core-test > /dev/null
+    - name: no-cert-refused
+      image: quay.io/openbao/openbao:${OPENBAO_IMAGE_TAG}
+      env:
+        - name: HOME
+          value: /tmp
+        - name: BAO_ADDR
+          value: https://openbao.openbao.svc.cluster.local:8200
+        - name: BAO_CACERT
+          value: /openbao-ca-bundle/ca.crt
+      volumeMounts:
+        - name: openbao-ca-bundle
+          mountPath: /openbao-ca-bundle
+          readOnly: true
+      script: |
+        #!/bin/sh
+        output=$(bao login -no-store -token-only -method=cert name=core-test 2>&1 > /dev/null)
+        echo "$output"
+        case $output in
+          *"no client certificate found"*) ;;
+          *) exit 1 ;;
+        esac
