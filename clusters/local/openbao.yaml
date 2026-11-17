@@ -3,6 +3,8 @@ kind: Kustomization
 metadata:
   name: openbao
   namespace: flux-system
+  labels:
+    data-cluster/core: "true"
 spec:
   interval: 1h
   retryInterval: 1m
@@ -17,6 +19,17 @@ spec:
   prune: true
   wait: true
   timeout: 3m
+  healthCheckExprs:
+    - apiVersion: cert-manager.io/v1
+      kind: Certificate
+      current: >-
+        status.conditions.exists(cond, cond.type == 'Ready' && cond.status == 'True' &&
+        cond.observedGeneration == metadata.generation)
+    - apiVersion: trust.cert-manager.io/v1alpha1
+      kind: Bundle
+      current: >-
+        status.conditions.exists(cond, cond.type == 'Synced' && cond.status == 'True' &&
+        cond.observedGeneration == metadata.generation)
   postBuild:
     substituteFrom:
       - kind: ConfigMap

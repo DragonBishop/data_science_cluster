@@ -3,6 +3,8 @@ kind: Kustomization
 metadata:
   name: tekton
   namespace: flux-system
+  labels:
+    data-cluster/core: "true"
 spec:
   interval: 1h
   retryInterval: 1m
@@ -16,6 +18,10 @@ spec:
   prune: true
   wait: true
   timeout: 5m
+  healthCheckExprs:
+    - apiVersion: operator.tekton.dev/v1alpha1
+      kind: TektonConfig
+      current: status.conditions.exists(cond, cond.type == 'Ready' && cond.status == 'True')
   postBuild:
     substituteFrom:
       - kind: ConfigMap

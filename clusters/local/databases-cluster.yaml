@@ -3,6 +3,8 @@ kind: Kustomization
 metadata:
   name: databases-cluster
   namespace: flux-system
+  labels:
+    data-cluster/core: "true"
 spec:
   interval: 1h
   retryInterval: 1m
@@ -19,6 +21,22 @@ spec:
   wait: true
   # A recovery replays all archived WAL before the Cluster reports Ready
   timeout: 30m
+  healthCheckExprs:
+    - apiVersion: postgresql.cnpg.io/v1
+      kind: Database
+      current: status.?applied.orValue(false)
+    - apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      current: >-
+        sets.contains(
+        status.conditions.map(cond, cond.status == 'True', cond.type),
+        ['Ready', 'ContinuousArchiving'])
+    - apiVersion: gateway.networking.k8s.io/v1alpha2
+      kind: TCPRoute
+      current: >-
+        status.?parents.orValue([]).exists(parent, sets.contains(
+        parent.conditions.map(cond, cond.status == 'True' && cond.observedGeneration == metadata.generation, cond.type),
+        ['Accepted', 'ResolvedRefs']))
   postBuild:
     substituteFrom:
       - kind: ConfigMap

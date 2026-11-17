@@ -3,6 +3,8 @@ kind: Kustomization
 metadata:
   name: seaweedfs
   namespace: flux-system
+  labels:
+    data-cluster/core: "true"
 spec:
   interval: 1h
   retryInterval: 1m
@@ -18,6 +20,12 @@ spec:
   # Ready only once the HelmRelease's post-install hook has created the backup bucket
   wait: true
   timeout: 5m
+  healthCheckExprs:
+    - apiVersion: cert-manager.io/v1
+      kind: Certificate
+      current: >-
+        status.conditions.exists(cond, cond.type == 'Ready' && cond.status == 'True' &&
+        cond.observedGeneration == metadata.generation)
   postBuild:
     substituteFrom:
       - kind: ConfigMap

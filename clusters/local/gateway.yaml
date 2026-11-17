@@ -3,6 +3,8 @@ kind: Kustomization
 metadata:
   name: gateway
   namespace: flux-system
+  labels:
+    data-cluster/core: "true"
 spec:
   interval: 1h
   retryInterval: 1m
@@ -16,6 +18,18 @@ spec:
   prune: true
   wait: true
   timeout: 3m
+  healthCheckExprs:
+    - apiVersion: cert-manager.io/v1
+      kind: Certificate
+      current: >-
+        status.conditions.exists(cond, cond.type == 'Ready' && cond.status == 'True' &&
+        cond.observedGeneration == metadata.generation)
+    - apiVersion: gateway.networking.k8s.io/v1
+      kind: Gateway
+      current: >-
+        sets.contains(
+        status.conditions.map(cond, cond.status == 'True' && cond.observedGeneration == metadata.generation, cond.type),
+        ['Accepted', 'Programmed'])
   postBuild:
     substituteFrom:
       - kind: ConfigMap
