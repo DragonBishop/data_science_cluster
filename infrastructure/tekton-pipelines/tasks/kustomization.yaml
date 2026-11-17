@@ -2,13 +2,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ca-bundles.yaml
+  - delete-probes.yaml
   - fetch-source.yaml
-  - flux-mtls.yaml
   - flux-ready.yaml
   - hubble-drops.yaml
+  - mtls-required.yaml
   - openbao-login.yaml
   - postgres-database-applied.yaml
   - postgres-login.yaml
   - spire.yaml
   - stepactions
+  - unauthorized-pod-denied.yaml
   - workloads-ready.yaml

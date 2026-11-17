@@ -1,0 +1,22 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: delete-probes
+  namespace: tekton-pipelines
+spec:
+  steps:
+    - name: deleted
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      securityContext:
+        runAsUser: 65532
+      env:
+        - name: HOME
+          value: /tmp
+      command:
+        - kubectl
+      args:
+        - delete
+        - pods
+        - --namespace=tekton-pipelines
+        - --selector=core-test/probe
+        - --wait=false

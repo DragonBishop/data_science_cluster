@@ -1,0 +1,24 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: mtls-required
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: url
+      description: An HTTPS URL whose server must refuse a client without a certificate
+      type: string
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+  steps:
+    - name: certificate-required
+      env:
+        - name: URL
+          value: $(params.url)
+      script: |
+        #!/usr/bin/env bash
+        output=$(curl --insecure --silent --show-error --max-time 10 --tlsv1.3 "$URL" 2>&1)
+        echo "$output"
+        [[ $output == *"alert certificate required"* ]]

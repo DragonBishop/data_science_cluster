@@ -27,8 +27,6 @@ spec:
       taskRef:
         name: flux-ready
       params:
-        - name: selector
-          value: data-cluster/core=true
         - name: revision
           value: $(tasks.fetch-source.results.revision)
     - name: ca-bundles
@@ -39,10 +37,19 @@ spec:
       runAfter: [flux-ready]
       taskRef:
         name: spire
-    - name: flux-mtls
+    - name: mtls-required
       runAfter: [flux-ready]
       taskRef:
-        name: flux-mtls
+        name: mtls-required
+      matrix:
+        params:
+          - name: url
+            value:
+              - https://source-controller.flux-system.svc.cluster.local./
+              - https://notification-controller.flux-system.svc.cluster.local./
+              - https://seaweedfs-master.seaweedfs.svc.cluster.local:19333/
+              - https://seaweedfs-filer.seaweedfs.svc.cluster.local:18888/
+              - https://seaweedfs-volume.seaweedfs.svc.cluster.local:18080/
     - name: openbao-login
       runAfter: [flux-ready]
       taskRef:
@@ -69,7 +76,7 @@ spec:
           - name: kind
             value: [deployments, statefulsets, daemonsets]
     - name: hubble-drops
-      runAfter: [ca-bundles, spire, flux-mtls, openbao-login, postgres-login, postgres-database-applied, workloads-ready]
+      runAfter: [ca-bundles, spire, mtls-required, openbao-login, postgres-login, postgres-database-applied, workloads-ready]
       taskRef:
         name: hubble-drops
       params:
@@ -79,3 +86,21 @@ spec:
             tekton-operator tekton tekton-triggers tekton-pipelines
         - name: since
           value: $(tasks.fetch-source.results.started-at)
+    - name: unauthorized-pod-denied
+      runAfter: [hubble-drops]
+      taskRef:
+        name: unauthorized-pod-denied
+      params:
+        - name: since
+          value: $(tasks.fetch-source.results.started-at)
+      matrix:
+        params:
+          - name: target
+            value:
+              - openbao.openbao.svc.cluster.local:8200
+              - postgres-cluster-rw.databases.svc.cluster.local:5432
+              - seaweedfs-s3.seaweedfs.svc.cluster.local:9000
+  finally:
+    - name: delete-probes
+      taskRef:
+        name: delete-probes
