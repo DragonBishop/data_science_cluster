@@ -1,3 +1,9 @@
+## [2.7.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.6.0...v2.7.0) - 2026-11-17
+
+### 📚 Documentation
+
+- *(openbao)* Remove the retired GPG recovery-key backup ([b63758d](https://github.com/DragonBishop/data_science_cluster/commit/b63758d14159fe3e07910a4b3f34ac6dff42b302))
+
 ## [2.6.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.5.0...v2.6.0) - 2026-11-14
 
 ### 🚀 Features
