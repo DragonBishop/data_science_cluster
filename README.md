@@ -133,7 +133,7 @@ The **Tekton Operator** installs **Tekton Pipelines** and **Tekton Triggers**, w
 
 | Component | Version | Description |
 | --- | --- | --- |
-| `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, Gateway TLS, OpenBao, a dynamic database login, backups and Hubble drops. |
+| `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core after every change Flux applies to it from `main`: Flux, workloads, CA bundles, SPIRE identities, servers that refuse clients without a certificate, OpenBao and PostgreSQL logins, network policies that drop unauthorized pods, and Hubble drops. |
 | Tekton Operator | `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator --> | Installs Pipelines, Triggers and the pruner from one `TektonConfig`. |
 | Tekton Pipelines | `v1.15.3` (via Tekton Operator `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. |
 | Tekton Triggers | `v0.37.1` (via Tekton Operator `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | The `flux-events` EventListener (planned for 3.0) turns events from Flux's notification-controller into PipelineRuns. A merge to `main` then starts `core-test`. |

@@ -236,7 +236,6 @@ The directory tree of this repository, then what each directory and file does.
 │   ├── tekton-pipelines/                # Pipelines and Tasks, and the runs they start
 │   │   ├── kustomization.yaml
 │   │   ├── tekton-pipelines-networkpolicy.yaml
-│   │   ├── tekton-pipelines-rbac.yaml
 │   │   ├── tekton-pipelines-tls.yaml
 │   │   ├── pipelines/                   # one folder per Pipeline, with its ServiceAccount and RBAC
 │   │   │   ├── kustomization.yaml
@@ -247,17 +246,21 @@ The directory tree of this repository, then what each directory and file does.
 │   │   │       └── kustomization.yaml
 │   │   └── tasks/                       # reusable Task definitions
 │   │       ├── ca-bundles.yaml
+│   │       ├── delete-probes.yaml
 │   │       ├── fetch-source.yaml
-│   │       ├── flux-mtls.yaml
 │   │       ├── flux-ready.yaml
 │   │       ├── hubble-drops.yaml
 │   │       ├── kustomization.yaml
+│   │       ├── mtls-required.yaml
 │   │       ├── openbao-login.yaml
+│   │       ├── postgres-database-applied.yaml
 │   │       ├── postgres-login.yaml
 │   │       ├── spire.yaml
-│   │       └── stepactions/             # reusable StepAction definitions
-│   │           ├── fetch-svid.yaml
-│   │           └── kustomization.yaml
+│   │       ├── stepactions/             # reusable StepAction definitions
+│   │       │   ├── fetch-svid.yaml
+│   │       │   └── kustomization.yaml
+│   │       ├── unauthorized-pod-denied.yaml
+│   │       └── workloads-ready.yaml
 │   ├── tekton-operator/
 │   │   ├── kustomization.yaml
 │   │   └── tekton-operator-release.yaml
@@ -348,7 +351,7 @@ The directory tree of this repository, then what each directory and file does.
     * **`databases-backups.yaml`**: The `ObjectStore` for WAL archiving and base backups at `https://seaweedfs-s3.seaweedfs.svc:9000`, verified against ConfigMap `openbao-root-ca`, and the `ScheduledBackup` of `postgres-cluster`. Job `postgres-bootstrap` creates `postgres-cluster` once, with `bootstrap.recovery` when Barman finds a completed base backup in the archive and `bootstrap.initdb` when the archive is empty. ConfigMap `postgres-bootstrap-patches` holds those two bootstrap sections.
     * **`databases-credentials.yaml`**: Deployment `barman-s3-credentials` and its `SecretProviderClass`, which deliver Barman's S3 key pair. The Deployment's one `pause` container holds the CSI mount for the CNPG pods, logging in as `barman-s3-role`. The CSI driver mirrors the key pair from `seaweedfs/creds/barman` into Secret `barman-s3-credentials`, which the `ObjectStore` reads.
   * **`cluster/`**: The Flux `Kustomization` `databases-cluster` (`clusters/local/databases-cluster.yaml`), applied after `databases-objectstore`. It holds the Cluster and the objects that need it running.
-    * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster` and its recovery source `postgres-backup-store`.
+    * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster`, its recovery source `postgres-backup-store`, and its `pg_hba` rules: `core_test` logs in with its SVID, and every connection without TLS is rejected.
     * **`databases.yaml`**: The CNPG `Database` resource for `data_science`, with its schemas and PostGIS extensions.
     * **`databases-localhost.yaml`**: A `CiliumLocalRedirectPolicy` that redirects `127.0.0.1:5432` on the node to the CNPG primary pod through eBPF, selected by CNPG's `instanceRole` label.
     * **`databases-route.yaml`**: A `TCPRoute` that attaches the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
@@ -392,7 +395,7 @@ The directory tree of this repository, then what each directory and file does.
   * **`cert-manager/`**: `cert-manager-release.yaml`, `cert-manager-values.yaml` (the Helm values the `cert_manager` role and the HelmRelease share, through ConfigMap `cert-manager-values`), `kustomization.yaml`
   * **`cilium/`**: `cilium-lan.yaml` (LAN LoadBalancer IP pool and L2 announcements), `cilium-release.yaml`, `cilium-values.yaml`, `cilium-clusterwide-networkpolicy.yaml` (the cluster's one policy file), `coredns-config.yaml` and `coredns-lan-service.yaml` (internal zone on CoreDNS), `kube-system-networkpolicy.yaml` (`kube-system`'s policy file), `kustomization.yaml`
   * **`cluster-config/`**: `cluster-config.yaml` (empty base), `kustomization.yaml`, and one fragment per kind of value: `certificates.yaml`, `cpu-memory.yaml`, `databases.yaml`, `networking.yaml`, `replicas.yaml`, `retention.yaml`, `schedules.yaml`, `storage.yaml`, `timeouts.yaml`, `versions.yaml` (centralized configuration ConfigMap)
-  * **`cnpg-operator/`**: `cnpg-operator-release.yaml`, `kustomization.yaml`
+  * **`cnpg-operator/`**: `cnpg-operator-release.yaml`, `kustomization.yaml`. The chart's `rbac.aggregateClusterRoles` adds read access to CNPG objects to the built-in `view` ClusterRole.
   * **`gateway/`**: `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
   * **`gateway-api-crds/`**: `kustomization.yaml`, `standard-install.yaml` (vendored Gateway API CRDs)
   * **`hubble/`**: `hubble-localhost.yaml`, `hubble-values.yaml`, `kustomization.yaml`
@@ -404,8 +407,28 @@ The directory tree of this repository, then what each directory and file does.
   * **`tekton/`**: The `TektonConfig` installs Pipelines and Triggers into `tekton`. Tasks, Pipelines and their runs go in `tekton-pipelines`.
     * **`tekton-config.yaml`**: The `TektonConfig` configures Pipelines, Triggers and the run pruner.
     * **`tekton-networkpolicy.yaml`**: `tekton`'s policy file, which lets the remote resolvers reach their source hosts.
-  * **`tekton-pipelines/`**: `kustomization.yaml`, `tekton-pipelines-networkpolicy.yaml` (`tekton-pipelines`' policy file, which lets TaskRun pods reach their source hosts) and `tekton-pipelines-rbac.yaml` (Role `tekton-pipelines-role` in `flux-system`, read access to Kustomizations and GitRepositories that each Pipeline binds with its own RoleBinding) and `tekton-pipelines-tls.yaml` (Certificate `hubble-client-cert` from `openbao-pki-issuer`, the client certificate Hubble Relay requires, and ConfigMap `spiffe-helper`, where Tasks that log in with an SVID have spiffe-helper write it), applied by the `tekton-pipelines` Kustomization. Pipeline folders in `pipelines/`, one per Pipeline with its ServiceAccount and RBAC, and reusable Task definitions in `tasks/`, applied by the `tekton-tasks` Kustomization. `ca-bundles.yaml` checks every labelled namespace's CA ConfigMaps and the OpenBao, SeaweedFS and Postgres certificates against them, one check per step. `flux-mtls.yaml` checks that source-controller and notification-controller refuse a client without an SVID. `spire.yaml` checks that a `tekton-pipelines` pod no ClusterSPIFFEID selects gets no SVID. `fetch-source.yaml` records its start time, reads a GitRepository's URL and the given Flux revision (or the GitRepository's stored one when none is given) and clones that commit into the `source` workspace with the `git-clone` StepAction, which the git resolver fetches from `tektoncd-catalog/git-clone`. It returns the revision and the start time. `flux-ready.yaml` waits until every Kustomization a label selector picks has applied a given Flux revision and is Ready. `hubble-drops.yaml` checks through Hubble Relay that every node is connected and that Hubble holds no dropped flow in the given namespaces since the given time. `openbao-login.yaml` fetches the pod's SVID with the `fetch-svid` StepAction and logs in to OpenBao's `core-test` cert role without storing the token. `postgres-login.yaml` fetches the SVID the same way and logs in to PostgreSQL as `core_test` over `verify-full` TLS. `stepactions/` holds StepActions that Tasks share, also applied by `tekton-tasks`: `fetch-svid.yaml` writes the pod's SVID, key and trust bundle to the Task's `svid` volume with spiffe-helper, retrying until SPIRE issues them.
-    * **`pipelines/core-test/`**: The `core-test` Pipeline, which checks the core at the Flux revision in its `revision` param, or the GitRepository's stored revision when the param is empty. `core-test-pipeline.yaml` calls its tasks, `fetch-source` first, then `flux-ready` on every `data-cluster/core` Kustomization at that revision, then `ca-bundles`, `spire`, `flux-mtls`, `openbao-login` and `postgres-login`, and last `hubble-drops` on every core namespace since `fetch-source` started. `core-test-rbac.yaml` holds the `core-test` ServiceAccount and the access each task needs, including its RoleBinding to `tekton-pipelines-role`. `core-test-run.yaml` starts a run by hand with `kubectl create -f` and gives each run its own `source` volume from a `volumeClaimTemplate`, deleted with the PipelineRun.
+  * **`tekton-pipelines/`**: The Flux `Kustomization` `tekton-pipelines` (`clusters/local/tekton-pipelines.yaml`). It holds the namespace's policy and TLS files and one folder per Pipeline, each with its ServiceAccount and RBAC.
+    * **`tekton-pipelines-networkpolicy.yaml`**: `tekton-pipelines`' policy file, which lets TaskRun pods reach their source hosts.
+    * **`tekton-pipelines-tls.yaml`**: Certificate `hubble-client-cert` from `openbao-pki-issuer`, the client certificate Hubble Relay requires, and ConfigMap `spiffe-helper`, where Tasks that log in with an SVID have spiffe-helper write it.
+    * **`pipelines/core-test/`**: The `core-test` Pipeline, its RBAC and its hand-run PipelineRun.
+      * **`core-test-pipeline.yaml`**: The `core-test` Pipeline, which checks the live core at the Flux revision in its `revision` param, or the GitRepository's stored revision when the param is empty.
+      * **`core-test-rbac.yaml`**: The `core-test` ServiceAccount, ClusterRoleBinding `core-test-view` to the built-in `view` ClusterRole for its reads, and Role and RoleBinding `core-test-role` in `tekton-pipelines`, which let it create and delete its probe pods.
+      * **`core-test-run.yaml`**: Starts a run by hand with `kubectl create -f` and gives each run its own `source` volume from a `volumeClaimTemplate`, deleted with the PipelineRun.
+    * **`tasks/`**: The Tasks that Pipelines share, applied by the Flux `Kustomization` `tekton-tasks` (`clusters/local/tekton-tasks.yaml`).
+      * **`ca-bundles.yaml`**: Checks every labelled namespace's CA ConfigMaps and the OpenBao, SeaweedFS and Postgres certificates against them, one check per step.
+      * **`delete-probes.yaml`**: Deletes every `core-test/probe` pod in `tekton-pipelines`.
+      * **`fetch-source.yaml`**: Records its start time, reads a GitRepository's URL and the given Flux revision (or the GitRepository's stored one when none is given) and clones that commit into the `source` workspace with the `git-clone` StepAction, which the git resolver fetches from `tektoncd-catalog/git-clone`. It returns the revision and the start time.
+      * **`flux-ready.yaml`**: Waits until every Kustomization in `flux-system` has applied a given Flux revision and is Ready.
+      * **`hubble-drops.yaml`**: Checks through Hubble Relay that every node is connected and that Hubble holds no dropped flow in the given namespaces since the given time.
+      * **`mtls-required.yaml`**: Checks that the server at a given URL refuses a client without a certificate.
+      * **`openbao-login.yaml`**: Fetches the pod's SVID with the `fetch-svid` StepAction and logs in to OpenBao's `core-test` cert role without storing the token, then checks that OpenBao refuses the same login without a client certificate.
+      * **`postgres-database-applied.yaml`**: Waits until CNPG reports that a given Database is applied, with its database, schemas and extensions created.
+      * **`postgres-login.yaml`**: Fetches the SVID the same way and logs in to PostgreSQL as `core_test` over `verify-full` TLS, then checks that PostgreSQL refuses `core_test` without a client certificate and refuses a connection without TLS.
+      * **`spire.yaml`**: Checks that a `tekton-pipelines` pod no ClusterSPIFFEID selects gets no SVID.
+      * **`unauthorized-pod-denied.yaml`**: Starts a probe pod, labelled `core-test/probe`, that the destination's network policy does not allow. The pod tries to connect to a given host and port, and the Task checks through Hubble Relay that Cilium dropped the connection with reason `POLICY_DENIED`.
+      * **`workloads-ready.yaml`**: Checks with `kubectl rollout status` that every object of a given workload kind, in every namespace, has rolled out and is ready, naming each one.
+      * **`stepactions/`**: The StepActions that Tasks share, also applied by `tekton-tasks`.
+        * **`fetch-svid.yaml`**: Writes the pod's SVID, key and trust bundle to the Task's `svid` volume with spiffe-helper, retrying until SPIRE issues them.
   * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`. The Tekton Operator in the `tekton-operator` namespace. It is its own Kustomization so the `TektonConfig` CRD exists before `tekton` applies one.
   * **`trust-manager/`**: `kustomization.yaml`, `trust-manager-release.yaml`, `trust-manager-values.yaml` (the Helm values the `trust_manager` role and the HelmRelease share, through ConfigMap `trust-manager-values`). trust-manager in `cert-manager`, which copies CA certificates from Secrets there into ConfigMaps and Secrets in every namespace labelled `data-cluster/ca-bundles`.
 * **`src/`**
