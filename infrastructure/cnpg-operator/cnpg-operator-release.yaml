@@ -16,6 +16,9 @@ spec:
   driftDetection:
     mode: enabled
   values:
+    rbac:
+      # Adds CNPG read access to the built-in view ClusterRole
+      aggregateClusterRoles: true
     resources:
       requests:
         cpu: ${CNPG_CPU_REQUEST}
