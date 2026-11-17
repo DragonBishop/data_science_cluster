@@ -1,4 +1,6 @@
 global:
+  installAndUpgradeHooks:
+    enabled: false
   spire:
     trustDomain: cluster.internal
     clusterName: data-science-cluster

@@ -6,6 +6,8 @@ metadata:
   namespace: cert-manager
 spec:
   interval: 1h
+  driftDetection:
+    mode: enabled
   releaseName: trust-manager
   chart:
     spec:

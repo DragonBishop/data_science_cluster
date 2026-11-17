@@ -4,6 +4,8 @@ metadata:
   name: plugin-barman-cloud
   namespace: cnpg-system
 spec:
+  driftDetection:
+    mode: enabled
   values:
     resources:
       requests:

@@ -13,6 +13,8 @@ metadata:
   name: cnpg
   namespace: cnpg-system
 spec:
+  driftDetection:
+    mode: enabled
   values:
     resources:
       requests:
