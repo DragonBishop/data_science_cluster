@@ -9,7 +9,15 @@ spec:
       csi:
         driver: csi.spiffe.io
         readOnly: true
+  stepTemplate:
+    securityContext:
+      runAsUser: 65532
   steps:
+    - name: wait-for-entry-sync
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      script: |
+        #!/usr/bin/env bash
+        sleep 30
     - name: fetch-identity
       image: ghcr.io/spiffe/spire-agent:${SPIRE_AGENT_IMAGE_TAG}
       onError: continue
@@ -26,20 +34,12 @@ spec:
         - -socketPath
         - /spiffe-workload-api/spire-agent.sock
         - -timeout
-        - 10s
+        - 30s
     - name: no-identity
       image: alpine/k8s:${ALPINE_K8S_VERSION}
-      securityContext:
-        runAsUser: 65532
       script: |
         #!/usr/bin/env bash
         set -eu
         exit_code=$(cat $(steps.step-fetch-identity.exitCode.path))
-        if [ "$exit_code" -eq 0 ]; then
-          echo "FAIL: SPIRE issued an identity to the spire task's pod, which neither the flux-controllers nor the core-test ClusterSPIFFEID selects."
-          echo "Run kubectl get clusterspiffeids"
-          echo "Check spire-values.yaml sets spire-server.controllerManager.identities.clusterSPIFFEIDs.default.enabled to false"
-          exit 1
-        else
-          echo "fetch-identity exit code: $exit_code"
-        fi
+        echo "fetch-identity exit code: $exit_code"
+        [[ $exit_code != 0 ]]

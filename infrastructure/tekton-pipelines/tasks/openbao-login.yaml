@@ -25,6 +25,7 @@ spec:
     - name: fetch-svid
       ref:
         name: fetch-svid
+      timeout: 90s
     - name: cert-login
       image: quay.io/openbao/openbao:${OPENBAO_IMAGE_TAG}
       env:

@@ -31,7 +31,7 @@ spec:
       script: |
         #!/usr/bin/env bash
         set -eu
-        date -u +%Y-%m-%dT%H:%M:%SZ > "$(results.started-at.path)"
+        printf '%s' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$(results.started-at.path)"
 
     - name: read-repository
       env:
