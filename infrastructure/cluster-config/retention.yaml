@@ -5,6 +5,7 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
+  HUBBLE_EVENT_BUFFER_CAPACITY: "16383"
   OPENBAO_SNAPSHOT_RETENTION_DAYS: "1"
   POSTGRES_BACKUP_RETENTION: "4d"
   TEKTON_PRUNER_KEEP: "100"
