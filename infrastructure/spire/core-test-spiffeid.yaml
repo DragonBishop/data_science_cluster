@@ -19,5 +19,5 @@ spec:
       - key: tekton.dev/pipelineTask
         operator: In
         values:
-          - openbao
+          - openbao-login
           - postgres-login

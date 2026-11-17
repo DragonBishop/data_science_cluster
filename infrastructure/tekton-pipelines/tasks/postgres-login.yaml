@@ -1,0 +1,58 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: postgres-login
+  namespace: tekton-pipelines
+spec:
+  volumes:
+    - name: spiffe-workload-api
+      csi:
+        driver: csi.spiffe.io
+        readOnly: true
+    - name: svid
+      emptyDir:
+        medium: Memory
+    - name: spiffe-helper
+      configMap:
+        name: spiffe-helper
+    - name: postgres-ca
+      configMap:
+        name: postgres-ca
+  stepTemplate:
+    securityContext:
+      runAsUser: 65532
+  steps:
+    - name: fetch-svid
+      ref:
+        name: fetch-svid
+    - name: cert-login
+      image: ghcr.io/cloudnative-pg/postgis:${POSTGIS_IMAGE_TAG}
+      env:
+        - name: HOME
+          value: /tmp
+        - name: PGHOST
+          value: postgres-cluster-rw.databases.svc.cluster.local
+        - name: PGDATABASE
+          value: ${DATA_SCIENCE_DB_NAME}
+        - name: PGUSER
+          value: core_test
+        - name: PGSSLMODE
+          value: verify-full
+        - name: PGSSLROOTCERT
+          value: /postgres-ca/ca.crt
+        - name: PGSSLCERT
+          value: /svid/svid.pem
+        - name: PGSSLKEY
+          value: /svid/svid.key
+      volumeMounts:
+        - name: svid
+          mountPath: /svid
+          readOnly: true
+        - name: postgres-ca
+          mountPath: /postgres-ca
+          readOnly: true
+      command:
+        - psql
+      args:
+        - --command
+        - SELECT current_user

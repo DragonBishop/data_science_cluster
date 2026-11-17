@@ -1,0 +1,38 @@
+apiVersion: tekton.dev/v1beta1
+kind: StepAction
+metadata:
+  name: fetch-svid
+  namespace: tekton-pipelines
+spec:
+  description: >-
+    Writes the pod's X.509 SVID (svid.pem), key (svid.key) and trust bundle (bundle.pem) to /svid with spiffe-helper,
+    retrying until SPIRE issues them.
+  params:
+    - name: workload-api-volume
+      description: The Task's volume from CSI driver csi.spiffe.io
+      type: string
+      default: spiffe-workload-api
+    - name: config-volume
+      description: The Task's volume from ConfigMap spiffe-helper
+      type: string
+      default: spiffe-helper
+    - name: svid-volume
+      description: The Task's volume that receives the SVID files
+      type: string
+      default: svid
+  image: ghcr.io/spiffe/spiffe-helper:${SPIFFE_HELPER_VERSION}
+  securityContext:
+    runAsUser: 65532
+  volumeMounts:
+    - name: $(params.workload-api-volume)
+      mountPath: /spiffe-workload-api
+      readOnly: true
+    - name: $(params.config-volume)
+      mountPath: /etc/spiffe-helper
+      readOnly: true
+    - name: $(params.svid-volume)
+      mountPath: /svid
+  args:
+    - -config
+    - /etc/spiffe-helper/helper.conf
+    - -daemon-mode=false
