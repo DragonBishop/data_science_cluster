@@ -239,6 +239,10 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
   * **What's happening:** Superuser credential refreshes reload automatically. `postgres-superuser-credentials` carries a permanent `cnpg.io/reload=true` label, written by the `opentofu` role's `tasks/secrets.yml`, and CNPG picks up the new Secret.
   * **How to fix it:** For the superuser password, update `database/config/postgres-cluster` in OpenBao (via `terraform/openbao/database.tf`). If a refresh stays unapplied, confirm the `cnpg.io/reload=true` label is present on the Secret (`kubectl get secret postgres-superuser-credentials -n databases --show-labels`) before assuming it needs to be reapplied by hand.
 
+* **A client is rejected with `pg_hba.conf rejects connection ... no encryption`**
+  * **What's happening:** The client connected without TLS. PostgreSQL rejects every connection without TLS ([Access Policy](ACCESSPOLICY.md#postgresql-administration)).
+  * **How to fix it:** Turn SSL on in the client's connection settings, with `sslmode=verify-full` and the `postgres-ca` certificate.
+
 * **Database connections fail with a hostname mismatch when using `sslmode=verify-full`**
   * **What's happening:** The name used to connect is not in the certificate.
   * **How to fix it:** Check `dnsNames` and `ipAddresses` in `apps/databases/security/databases-tls.yaml`. The certificate covers `postgres-cluster-rw`, `-ro` and `-r` in short and fully qualified forms, `localhost`, `127.0.0.1`, `databases.cluster.internal` and the shared Gateway's LAN IP. When you add a name there, cert-manager reissues the certificate through `postgres-ca-issuer`.

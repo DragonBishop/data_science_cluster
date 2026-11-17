@@ -8,33 +8,71 @@ spec:
     - name: repository
       description: A GitRepository name in flux-system
       type: string
+    - name: revision
+      description: The Flux revision to test, <branch>@sha1:<sha>; empty reads the GitRepository's stored artifact
+      type: string
+      default: ""
   workspaces:
     - name: source
   results:
-    - name: commit
-      type: string    # name, type; a step writes $(results.<name>.path)
-    - name: started_at
+    - name: revision
       type: string
+    - name: started-at
+      type: string
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
   steps:
-    - name: record_time
-      image: alpine/k8s:${ALPINE_K8S_VERSION}
-      workingDir: $(workspaces.source.path)
+    - name: record-start
       script: |
         #!/usr/bin/env bash
-        set -euo pipefail
-        started_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-        printf '%s' "$started_at" > "$(results.started_at.path)"
+        set -eu
+        printf '%s' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$(results.started-at.path)"
 
-    - name: fetch
-      image: alpine/k8s
-      workingDir: $(workspaces.source.path)
+    - name: read-repository
       env:
         - name: REPOSITORY
           value: $(params.repository)
+        - name: REQUESTED_REVISION
+          value: $(params.revision)
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
-        kubectl -n flux-system get gitrepository "$REPOSITORY" -o jsonpath=' \
-        {.status.artifact.url}{\n} \
-        {.status.artifact.revision}{\n} \
-        {.status.conditions[?(@.type=="Ready")].message}{"\n"}'
+        kubectl -n flux-system get gitrepository "$REPOSITORY" -o jsonpath='{.spec.url}' > "$(step.results.url.path)"
+        tested_revision=$REQUESTED_REVISION
+        if [[ -z $tested_revision ]]; then
+          tested_revision=$(kubectl -n flux-system get gitrepository "$REPOSITORY" -o jsonpath='{.status.artifact.revision}')
+        fi
+        if [[ -z $tested_revision ]]; then
+          kubectl -n flux-system get gitrepository "$REPOSITORY" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}'
+          exit 1
+        fi
+        printf '%s' "$tested_revision" > "$(results.revision.path)"
+        printf '%s' "$${tested_revision##*:}" > "$(step.results.sha.path)"
+      results:
+        - name: url
+          type: string
+        - name: sha
+          type: string
+
+    - name: git-clone
+      ref:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/tektoncd-catalog/git-clone.git
+          - name: revision
+            value: v1.7.1
+          - name: pathInRepo
+            value: stepaction/git-clone/git-clone.yaml
+      params:
+        - name: url
+          value: $(steps.read-repository.results.url)
+        - name: revision
+          value: $(steps.read-repository.results.sha)
+        - name: output-path
+          value: $(workspaces.source.path)

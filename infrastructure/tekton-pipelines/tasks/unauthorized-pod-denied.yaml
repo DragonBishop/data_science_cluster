@@ -1,0 +1,65 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: unauthorized-pod-denied
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: target
+      description: A host:port that must refuse a tekton-pipelines pod its network policy does not allow
+      type: string
+    - name: since
+      description: An RFC 3339 time before the probe pod starts
+      type: string
+  volumes:
+    - name: hubble-client-cert
+      secret:
+        secretName: hubble-client-cert
+  stepTemplate:
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+      - name: TARGET
+        value: $(params.target)
+      - name: PROBE
+        value: $(context.taskRun.name)-probe
+  steps:
+    - name: probe
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        kubectl run "$PROBE" --namespace tekton-pipelines --restart=Never \
+          --image=alpine/k8s:${ALPINE_K8S_VERSION} --labels=core-test/probe=unauthorized-pod-denied \
+          --command -- curl --silent --show-error --max-time 5 "telnet://$TARGET"
+        kubectl wait "pod/$PROBE" --namespace tekton-pipelines --for=jsonpath='{.status.phase}'=Failed --timeout=2m
+    - name: policy-denied
+      image: quay.io/cilium/cilium:v${CILIUM_VERSION}
+      env:
+        - name: SINCE
+          value: $(params.since)
+        - name: HUBBLE_SERVER
+          value: hubble-relay.kube-system.svc.cluster.local:443
+        - name: HUBBLE_TLS
+          value: "true"
+        - name: HUBBLE_TLS_SERVER_NAME
+          value: relay.hubble-relay.cilium.io
+        - name: HUBBLE_TLS_CA_CERT_FILES
+          value: /hubble-client-cert/ca.crt
+        - name: HUBBLE_TLS_CLIENT_CERT_FILE
+          value: /hubble-client-cert/tls.crt
+        - name: HUBBLE_TLS_CLIENT_KEY_FILE
+          value: /hubble-client-cert/tls.key
+      volumeMounts:
+        - name: hubble-client-cert
+          mountPath: /hubble-client-cert
+          readOnly: true
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        flows=$(hubble observe --since "$SINCE" --from-pod "tekton-pipelines/$PROBE" --to-port "$${TARGET##*:}" \
+          --verdict DROPPED --drop-reason-desc POLICY_DENIED -o compact)
+        echo "$flows"
+        [[ -n $flows ]]

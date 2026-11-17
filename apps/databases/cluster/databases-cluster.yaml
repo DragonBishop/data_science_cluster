@@ -32,6 +32,7 @@ spec:
   postgresql:
     pg_hba:
       - hostssl all core_test all cert map=spiffe
+      - hostnossl all all all reject
     pg_ident:
       - spiffe core-test.spiffe core_test
 

@@ -35,6 +35,8 @@ data:
   SEAWEEDFS_VERSION: "4.52.0"
   # renovate: datasource=helm depName=secrets-store-csi-driver registryUrl=https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
   SECRETS_STORE_CSI_DRIVER_VERSION: "1.6.2"
+  # renovate: datasource=docker depName=ghcr.io/spiffe/spiffe-helper
+  SPIFFE_HELPER_VERSION: "0.12.3"
   # renovate: datasource=github-releases depName=spiffe/spire extractVersion=^v(?<version>.+)$
   SPIRE_AGENT_IMAGE_TAG: "1.16.0"
   # renovate: datasource=helm depName=spire-crds registryUrl=https://spiffe.github.io/helm-charts-hardened

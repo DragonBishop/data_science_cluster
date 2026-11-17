@@ -1,0 +1,41 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: workloads-ready
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: kind
+      description: A workload kind kubectl rollout status accepts, deployments, statefulsets or daemonsets
+      type: string
+    - name: timeout
+      description: How long kubectl rollout status may take for each object
+      type: string
+      default: 5m
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+      - name: KIND
+        value: $(params.kind)
+      - name: TIMEOUT
+        value: $(params.timeout)
+  steps:
+    - name: rolled-out
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        objects=$(kubectl get "$KIND" --all-namespaces --no-headers \
+          -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name)
+        [[ -n $objects ]]
+        failed=0
+        while read -r namespace name; do
+          echo "$namespace/$name"
+          if ! kubectl -n "$namespace" rollout status "$KIND/$name" --timeout="$TIMEOUT"; then
+            failed=1
+          fi
+        done <<< "$objects"
+        exit "$failed"

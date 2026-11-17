@@ -13,6 +13,8 @@ metadata:
   name: spire-crds
   namespace: spire
 spec:
+  driftDetection:
+    mode: enabled
   interval: 1h
   releaseName: spire-crds
   chart:
@@ -36,6 +38,8 @@ metadata:
   name:  spire
   namespace: spire
 spec:
+  driftDetection:
+    mode: enabled
   interval: 1h
   releaseName: spire
   chart:

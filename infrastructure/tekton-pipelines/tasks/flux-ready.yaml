@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: flux-ready
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: revision
+      description: The Flux revision every Kustomization must have applied, <branch>@sha1:<sha>
+      type: string
+    - name: timeout
+      description: How long each kubectl wait may take
+      type: string
+      default: 30m
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+      - name: REVISION
+        value: $(params.revision)
+      - name: TIMEOUT
+        value: $(params.timeout)
+  steps:
+    - name: revision-applied
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        if ! kubectl -n flux-system wait kustomization --all --timeout="$TIMEOUT" \
+          --for=jsonpath="{.status.lastAppliedRevision}=$REVISION"; then
+          kubectl -n flux-system get kustomization
+          exit 1
+        fi
+    - name: ready
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        if ! kubectl -n flux-system wait kustomization --all --timeout="$TIMEOUT" --for=condition=Ready; then
+          kubectl -n flux-system get kustomization
+          exit 1
+        fi

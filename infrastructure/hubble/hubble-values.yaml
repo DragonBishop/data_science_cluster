@@ -1,5 +1,6 @@
 # Cilium Helm values for Hubble Relay
 hubble:
+  eventBufferCapacity: "${HUBBLE_EVENT_BUFFER_CAPACITY}"
   relay:
     resources:
       requests:

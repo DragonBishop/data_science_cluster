@@ -18,6 +18,8 @@ metadata:
   name: tekton-operator
   namespace: tekton-operator
 spec:
+  driftDetection:
+    mode: enabled
   interval: 1h
   releaseName: tekton-operator
   chartRef:

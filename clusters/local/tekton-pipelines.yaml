@@ -9,6 +9,8 @@ spec:
   dependsOn:
     - name: tekton
     - name: cluster-config
+    # hubble-client-cert comes from openbao-pki-issuer
+    - name: openbao
   sourceRef:
     kind: GitRepository
     name: flux-system

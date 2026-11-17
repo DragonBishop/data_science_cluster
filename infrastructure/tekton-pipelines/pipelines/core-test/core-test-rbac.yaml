@@ -4,27 +4,40 @@ metadata:
   name: core-test
   namespace: tekton-pipelines
 ---
-# ca-bundles reads the CA ConfigMaps in every labelled namespace
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: core-test-ca-bundles
-rules:
-  - apiGroups: [""]
-    resources: ["namespaces"]
-    verbs: ["list"]
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get"]
----
+# core-test reads cluster state through the built-in view ClusterRole, which excludes Secrets
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: core-test-ca-bundles
+  name: core-test-view
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: core-test-ca-bundles
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: core-test
+    namespace: tekton-pipelines
+---
+# core-test creates and deletes its probe pods
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: core-test-role
+  namespace: tekton-pipelines
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: core-test-role
+  namespace: tekton-pipelines
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: core-test-role
 subjects:
   - kind: ServiceAccount
     name: core-test

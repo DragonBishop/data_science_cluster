@@ -1,0 +1,70 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: openbao-login
+  namespace: tekton-pipelines
+spec:
+  volumes:
+    - name: spiffe-workload-api
+      csi:
+        driver: csi.spiffe.io
+        readOnly: true
+    - name: svid
+      emptyDir:
+        medium: Memory
+    - name: spiffe-helper
+      configMap:
+        name: spiffe-helper
+    - name: openbao-ca-bundle
+      configMap:
+        name: openbao-ca-bundle
+  stepTemplate:
+    securityContext:
+      runAsUser: 65532
+  steps:
+    - name: fetch-svid
+      ref:
+        name: fetch-svid
+      timeout: 90s
+    - name: cert-login
+      image: quay.io/openbao/openbao:${OPENBAO_IMAGE_TAG}
+      env:
+        - name: HOME
+          value: /tmp
+        - name: BAO_ADDR
+          value: https://openbao.openbao.svc.cluster.local:8200
+        - name: BAO_CACERT
+          value: /openbao-ca-bundle/ca.crt
+      volumeMounts:
+        - name: svid
+          mountPath: /svid
+          readOnly: true
+        - name: openbao-ca-bundle
+          mountPath: /openbao-ca-bundle
+          readOnly: true
+      script: |
+        #!/bin/sh
+        set -eu
+        bao login -no-store -token-only -method=cert \
+          -client-cert=/svid/svid.pem -client-key=/svid/svid.key name=core-test > /dev/null
+    - name: no-cert-refused
+      image: quay.io/openbao/openbao:${OPENBAO_IMAGE_TAG}
+      env:
+        - name: HOME
+          value: /tmp
+        - name: BAO_ADDR
+          value: https://openbao.openbao.svc.cluster.local:8200
+        - name: BAO_CACERT
+          value: /openbao-ca-bundle/ca.crt
+      volumeMounts:
+        - name: openbao-ca-bundle
+          mountPath: /openbao-ca-bundle
+          readOnly: true
+      script: |
+        #!/bin/sh
+        output=$(bao login -no-store -token-only -method=cert name=core-test 2>&1 > /dev/null)
+        echo "$output"
+        case $output in
+          *"no client certificate found"*) ;;
+          *) exit 1 ;;
+        esac

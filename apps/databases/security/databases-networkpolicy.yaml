@@ -15,13 +15,15 @@ spec:
         - ports:
             - port: "5432"
               protocol: TCP
-    # Replication and join between instances
+    # Replication, join and instance status checks between instances
     - fromEndpoints:
         - matchLabels:
             cnpg.io/cluster: postgres-cluster
       toPorts:
         - ports:
             - port: "5432"
+              protocol: TCP
+            - port: "8000"
               protocol: TCP
     # CNPG operator status checks
     - fromEndpoints:

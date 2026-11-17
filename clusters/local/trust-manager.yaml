@@ -3,8 +3,6 @@ kind: Kustomization
 metadata:
   name: trust-manager
   namespace: flux-system
-  labels:
-    data-cluster/core: "true"
 spec:
   interval: 1h
   retryInterval: 1m
