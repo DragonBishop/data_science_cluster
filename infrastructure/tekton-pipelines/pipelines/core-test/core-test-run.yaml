@@ -9,3 +9,12 @@ spec:
     name: core-test
   taskRunTemplate:
     serviceAccountName: core-test
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi

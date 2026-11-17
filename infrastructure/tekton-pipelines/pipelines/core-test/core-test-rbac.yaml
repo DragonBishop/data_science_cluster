@@ -29,3 +29,18 @@ subjects:
   - kind: ServiceAccount
     name: core-test
     namespace: tekton-pipelines
+---
+# fetch-source reads the GitRepository, and flux-ready waits on the Kustomizations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: core-test-role
+  namespace: flux-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tekton-pipelines-role
+subjects:
+  - kind: ServiceAccount
+    name: core-test
+    namespace: tekton-pipelines
