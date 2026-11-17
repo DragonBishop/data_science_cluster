@@ -4,50 +4,61 @@ metadata:
   name: core-test
   namespace: tekton-pipelines
 spec:
+  params:
+    - name: revision
+      description: The Flux revision to test, <branch>@sha1:<sha>; empty tests the GitRepository's stored artifact
+      type: string
+      default: ""
+  workspaces:
+    - name: source
   tasks:
+    - name: fetch-source
+      taskRef:
+        name: fetch-source
+      params:
+        - name: repository
+          value: flux-system
+        - name: revision
+          value: $(params.revision)
+      workspaces:
+        - name: source
+          workspace: source
+    - name: flux-ready
+      taskRef:
+        name: flux-ready
+      params:
+        - name: selector
+          value: data-cluster/core=true
+        - name: revision
+          value: $(tasks.fetch-source.results.revision)
     - name: ca-bundles
+      runAfter: [flux-ready]
       taskRef:
         name: ca-bundles
     - name: spire
-      taskSpec:
-        volumes:
-          - name: spiffe-workload-api
-            csi:
-              driver: csi.spiffe.io
-              readOnly: true
-        steps:
-          - name: fetch-identity
-            image: ghcr.io/spiffe/spire-agent:${SPIRE_AGENT_IMAGE_TAG}
-            onError: continue
-            volumeMounts:
-              - name: spiffe-workload-api
-                mountPath: /spiffe-workload-api
-                readOnly: true
-            command:
-              - /opt/spire/bin/spire-agent
-            args:
-              - api
-              - fetch
-              - x509
-              - -socketPath
-              - /spiffe-workload-api/spire-agent.sock
-              - -timeout
-              - 10s
-          - name: no-identity
-            image: alpine/k8s:${ALPINE_K8S_VERSION}
-            securityContext:
-              runAsUser: 65532
-            script: |
-              #!/usr/bin/env bash
-              set -eu
-              exit_code=$(cat $(steps.step-fetch-identity.exitCode.path))
-              if [ "$exit_code" -eq 0 ]; then
-                echo "FAIL: SPIRE issued an identity to a tekton-pipelines pod instead of the Flux controllers and Prometheus."
-                echo "Run kubectl get clusterspiffeids, and check spire-values.yaml sets spire-server.controllerManager.identities.clusterSPIFFEIDs.default.enabled to false"
-                exit 1
-              else
-                echo "fetch-identity exit code: $exit_code"
-              fi
+      runAfter: [flux-ready]
+      taskRef:
+        name: spire
     - name: flux-mtls
+      runAfter: [flux-ready]
       taskRef:
         name: flux-mtls
+    - name: openbao-login
+      runAfter: [flux-ready]
+      taskRef:
+        name: openbao-login
+    - name: postgres-login
+      runAfter: [flux-ready]
+      taskRef:
+        name: postgres-login
+    - name: hubble-drops
+      runAfter: [ca-bundles, spire, flux-mtls, openbao-login, postgres-login]
+      taskRef:
+        name: hubble-drops
+      params:
+        - name: namespaces
+          value: >-
+            kube-system flux-system openbao cnpg-system databases cert-manager gateway seaweedfs spire
+            tekton-operator tekton tekton-triggers tekton-pipelines
+        - name: since
+          value: $(tasks.fetch-source.results.started-at)

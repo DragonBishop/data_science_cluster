@@ -1,0 +1,67 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hubble-drops
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: namespaces
+      description: Space-separated namespaces whose dropped flows since the test window opened fail the task
+      type: string
+    - name: since
+      description: An RFC 3339 time that opens the test window
+      type: string
+  volumes:
+    - name: hubble-client-cert
+      secret:
+        secretName: hubble-client-cert
+  stepTemplate:
+    image: quay.io/cilium/cilium:v${CILIUM_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+      - name: HUBBLE_SERVER
+        value: hubble-relay.kube-system.svc.cluster.local:443
+      - name: HUBBLE_TLS
+        value: "true"
+      - name: HUBBLE_TLS_SERVER_NAME
+        value: relay.hubble-relay.cilium.io
+      - name: HUBBLE_TLS_CA_CERT_FILES
+        value: /hubble-client-cert/ca.crt
+      - name: HUBBLE_TLS_CLIENT_CERT_FILE
+        value: /hubble-client-cert/tls.crt
+      - name: HUBBLE_TLS_CLIENT_KEY_FILE
+        value: /hubble-client-cert/tls.key
+    volumeMounts:
+      - name: hubble-client-cert
+        mountPath: /hubble-client-cert
+        readOnly: true
+  steps:
+    - name: relay-connected
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        status=$(hubble status)
+        echo "$status"
+        [[ $status =~ Connected\ Nodes:\ ([0-9]+)/([0-9]+) ]]
+        [[ $${BASH_REMATCH[1]} == "$${BASH_REMATCH[2]}" ]]
+    - name: no-drops
+      env:
+        - name: NAMESPACES
+          value: $(params.namespaces)
+        - name: SINCE
+          value: $(params.since)
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        namespace_filters=()
+        for namespace in $NAMESPACES; do
+          namespace_filters+=(--namespace "$namespace")
+        done
+        drops=$(hubble observe --all --since "$SINCE" --verdict DROPPED "$${namespace_filters[@]}" -o compact)
+        if [[ -n $drops ]]; then
+          echo "$drops"
+          exit 1
+        fi

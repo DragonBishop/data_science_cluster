@@ -3,12 +3,16 @@ kind: Kustomization
 metadata:
   name: tekton-pipelines
   namespace: flux-system
+  labels:
+    data-cluster/core: "true"
 spec:
   interval: 1h
   retryInterval: 1m
   dependsOn:
     - name: tekton
     - name: cluster-config
+    # hubble-client-cert comes from openbao-pki-issuer
+    - name: openbao
   sourceRef:
     kind: GitRepository
     name: flux-system
