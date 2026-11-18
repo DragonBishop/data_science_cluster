@@ -78,3 +78,9 @@
         - name: Report OpenBao credentials even when provisioning fails
           ansible.builtin.import_tasks: tasks/openbao_credentials.yml
           tags: always
+
+    - name: Test the cluster with core-test
+      ansible.builtin.import_role:
+        name: dragonbishop.cluster.flux
+        tasks_from: core_test
+      tags: always
