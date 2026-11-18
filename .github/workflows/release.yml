@@ -51,11 +51,15 @@ jobs:
         with:
           client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
           token: ${{ steps.app-token.outputs.token }}
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The next step pushes the regenerated changelogs with these credentials
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
         if: ${{ steps.release.outputs.prs_created == 'true' }}
         with:
           ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
@@ -80,16 +84,19 @@ jobs:
             -o ansible/ansible_collections/dragonbishop/cluster/CHANGELOG.md
             --github-repo ${{ github.repository }}
       - if: ${{ steps.release.outputs.prs_created == 'true' }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/CHANGELOG.md ansible/ansible_collections/dragonbishop/cluster/CHANGELOG.md
-          git commit -m "docs: regenerate changelog for ${{ steps.version.outputs.tag }}" || exit 0
+          git commit -m "docs: regenerate changelog for $TAG" || exit 0
           git push
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ steps.release.outputs.release_created }}
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         if: ${{ steps.release.outputs.release_created }}
         with:
