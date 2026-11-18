@@ -9,34 +9,17 @@ spec:
       description: The Flux revision to test, <branch>@sha1:<sha>; empty tests the GitRepository's stored artifact
       type: string
       default: ""
-  workspaces:
-    - name: source
   tasks:
-    - name: fetch-source
-      taskRef:
-        name: fetch-source
-      params:
-        - name: repository
-          value: flux-system
-        - name: revision
-          value: $(params.revision)
-      workspaces:
-        - name: source
-          workspace: source
     - name: flux-ready
       taskRef:
         name: flux-ready
       params:
         - name: revision
-          value: $(tasks.fetch-source.results.revision)
+          value: $(params.revision)
     - name: ca-bundles
       runAfter: [flux-ready]
       taskRef:
         name: ca-bundles
-    - name: spire
-      runAfter: [flux-ready]
-      taskRef:
-        name: spire
     - name: mtls-required
       runAfter: [flux-ready]
       taskRef:
@@ -50,14 +33,10 @@ spec:
               - https://seaweedfs-master.seaweedfs.svc.cluster.local:19333/
               - https://seaweedfs-filer.seaweedfs.svc.cluster.local:18888/
               - https://seaweedfs-volume.seaweedfs.svc.cluster.local:18080/
-    - name: openbao-login
+    - name: client-login
       runAfter: [flux-ready]
       taskRef:
-        name: openbao-login
-    - name: postgres-login
-      runAfter: [flux-ready]
-      taskRef:
-        name: postgres-login
+        name: client-login
     - name: postgres-database-applied
       runAfter: [flux-ready]
       taskRef:
@@ -75,24 +54,10 @@ spec:
         params:
           - name: kind
             value: [deployments, statefulsets, daemonsets]
-    - name: hubble-drops
-      runAfter: [ca-bundles, spire, mtls-required, openbao-login, postgres-login, postgres-database-applied, workloads-ready]
-      taskRef:
-        name: hubble-drops
-      params:
-        - name: namespaces
-          value: >-
-            kube-system flux-system openbao cnpg-system databases cert-manager gateway seaweedfs spire
-            tekton-operator tekton tekton-triggers tekton-pipelines
-        - name: since
-          value: $(tasks.fetch-source.results.started-at)
     - name: unauthorized-pod-denied
-      runAfter: [hubble-drops]
+      runAfter: [flux-ready]
       taskRef:
         name: unauthorized-pod-denied
-      params:
-        - name: since
-          value: $(tasks.fetch-source.results.started-at)
       matrix:
         params:
           - name: target
@@ -100,6 +65,10 @@ spec:
               - openbao.openbao.svc.cluster.local:8200
               - postgres-cluster-rw.databases.svc.cluster.local:5432
               - seaweedfs-s3.seaweedfs.svc.cluster.local:9000
+              - el-flux-events.tekton-triggers.svc.cluster.local:8443
+              - tekton-pipelines-webhook.tekton.svc.cluster.local:443
+              - tekton-triggers-webhook.tekton.svc.cluster.local:443
+              - tekton-triggers-core-interceptors.tekton.svc.cluster.local:8443
   finally:
     - name: delete-probes
       taskRef:

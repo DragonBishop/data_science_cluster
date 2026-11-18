@@ -1,0 +1,96 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: client-login
+  namespace: tekton-pipelines
+spec:
+  volumes:
+    - name: login
+      emptyDir:
+        medium: Memory
+    - name: openbao-ca-bundle
+      configMap:
+        name: openbao-ca-bundle
+    - name: postgres-ca
+      configMap:
+        name: postgres-ca
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+      - name: OPENBAO_URL
+        value: https://openbao.openbao.svc.cluster.local:8200/v1
+    volumeMounts:
+      - name: login
+        mountPath: /login
+      - name: openbao-ca-bundle
+        mountPath: /ca/openbao
+      - name: postgres-ca
+        mountPath: /ca/postgres
+  steps:
+    - name: issue-token
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        kubectl create token databases-openbao-auth -n databases --audience openbao --duration 10m > /login/token
+    - name: openbao-login
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        response=$(curl --silent --show-error --fail --cacert /ca/openbao/ca.crt \
+          --json "{\"role\": \"databases-role\", \"jwt\": \"$(< /login/token)\"}" \
+          "$OPENBAO_URL/auth/kubernetes/login")
+        jq --raw-output .auth.client_token <<< "$response" > /login/openbao-token
+    - name: read-database-login
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        response=$(curl --silent --show-error --fail --cacert /ca/openbao/ca.crt \
+          --header "X-Vault-Token: $(< /login/openbao-token)" \
+          "$OPENBAO_URL/database/creds/postgres-app-role")
+        jq --raw-output .data.username <<< "$response" > /login/username
+        jq --raw-output .data.password <<< "$response" > /login/password
+    - name: database-login
+      image: ghcr.io/cloudnative-pg/postgis:${POSTGIS_IMAGE_TAG}
+      env:
+        - name: PGHOST
+          value: postgres-cluster-rw.databases.svc.cluster.local
+        - name: PGDATABASE
+          value: ${DATA_SCIENCE_DB_NAME}
+        - name: PGSSLMODE
+          value: verify-full
+        - name: PGSSLROOTCERT
+          value: /ca/postgres/ca.crt
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        PGUSER=$(< /login/username) PGPASSWORD=$(< /login/password) psql --no-password --command 'SELECT current_user'
+    - name: wrong-account-refused
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        token=$(kubectl create token core-test -n tekton-pipelines --audience openbao --duration 10m)
+        output=$(curl --silent --show-error --cacert /ca/openbao/ca.crt \
+          --json "{\"role\": \"databases-role\", \"jwt\": \"$token\"}" \
+          "$OPENBAO_URL/auth/kubernetes/login")
+        echo "$output"
+        [[ $output == *"service account name not authorized"* ]]
+    - name: no-tls-refused
+      image: ghcr.io/cloudnative-pg/postgis:${POSTGIS_IMAGE_TAG}
+      env:
+        - name: PGHOST
+          value: postgres-cluster-rw.databases.svc.cluster.local
+        - name: PGDATABASE
+          value: ${DATA_SCIENCE_DB_NAME}
+        - name: PGUSER
+          value: postgres
+        - name: PGSSLMODE
+          value: disable
+      script: |
+        #!/usr/bin/env bash
+        output=$(psql --no-password --command 'SELECT current_user' 2>&1)
+        echo "$output"
+        [[ $output == *"no encryption"* ]]

@@ -75,12 +75,3 @@ spec:
         - ports:
             - port: "4244"
               protocol: TCP
-  ingress:
-    # hubble-drops in Tekton runs
-    - fromEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: tekton-pipelines
-      toPorts:
-        - ports:
-            - port: "4245"
-              protocol: TCP

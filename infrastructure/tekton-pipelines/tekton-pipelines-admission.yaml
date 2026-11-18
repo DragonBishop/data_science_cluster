@@ -1,0 +1,47 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: run-serviceaccounts
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    # Equivalent converts v1beta1 runs to v1 before the checks below
+    matchPolicy: Equivalent
+    resourceRules:
+      - apiGroups: ["tekton.dev"]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pipelineruns", "taskruns"]
+  variables:
+    - name: namedServiceAccounts
+      expression: >-
+        object.kind == 'TaskRun'
+          ? [object.spec.?serviceAccountName.orValue('')]
+          : [object.spec.?taskRunTemplate.?serviceAccountName.orValue('')]
+            + object.spec.?taskRunSpecs.orValue([]).map(taskRunSpec, taskRunSpec.?serviceAccountName.orValue(''))
+    - name: guardedServiceAccounts
+      expression: "['core-test', 'code-quality']"
+    - name: allowedCreators
+      expression: >-
+        ['system:admin',
+         'system:serviceaccount:tekton-triggers:el-flux-events',
+         'system:serviceaccount:tekton:tekton-pipelines-controller']
+  validations:
+    - expression: >-
+        !variables.namedServiceAccounts.exists(name, name in variables.guardedServiceAccounts)
+        || request.userInfo.username in variables.allowedCreators
+      message: >-
+        Runs as core-test or code-quality may be started only by system:admin,
+        EventListener flux-events or the Tekton Pipelines controller
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: run-serviceaccounts
+spec:
+  policyName: run-serviceaccounts
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: tekton-pipelines
