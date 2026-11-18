@@ -32,6 +32,10 @@ One-time, first-install setup: see [Installation](INSTALLATION.md) for Requireme
 
 `just bootstrap` prompts for the OpenBao root token, state-encryption passphrase and PostgreSQL superuser password. See [Access Policy](ACCESSPOLICY.md#provisioning-credentials) for credential handling.
 
+Every `just bootstrap` run, including one limited by `--tags`, ends with a `core-test` PipelineRun and fails when `core-test` fails.
+
+Flux follows `main`. To test a pull request on the workstation, point Flux at its branch with `FLUX_GIT_BRANCH=<branch> just bootstrap --tags flux`. Each commit Flux then applies from that branch starts `core-test-<sha>` through Trigger `pull-request`. Run `just bootstrap --tags flux` without `FLUX_GIT_BRANCH` to return Flux to `main`.
+
 ## Cluster Lifecycle
 
 Start and stop the cluster each work session, check its health, and inspect or reach into it while it runs.

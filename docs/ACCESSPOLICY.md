@@ -17,7 +17,9 @@ Access to namespaced Kubernetes resources uses a Role and RoleBinding in the res
 
 ### Pipeline Access
 
-A Pipeline's ServiceAccount reads cluster state through the built-in `view` ClusterRole, with one ClusterRoleBinding. `view` grants read access to most objects in every namespace. It excludes Secrets, RBAC objects, `exec` and every change. Flux, cert-manager, Tekton and the CNPG chart add their objects to it. A Pipeline that changes something gets one Role in `tekton-pipelines` listing those changes. `core-test` has ClusterRoleBinding `core-test-view` and Role `core-test-role`, which creates and deletes its probe pods.
+A Pipeline's ServiceAccount reads cluster state through the built-in `view` ClusterRole, with one ClusterRoleBinding. `view` grants read access to most objects in every namespace. It excludes Secrets, RBAC objects, `exec` and every change. Flux, cert-manager, Tekton and the CNPG chart add their objects to it. A Pipeline that changes something gets one Role in `tekton-pipelines` listing those changes. `core-test` has ClusterRoleBinding `core-test-view` and Role `core-test-role`, which creates and deletes its probe pods and issues a token for `core-test`. A test that needs an application login gets that named object through a Role in the application's namespace. Role `core-test-role` in `databases` lets `core-test` issue a token for ServiceAccount `databases-openbao-auth`, so `client-login` can log in to OpenBao as the data-science client. `run-serviceaccounts` limits who can start a run as `core-test`. ClusterRole `code-quality-view` grants ServiceAccount `code-quality` `get` on GitRepositories and `get` and `list` on CustomResourceDefinitions, for `fetch-source` and `manifests`. Its other Tasks run the pull request's files as ServiceAccount `code-quality-branch`, which mounts no token.
+
+Tekton runs a PipelineRun as the ServiceAccount it names, without checking the creator's permission to use that account. ValidatingAdmissionPolicy `run-serviceaccounts` ([`infrastructure/tekton-pipelines/tekton-pipelines-admission.yaml`](../infrastructure/tekton-pipelines/tekton-pipelines-admission.yaml)) admits a run in `tekton-pipelines` that names `core-test` or `code-quality` only from `system:admin` (Ansible and hand runs), EventListener `flux-events`'s ServiceAccount `el-flux-events` and the Tekton Pipelines controller, which creates the TaskRuns.
 
 `view` can read pod specs, pod logs, ConfigMaps and events. Credentials stay out of all four and travel in Secrets or CSI mounts. A Pipeline that can create pods in `tekton-pipelines` can mount that namespace's Secrets. `tekton-pipelines` holds the Secrets its Pipelines already use and no others. The Pipelines and Tasks that run come from `main` through Flux, and a run tests a branch's revision with them.
 
@@ -27,7 +29,7 @@ The human administrator uses the `postgres` superuser login with a password supp
 
 Workload logins use the stable database-owner role `app_readwrite` for the data-science database. This owner role is `NOLOGIN` and sits outside the global data roles. CNPG initializes the data-science database with default table and sequence privileges for `app_readwrite` before installing PostGIS. Objects that `postgres` creates in that database inherit these privileges. Other databases keep PostgreSQL's defaults. OpenBao's temporary logins switch to the owner role by default. Objects they create keep a stable owner after a login expires.
 
-PostgreSQL requires TLS on every connection. The `pg_hba` rule `hostnossl all all all reject` in [`apps/databases/cluster/databases-cluster.yaml`](../apps/databases/cluster/databases-cluster.yaml) rejects a connection without TLS for every user, before any password check. Desktop clients such as DBeaver and SQLTools need SSL turned on in their connection settings, with `sslmode=verify-full` and the `postgres-ca` certificate. `core_test` logs in with a client certificate carrying the `core-test` SVID.
+PostgreSQL requires TLS on every connection. The `pg_hba` rule `hostnossl all all all reject` in [`apps/databases/cluster/databases-cluster.yaml`](../apps/databases/cluster/databases-cluster.yaml) rejects a connection without TLS for every user, before any password check. Desktop clients such as DBeaver and SQLTools need SSL turned on in their connection settings, with `sslmode=verify-full` and the `postgres-ca` certificate.
 
 ### Issuer Authentication
 
@@ -73,7 +75,7 @@ Trust a certificate that identifies the service or workload you expected, is val
 | OpenTofu, cert-manager and SPIRE connecting to OpenBao | `openbao-local-ca-secret`, distributed as `openbao-ca-bundle` |
 | Gateway, SeaweedFS S3 and Hubble clients | OpenBao's service-PKI root, distributed as `openbao-root-ca` or carried in their TLS Secret |
 | OpenBao and application clients verifying PostgreSQL, and PostgreSQL replication | Dedicated `postgres-ca` |
-| PostgreSQL SVID login | `postgres-client-ca`, containing the SPIRE signing root and PostgreSQL replication CA |
+| PostgreSQL replication client certificates | `postgres-client-ca`, containing the PostgreSQL CA |
 | Flux controller mTLS and workload identity consumers | SPIRE's workload API trust bundle |
 | SeaweedFS internal HTTPS/gRPC | SeaweedFS's chart-owned CA |
 
