@@ -1,0 +1,15 @@
+apiVersion: notification.toolkit.fluxcd.io/v1
+kind: Alert
+metadata:
+  name: pull-request
+  namespace: flux-system
+spec:
+  providerRef:
+    name: el-flux-events
+  eventSeverity: info
+  eventSources:
+    - kind: Kustomization
+      name: "*"
+  # Apply events list only the objects that changed, one "<subject> <action>" per line
+  inclusionList:
+    - '^\S+ (created|configured|deleted)'

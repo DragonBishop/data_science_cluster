@@ -67,3 +67,14 @@ patches:
     - op: add
       path: /spec/template/spec/containers/0/args/-
       value: --authorized-notifier-spiffe-id=spiffe://cluster.internal/ns/flux-system/sa/helm-controller
+# openbao-root-ca Secret target for Provider el-flux-events
+- target:
+    kind: Namespace
+    name: flux-system
+  patch: |
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: flux-system
+      labels:
+        data-cluster/ca-bundles: "true"
