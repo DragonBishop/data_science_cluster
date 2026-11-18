@@ -1,0 +1,75 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: Trigger
+metadata:
+  name: pull-request
+  namespace: tekton-triggers
+spec:
+  interceptors:
+    - ref:
+        name: cel
+        kind: ClusterInterceptor
+      params:
+        # Flux follows a branch other than main only while a pull request is tested
+        - name: filter
+          value: >-
+            body.involvedObject.kind == 'Kustomization' &&
+            has(body.metadata.revision) &&
+            body.metadata.revision.matches('^[A-Za-z0-9._/-]+@sha1:[0-9a-f]{40}$') &&
+            !body.metadata.revision.startsWith('main@')
+        - name: overlays
+          value:
+            - key: sha
+              expression: body.metadata.revision.split('@sha1:')[1]
+  bindings:
+    - name: revision
+      value: $(body.metadata.revision)
+    - name: sha
+      value: $(extensions.sha)
+  template:
+    spec:
+      params:
+        - name: revision
+        - name: sha
+      resourcetemplates:
+        # Ansible starts the same name when it gets there first
+        - apiVersion: tekton.dev/v1
+          kind: PipelineRun
+          metadata:
+            name: core-test-$(tt.params.sha)
+            namespace: tekton-pipelines
+          spec:
+            pipelineRef:
+              name: core-test
+            params:
+              - name: revision
+                value: $(tt.params.revision)
+            taskRunTemplate:
+              serviceAccountName: core-test
+        - apiVersion: tekton.dev/v1
+          kind: PipelineRun
+          metadata:
+            name: code-quality-$(tt.params.sha)
+            namespace: tekton-pipelines
+          spec:
+            pipelineRef:
+              name: code-quality
+            params:
+              - name: revision
+                value: $(tt.params.revision)
+            # Only fetch-source and manifests read the API
+            taskRunTemplate:
+              serviceAccountName: code-quality-branch
+            taskRunSpecs:
+              - pipelineTaskName: fetch-source
+                serviceAccountName: code-quality
+              - pipelineTaskName: manifests
+                serviceAccountName: code-quality
+            workspaces:
+              - name: source
+                volumeClaimTemplate:
+                  spec:
+                    accessModes:
+                      - ReadWriteOnce
+                    resources:
+                      requests:
+                        storage: ${TEKTON_SOURCE_WORKSPACE_SIZE}

@@ -1,0 +1,106 @@
+---
+- name: Run core-test on what Flux applied
+  when: not ansible_check_mode
+  vars:
+    flux_core_test_revision: "{{ flux_source.resources[0].status.artifact.revision }}"
+    flux_core_test_on_main: "{{ flux_core_test_revision.startswith('main@') }}"
+    # Trigger pull-request starts the same name for a pull request's commit
+    flux_core_test_pull_request_run: "core-test-{{ flux_core_test_revision.split('@sha1:') | last }}"
+    flux_core_test_run_name: "{{ flux_core_test_main_run.result.metadata.name | default(flux_core_test_pull_request_run) }}"
+    flux_core_test_run_spec:
+      pipelineRef:
+        name: core-test
+      params:
+        - name: revision
+          value: "{{ flux_core_test_revision }}"
+      taskRunTemplate:
+        serviceAccountName: core-test
+  block:
+    - name: Wait for Flux to apply the Tasks and the Pipeline core-test uses
+      kubernetes.core.k8s_info:
+        api_version: kustomize.toolkit.fluxcd.io/v1
+        kind: Kustomization
+        namespace: flux-system
+        name: "{{ item }}"
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 1200
+      loop:
+        - tekton-tasks
+        - tekton-pipelines
+      register: flux_tekton_kustomizations
+      failed_when: flux_tekton_kustomizations.resources | length == 0
+
+    # The source may still hold the previous branch's commit right after sync.yml switched branches
+    - name: Fetch the branch Flux follows
+      ansible.builtin.command: flux reconcile source git flux-system
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      changed_when: false
+
+    - name: Read the revision Flux stores for its source
+      kubernetes.core.k8s_info:
+        api_version: source.toolkit.fluxcd.io/v1
+        kind: GitRepository
+        namespace: flux-system
+        name: flux-system
+      register: flux_source
+
+    # A test run changes no managed configuration
+    - name: Start a core-test PipelineRun on main
+      kubernetes.core.k8s:
+        state: present
+        namespace: tekton-pipelines
+        generate_name: core-test-
+        definition:
+          apiVersion: tekton.dev/v1
+          kind: PipelineRun
+          spec: "{{ flux_core_test_run_spec }}"
+      register: flux_core_test_main_run
+      changed_when: false
+      when: flux_core_test_on_main
+
+    - name: Look for the pull request commit's core-test PipelineRun
+      kubernetes.core.k8s_info:
+        api_version: tekton.dev/v1
+        kind: PipelineRun
+        namespace: tekton-pipelines
+        name: "{{ flux_core_test_pull_request_run }}"
+      register: flux_core_test_existing
+      when: not flux_core_test_on_main
+
+    - name: Start the pull request commit's core-test PipelineRun
+      kubernetes.core.k8s:
+        state: present
+        namespace: tekton-pipelines
+        name: "{{ flux_core_test_pull_request_run }}"
+        definition:
+          apiVersion: tekton.dev/v1
+          kind: PipelineRun
+          spec: "{{ flux_core_test_run_spec }}"
+      changed_when: false
+      when: not flux_core_test_on_main and flux_core_test_existing.resources | length == 0
+
+    - name: Wait for the core-test PipelineRun to finish
+      kubernetes.core.k8s_info:
+        api_version: tekton.dev/v1
+        kind: PipelineRun
+        namespace: tekton-pipelines
+        name: "{{ flux_core_test_run_name }}"
+      register: flux_core_test_status
+      until: flux_core_test_status.resources[0].status.completionTime is defined
+      retries: 360
+      delay: 10
+
+    - name: Check that core-test passed
+      vars:
+        flux_core_test_condition: >-
+          {{ flux_core_test_status.resources[0].status.conditions
+             | selectattr('type', 'equalto', 'Succeeded') | first }}
+      ansible.builtin.assert:
+        that: flux_core_test_condition.status == 'True'
+        fail_msg: >-
+          PipelineRun {{ flux_core_test_run_name }} failed: {{ flux_core_test_condition.message }}
+        success_msg: PipelineRun {{ flux_core_test_run_name }} passed

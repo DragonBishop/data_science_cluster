@@ -21,20 +21,15 @@ spec:
   superuserSecret:
     name: postgres-superuser-credentials
 
+  # CNPG drops a removed role only through ensure: absent; delete this block once core_test is gone
   managed:
     roles:
       - name: core_test
-        ensure: present
-        login: true
-        inRoles:
-          - app_readwrite
+        ensure: absent
 
   postgresql:
     pg_hba:
-      - hostssl all core_test all cert map=spiffe
       - hostnossl all all all reject
-    pg_ident:
-      - spiffe core-test.spiffe core_test
 
   storage:
     size: ${POSTGRES_STORAGE_SIZE}

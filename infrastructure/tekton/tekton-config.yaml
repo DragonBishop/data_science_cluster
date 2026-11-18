@@ -82,6 +82,7 @@ spec:
                       limits:
                         memory: ${TEKTON_PROXY_WEBHOOK_MEM_LIMIT}
   trigger:
+    disabled: false
     options:
       deployments:
         tekton-triggers-controller:
@@ -131,3 +132,4 @@ spec:
     disabled: true
   result:
     disabled: true
+    is_external_db: false

@@ -1,0 +1,24 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tekton-triggers
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 1m
+  dependsOn:
+    - name: tekton
+    - name: cluster-config
+    # el-flux-events-cert comes from openbao-pki-issuer
+    - name: openbao
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./infrastructure/tekton-triggers
+  prune: true
+  wait: true
+  timeout: 3m
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config

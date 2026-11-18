@@ -1,0 +1,59 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: code-quality
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: revision
+      description: The Flux revision to check, <branch>@sha1:<sha>
+      type: string
+  workspaces:
+    - name: source
+  tasks:
+    - name: fetch-source
+      taskRef:
+        name: fetch-source
+      params:
+        - name: repository
+          value: flux-system
+        - name: revision
+          value: $(params.revision)
+      workspaces:
+        - name: source
+          workspace: source
+    - name: shellcheck
+      runAfter: [fetch-source]
+      taskRef:
+        name: shellcheck
+      workspaces:
+        - name: source
+          workspace: source
+    - name: renovate-config
+      runAfter: [fetch-source]
+      taskRef:
+        name: renovate-config
+      workspaces:
+        - name: source
+          workspace: source
+    - name: zizmor
+      runAfter: [fetch-source]
+      taskRef:
+        name: zizmor
+      workspaces:
+        - name: source
+          workspace: source
+    - name: prek
+      runAfter: [fetch-source]
+      taskRef:
+        name: prek
+      workspaces:
+        - name: source
+          workspace: source
+    - name: manifests
+      runAfter: [fetch-source]
+      taskRef:
+        name: manifests
+      workspaces:
+        - name: source
+          workspace: source

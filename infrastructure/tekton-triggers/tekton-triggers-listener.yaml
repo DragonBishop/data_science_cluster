@@ -1,0 +1,37 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: flux-events
+  namespace: tekton-triggers
+spec:
+  serviceAccountName: el-flux-events
+  triggers:
+    - triggerRef: pull-request
+  resources:
+    kubernetesResource:
+      spec:
+        template:
+          spec:
+            containers:
+              - env:
+                  - name: TLS_CERT
+                    valueFrom:
+                      secretKeyRef:
+                        name: el-flux-events-cert
+                        key: tls.crt
+                  - name: TLS_KEY
+                    valueFrom:
+                      secretKeyRef:
+                        name: el-flux-events-cert
+                        key: tls.key
+---
+apiVersion: notification.toolkit.fluxcd.io/v1
+kind: Provider
+metadata:
+  name: el-flux-events
+  namespace: flux-system
+spec:
+  type: generic
+  address: https://el-flux-events.tekton-triggers.svc.cluster.local:8443
+  certSecretRef:
+    name: openbao-root-ca

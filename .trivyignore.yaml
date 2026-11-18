@@ -1,0 +1,32 @@
+misconfigurations:
+  - id: KSV-0037
+    paths:
+      - cilium.yaml
+      - hubble.yaml
+      - secrets-store-csi-driver.yaml
+    statement: Cilium, its kube-system policies, CoreDNS's LAN Service, Hubble Relay's redirect and the Secrets Store CSI driver belong in kube-system
+  - id: KSV-0109
+    paths:
+      - cluster-config.yaml
+      - databases-objectstore.yaml
+      - openbao.yaml
+    statement: The check matches key names such as SECRETS_STORE_*, serverTLSSecret and s3CredentialsSecret; these ConfigMaps hold settings and Secret names, no secret values
+  - id: KSV-01010
+    paths:
+      - cluster-config.yaml
+      - openbao.yaml
+    statement: The check matches key names such as CERT_KEY_SIZE and the seal's current_key file path; these ConfigMaps hold no secret values
+  - id: KSV-0048
+    paths:
+      - tekton-pipelines.yaml
+    statement: Role core-test-role creates and deletes the probe pods of core-test's unauthorized-pod-denied Task
+  - id: KSV-0125
+    paths:
+      - databases-objectstore.yaml
+      - openbao-snapshot.yaml
+    statement: The cluster's images come from registry.k8s.io, ghcr.io, quay.io and Docker Hub, which the check's default trusted list does not name
+  - id: DS-0026
+    paths:
+      - cluster/Dockerfile
+      - host/Dockerfile
+    statement: Devcontainers run interactively in VS Code, which reads no HEALTHCHECK

@@ -1,0 +1,20 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: flux-events
+  namespace: tekton-triggers
+spec:
+  # EventListener flux-events pod
+  endpointSelector:
+    matchLabels:
+      eventlistener: flux-events
+  ingress:
+    # Flux notifications; Service port 8443 targets pod port 8080
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: flux-system
+            app: notification-controller
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

@@ -1,0 +1,91 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: manifests
+  namespace: tekton-pipelines
+spec:
+  workspaces:
+    - name: source
+  volumes:
+    - name: manifests
+      emptyDir: {}
+  stepTemplate:
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: HOME
+        value: /tmp
+    workingDir: $(workspaces.source.path)
+    volumeMounts:
+      - name: manifests
+        mountPath: /manifests
+  steps:
+    # Flux builds with the load restrictor off
+    - name: build
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        mkdir -p /manifests/built
+        kubectl kustomize infrastructure/cluster-config | yq '.data' -o shell > /manifests/cluster-config.env
+        for kustomization_file in clusters/local/*.yaml; do
+          kustomization_name=$(basename "$kustomization_file" .yaml)
+          kubectl kustomize --load-restrictor LoadRestrictionsNone "$(yq '.spec.path' "$kustomization_file")" \
+            > "/manifests/built/$kustomization_name.yaml"
+        done
+    - name: substitute
+      image: ghcr.io/fluxcd/flux-cli:${FLUX_CLI_VERSION}
+      script: |
+        #!/bin/sh
+        set -eu
+        mkdir -p /manifests/rendered
+        set -a
+        . /manifests/cluster-config.env
+        set +a
+        for built_file in /manifests/built/*.yaml; do
+          flux envsubst --strict < "$built_file" > "/manifests/rendered/$(basename "$built_file")"
+        done
+    - name: crd-schemas
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        kubectl get customresourcedefinitions -o json \
+          | jq -c '.items[] | .spec as $crd | $crd.versions[]
+              | {path: "\($crd.group)/\($crd.names.kind | ascii_downcase)_\(.name).json", schema: .schema.openAPIV3Schema}' \
+          | while read -r crd_version; do
+              schema_path=/manifests/crds/$(jq -r .path <<< "$crd_version")
+              mkdir -p "$(dirname "$schema_path")"
+              jq .schema <<< "$crd_version" > "$schema_path"
+            done
+    # kubeconform has no schema for the CustomResourceDefinition kind itself
+    - name: kubeconform
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        kubeconform -strict -summary -skip CustomResourceDefinition \
+          -schema-location default \
+          -schema-location '/manifests/crds/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json' \
+          /manifests/rendered/
+    - name: trivy-manifests
+      image: aquasec/trivy:${TRIVY_VERSION}
+      workingDir: /manifests/rendered
+      script: |
+        #!/bin/sh
+        set -eu
+        trivy config --quiet --skip-check-update --exit-code 1 --ignorefile "$(workspaces.source.path)/.trivyignore.yaml" .
+    - name: trivy-terraform
+      image: aquasec/trivy:${TRIVY_VERSION}
+      workingDir: $(workspaces.source.path)/terraform/openbao
+      script: |
+        #!/bin/sh
+        set -eu
+        trivy config --quiet --skip-check-update --exit-code 1 --ignorefile "$(workspaces.source.path)/.trivyignore.yaml" .
+    - name: trivy-dockerfiles
+      image: aquasec/trivy:${TRIVY_VERSION}
+      workingDir: $(workspaces.source.path)/.devcontainer
+      script: |
+        #!/bin/sh
+        set -eu
+        trivy config --quiet --skip-check-update --exit-code 1 --ignorefile "$(workspaces.source.path)/.trivyignore.yaml" .

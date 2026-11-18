@@ -37,6 +37,20 @@
                 value: {{ flux_git_branch }}
   when: flux_git_branch != 'main'
 
+# Server-side apply drops the patches field the ansible manager owns, so Flux follows main again
+- name: Return Flux to main
+  kubernetes.core.k8s:
+    state: present
+    server_side_apply:
+      field_manager: ansible
+    definition:
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: flux-system
+        namespace: flux-system
+  when: flux_git_branch == 'main'
+
 - name: Apply the network policy Flux needs to fetch its source
   kubernetes.core.k8s:
     state: present

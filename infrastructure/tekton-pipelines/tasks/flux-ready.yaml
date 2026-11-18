@@ -6,8 +6,9 @@ metadata:
 spec:
   params:
     - name: revision
-      description: The Flux revision every Kustomization must have applied, <branch>@sha1:<sha>
+      description: The Flux revision every Kustomization must have applied, <branch>@sha1:<sha>; empty reads GitRepository flux-system's stored revision
       type: string
+      default: ""
     - name: timeout
       description: How long each kubectl wait may take
       type: string
@@ -28,8 +29,11 @@ spec:
       script: |
         #!/usr/bin/env bash
         set -eu
+        revision=$${REVISION:-$(kubectl -n flux-system get gitrepository flux-system -o jsonpath='{.status.artifact.revision}')}
+        echo "waiting for every Kustomization to apply $revision"
+        [[ -n $revision ]]
         if ! kubectl -n flux-system wait kustomization --all --timeout="$TIMEOUT" \
-          --for=jsonpath="{.status.lastAppliedRevision}=$REVISION"; then
+          --for=jsonpath="{.status.lastAppliedRevision}=$revision"; then
           kubectl -n flux-system get kustomization
           exit 1
         fi

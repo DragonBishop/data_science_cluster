@@ -17,8 +17,6 @@ spec:
   results:
     - name: revision
       type: string
-    - name: started-at
-      type: string
   stepTemplate:
     image: alpine/k8s:${ALPINE_K8S_VERSION}
     securityContext:
@@ -27,12 +25,6 @@ spec:
       - name: HOME
         value: /tmp
   steps:
-    - name: record-start
-      script: |
-        #!/usr/bin/env bash
-        set -eu
-        printf '%s' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$(results.started-at.path)"
-
     - name: read-repository
       env:
         - name: REPOSITORY

@@ -20,3 +20,25 @@ spec:
         - ports:
             - port: "443"
               protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: core-interceptors
+  namespace: tekton
+spec:
+  # Triggers core interceptors pod, which serves ClusterInterceptor cel
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: core-interceptors
+      app.kubernetes.io/part-of: tekton-triggers
+  ingress:
+    # EventListener flux-events runs its Triggers' CEL filters here
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-triggers
+            eventlistener: flux-events
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
