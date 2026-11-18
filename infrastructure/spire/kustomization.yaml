@@ -2,7 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - spire-release.yaml
-  - core-test-spiffeid.yaml
   - flux-controllers-spiffeid.yaml
 configMapGenerator:
   - name: spire-values

@@ -92,39 +92,6 @@ run "policies_read_only" {
   }
 }
 
-run "cert_roles_bound_narrowly" {
-  command = plan
-
-  assert {
-    condition = alltrue([
-      for role in [
-        vault_cert_auth_backend_role.core_test,
-      ] : length(role.allowed_uri_sans) == 1
-    ])
-    error_message = "A cert auth role admits more than one SPIFFE ID."
-  }
-}
-
-run "cert_roles_trust_root_ca" {
-  command = plan
-
-  override_resource {
-    target = vault_pki_secret_backend_root_cert.root
-    values = {
-      certificate = "root-ca"
-    }
-  }
-
-  assert {
-    condition = alltrue([
-      for role in [
-        vault_cert_auth_backend_role.core_test,
-      ] : role.certificate == vault_pki_secret_backend_root_cert.root.certificate
-    ])
-    error_message = "A cert auth role does not trust the OpenBao root CA that signs SPIRE's CA."
-  }
-}
-
 run "seaweedfs_lease_ttl" {
   command = plan
 

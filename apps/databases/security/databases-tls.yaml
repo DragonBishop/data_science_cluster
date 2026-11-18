@@ -76,12 +76,9 @@ spec:
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
-  name: postgres-client-ca          # CNPG's clientCASecret: the Root CA for SVIDs, the Postgres CA for replication
+  name: postgres-client-ca          # CNPG's clientCASecret: the Postgres CA for replication
 spec:
   sources:
-    - secret:
-        name: openbao-root-ca-source
-        key: ca.crt
     - secret:
         name: postgres-ca
         key: tls.crt
