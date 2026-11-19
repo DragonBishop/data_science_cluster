@@ -4,10 +4,9 @@
 #
 set -eu
 
+# The k3s role writes the admin kubeconfig here
 configure_kubeconfig() {
-    local kubeconfig_dest="$HOME/.kube/config"
-    mkdir -p "$(dirname "$kubeconfig_dest")"
-    export KUBECONFIG="$kubeconfig_dest"
+    export KUBECONFIG="$HOME/.kube/config"
 }
 
 start_k3s_service() {
@@ -22,7 +21,7 @@ start_k3s_service() {
         exit 1
     fi
 }
-#
+
 k3s_alive() {
     systemctl is-active --quiet k3s 2>/dev/null
 }
@@ -58,11 +57,9 @@ wait_for_node_ready() {
         retries=$((retries+1))
         if [ $retries -ge 60 ]; then
             echo "❌ ERROR: Node not Ready within 5 minutes."
-            echo "💡 TROUBLESHOOTING: CNI (Cilium) needed for node to report Ready."
-            echo "   1. Is Cilium installed?  cilium status --wait"
-            echo "   2. On a first-time build, install it now:"
-            echo "      helm upgrade --install cilium oci://quay.io/cilium/charts/cilium \\"
-            echo "        --version <chart-version> --namespace kube-system -f infrastructure/cilium/cilium-values.yaml"
+            echo "💡 TROUBLESHOOTING: the node reports Ready once Cilium, its CNI, runs."
+            echo "   Check the agent:  kubectl get pods -n kube-system -l k8s-app=cilium"
+            echo "   If Cilium was never installed, install it the way the bootstrap does:  just bootstrap --tags cilium"
             exit 1
         fi
         echo "   ...still waiting for node... ($((retries * 5))s elapsed)"
