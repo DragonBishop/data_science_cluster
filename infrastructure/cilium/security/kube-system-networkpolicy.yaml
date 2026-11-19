@@ -67,6 +67,15 @@ spec:
   endpointSelector:
     matchLabels:
       k8s-app: hubble-relay
+  ingress:
+    # Hubble UI's backend
+    - fromEndpoints:
+        - matchLabels:
+            k8s-app: hubble-ui
+      toPorts:
+        - ports:
+            - port: "4245"
+              protocol: TCP
   egress:
     # Hubble server in the Cilium agent
     - toEntities:

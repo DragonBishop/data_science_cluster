@@ -34,6 +34,58 @@ spec:
       name: hubble-values
       valuesKey: values.yaml
       optional: true
+  postRenderers:
+    - kustomize:
+        patches:
+          # Terminate HTTPS inside the Hubble UI pod
+          - target:
+              kind: Deployment
+              name: hubble-ui
+            patch: |
+              - op: add
+                path: /spec/template/spec/containers/-
+                value:
+                  name: localhost-tls
+                  image: ghostunnel/ghostunnel:${GHOSTUNNEL_VERSION}
+                  args:
+                    - server
+                    - --listen=0.0.0.0:8443
+                    - --target=127.0.0.1:8081
+                    - --cert=/tls/tls.crt
+                    - --key=/tls/tls.key
+                    # Access is restricted to the host
+                    - --disable-authentication
+                    # Picks up cert-manager's renewal
+                    - --timed-reload=1h
+                  ports:
+                    - name: localhost-tls
+                      containerPort: 8443
+                      protocol: TCP
+                  securityContext:
+                    runAsUser: 65532
+                    runAsNonRoot: true
+                    allowPrivilegeEscalation: false
+                    readOnlyRootFilesystem: true
+                    capabilities:
+                      drop: [ALL]
+                    seccompProfile:
+                      type: RuntimeDefault
+                  resources:
+                    requests:
+                      cpu: ${LOCALHOST_TLS_CPU_REQUEST}
+                      memory: ${LOCALHOST_TLS_MEM_REQUEST}
+                    limits:
+                      memory: ${LOCALHOST_TLS_MEM_LIMIT}
+                  volumeMounts:
+                    - name: localhost-tls
+                      mountPath: /tls
+                      readOnly: true
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: localhost-tls
+                  secret:
+                    secretName: hubble-ui-localhost-tls
   install:
     remediation:
       retries: ${CILIUM_HELM_RETRIES}
