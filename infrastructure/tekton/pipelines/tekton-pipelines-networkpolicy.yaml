@@ -15,6 +15,9 @@ spec:
         - matchPattern: "*.github.com"
         # GitHub: raw files and release downloads
         - matchPattern: "*.githubusercontent.com"
+        # Dashboard release for manifest builds
+        - matchName: "infra.tekton.dev"
+        - matchName: "objectstorage.us-ashburn-1.oraclecloud.com"
         # PyPI: index and package files
         - matchName: "pypi.org"
         - matchName: "files.pythonhosted.org"
