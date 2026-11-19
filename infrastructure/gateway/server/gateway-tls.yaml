@@ -1,4 +1,4 @@
-# Wildcard edge TLS certificate for the internal domain's HTTPRoutes issued via OpenBao PKI
+# Gateway edge certificate from the desktop CA
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -15,5 +15,5 @@ spec:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
   issuerRef:
-    name: openbao-pki-issuer
-    kind: ClusterIssuer
+    name: openbao-desktop-issuer
+    kind: Issuer
