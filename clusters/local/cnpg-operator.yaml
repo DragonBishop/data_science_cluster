@@ -20,8 +20,3 @@ spec:
     substituteFrom:
       - kind: ConfigMap
         name: cluster-config
-  healthChecks:
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: cnpg-cloudnative-pg
-      namespace: cnpg-system
