@@ -25,7 +25,6 @@ dynamic = ["version"]
 dev = [
   "ansible>=14.3.1",
   "pytest>=9.1.1",
-  "pytest-cov>=7.1.0",
   "prek>=0.5.7",
   "molecule>=26.8.0",
   "jsonpatch>=1.33",
@@ -41,20 +40,6 @@ notebook = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.coverage.report]
-exclude_also = [
-  "def __repr__",
-  "if self.debug:",
-  "if settings.DEBUG",
-  "raise AssertionError",
-  "raise NotImplementedError",
-  "if 0:",
-  "if __name__ == .__main__.:",
-  "if TYPE_CHECKING:",
-  'class .*\bProtocol\):',
-  '@(abc\.)?abstractmethod',
-]
 
 [tool.hatch.version]
 path = "src/data_science_cluster/__init__.py"

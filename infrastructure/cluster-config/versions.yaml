@@ -43,8 +43,6 @@ data:
   SECRETS_STORE_CSI_DRIVER_VERSION: "1.6.2"
   # renovate: datasource=docker depName=koalaman/shellcheck-alpine
   SHELLCHECK_VERSION: "v0.11.0"
-  # renovate: datasource=github-releases depName=spiffe/spire extractVersion=^v(?<version>.+)$
-  SPIRE_AGENT_IMAGE_TAG: "1.16.0"
   # renovate: datasource=helm depName=spire-crds registryUrl=https://spiffe.github.io/helm-charts-hardened
   SPIRE_CRDS_VERSION: "0.6.1"
   # renovate: datasource=helm depName=spire registryUrl=https://spiffe.github.io/helm-charts-hardened
