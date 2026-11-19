@@ -7,14 +7,14 @@ spec:
   interval: 1h
   retryInterval: 1m
   dependsOn:
-    - name: openbao
+    - name: openbao-server
     - name: seaweedfs
     - name: secrets-store-csi-driver
     - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./infrastructure/openbao-snapshot
+  path: ./infrastructure/openbao/snapshot
   prune: true
   wait: true
   timeout: 3m

@@ -12,7 +12,7 @@
 - name: Substitute cluster-config values into the Cilium cluster-default network policy
   ansible.builtin.command:
     cmd: flux envsubst --strict
-    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml') }}"
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml') }}"
   environment:
     LAN_CIDR: "{{ lan_cidr }}"
   register: cilium_clusterwide_policy_substituted
@@ -26,7 +26,7 @@
 - name: Substitute cluster-config values into the kube-system network policy
   ansible.builtin.command:
     cmd: flux envsubst --strict
-    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/kube-system-networkpolicy.yaml') }}"
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/security/kube-system-networkpolicy.yaml') }}"
   environment:
     LAN_CIDR: "{{ lan_cidr }}"
   register: cilium_kube_system_policy_substituted

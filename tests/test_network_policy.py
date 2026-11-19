@@ -30,7 +30,9 @@ def test_baseline_preserves_host_access_without_a_global_gateway_grant():
 
 
 def test_gateway_namespace_selectors_admit_the_database_namespace():
-    gateway = built_resource("infrastructure/gateway", "Gateway", "internal-gateway")
+    gateway = built_resource(
+        "infrastructure/gateway/server", "Gateway", "internal-gateway"
+    )
     namespace = built_resource("infrastructure/namespaces", "Namespace", "databases")
     for listener in gateway["spec"]["listeners"]:
         namespace_rule = listener["allowedRoutes"]["namespaces"]

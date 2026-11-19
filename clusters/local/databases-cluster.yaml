@@ -10,7 +10,7 @@ spec:
   dependsOn:
     - name: databases-objectstore
     # The TCPRoute attaches to the shared Gateway
-    - name: gateway
+    - name: gateway-server
   sourceRef:
     kind: GitRepository
     name: flux-system

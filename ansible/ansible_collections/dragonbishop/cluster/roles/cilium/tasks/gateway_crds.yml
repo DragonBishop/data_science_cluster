@@ -2,6 +2,6 @@
 - name: "Install Gateway API Custom Resource Definitions (CRDs)"
   kubernetes.core.k8s:
     state: present
-    src: "{{ repo_root }}/infrastructure/gateway-api-crds/standard-install.yaml"
+    src: "{{ repo_root }}/infrastructure/gateway/crds/standard-install.yaml"
     server_side_apply:
       field_manager: ansible

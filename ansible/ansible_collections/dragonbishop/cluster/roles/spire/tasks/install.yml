@@ -37,4 +37,4 @@
 - name: Register the Flux controllers' SPIFFE IDs
   kubernetes.core.k8s:
     state: present
-    src: "{{ repo_root }}/infrastructure/spire/flux-controllers-spiffeid.yaml"
+    src: "{{ repo_root }}/infrastructure/spire/identities/flux-controllers-spiffeid.yaml"

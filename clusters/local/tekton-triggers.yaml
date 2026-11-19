@@ -7,14 +7,14 @@ spec:
   interval: 1h
   retryInterval: 1m
   dependsOn:
-    - name: tekton
+    - name: tekton-config
     - name: cluster-config
     # el-flux-events-cert comes from openbao-pki-issuer
-    - name: openbao
+    - name: openbao-server
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./infrastructure/tekton-triggers
+  path: ./infrastructure/tekton/triggers
   prune: true
   wait: true
   timeout: 3m

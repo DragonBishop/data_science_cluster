@@ -7,12 +7,12 @@ spec:
   interval: 1h
   retryInterval: 1m
   dependsOn:
-    - name: tekton
+    - name: tekton-config
     - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./infrastructure/tekton-pipelines/tasks
+  path: ./infrastructure/tekton/tasks
   prune: true
   wait: true
   timeout: 3m

@@ -7,7 +7,7 @@ spec:
   interval: 1h
   retryInterval: 1m
   dependsOn:
-    - name: gateway-api-crds
+    - name: gateway-crds
     - name: namespaces
     - name: cluster-config
   sourceRef:

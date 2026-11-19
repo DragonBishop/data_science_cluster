@@ -9,7 +9,7 @@ spec:
   dependsOn:
     - name: cluster-config
     - name: namespaces
-    - name: openbao
+    - name: openbao-server
   sourceRef:
     kind: GitRepository
     name: flux-system
