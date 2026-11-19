@@ -75,6 +75,21 @@ spec:
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
+  # Signs only openbao-server-cert's names
+  nameConstraints:
+    critical: true
+    permitted:
+      dnsDomains:
+        - openbao
+        - openbao.openbao
+        - openbao.openbao.svc
+        - openbao.openbao.svc.cluster.local
+        - openbao-internal
+        - openbao-internal.openbao
+        - openbao-internal.openbao.svc.cluster.local
+        - localhost
+      ipRanges:
+        - 127.0.0.1/32
   issuerRef:
     name: openbao-selfsigned-bootstrap
     kind: ClusterIssuer
