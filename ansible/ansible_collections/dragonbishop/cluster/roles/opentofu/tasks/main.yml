@@ -13,3 +13,6 @@
 
 - name: Apply terraform/openbao
   ansible.builtin.import_tasks: apply.yml
+
+- name: Install or remove the cluster's CAs in the system trust store
+  ansible.builtin.import_tasks: desktop_trust.yml
