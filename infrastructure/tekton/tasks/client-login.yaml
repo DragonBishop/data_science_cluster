@@ -50,7 +50,7 @@ spec:
         set -eu
         response=$(curl --silent --show-error --fail --cacert /ca/openbao/ca.crt \
           --header "X-Vault-Token: $(< /login/openbao-token)" \
-          "$OPENBAO_URL/database/creds/postgres-app-role")
+          "$OPENBAO_URL/database/creds/ds-app-role")
         jq --raw-output .data.username <<< "$response" > /login/username
         jq --raw-output .data.password <<< "$response" > /login/password
     - name: database-login
