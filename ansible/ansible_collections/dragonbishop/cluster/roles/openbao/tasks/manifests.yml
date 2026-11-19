@@ -2,7 +2,7 @@
 - name: Substitute cluster-config values into OpenBao's manifests
   ansible.builtin.command:
     cmd: flux envsubst --strict
-    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/openbao/' + item) }}"
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/openbao/server/' + item) }}"
   environment:
     CERT_KEY_ALGORITHM: "{{ cert_key_algorithm }}"
     CERT_KEY_SIZE: "{{ cert_key_size }}"

@@ -9,60 +9,55 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLAYBOOK_DIR = REPO_ROOT / "ansible/ansible_collections/dragonbishop/cluster/playbooks"
-
-
-@pytest.mark.parametrize(
-    ("stage", "fail", "expected"),
-    [
-        ("initialized", False, ["test-seal", "test-root", "test-recovery"]),
-        ("initialized", True, ["test-seal", "test-root", "test-recovery"]),
-        ("seal-generated", True, ["test-seal"]),
-        ("before-openbao", True, []),
-    ],
+PROVISIONING_TASK = (
+    "Provision OpenBao and dependent services and report generated credentials"
 )
-def test_credentials_reported_after_provisioning(
-    tmp_path: Path, stage: str, fail: bool, expected: list[str]
-):
-    # Use the production block/always structure and credential output tasks,
-    # replacing only the provisioning work with a controlled success or failure.
+CREDENTIALS = ["test-seal", "test-root", "test-recovery"]
+FAILURE_MESSAGE = "simulated provisioning failure"
+
+SEAL_KEY = {"openbao_effective_seal_key": "test-seal"}
+GENERATED_SEAL_KEY = {"openbao_generated_seal_key": {"stdout": "test-seal"}}
+INITIALIZED = {
+    "openbao_root_token": "test-root",
+    "openbao_fresh_recovery_keys": ["test-recovery"],
+}
+
+
+def provisioning_task() -> dict:
+    """Return the playbook's provisioning block, whose always section prints the credentials."""
     playbook = yaml.safe_load((PLAYBOOK_DIR / "data_cluster.yml").read_text())
-    provisioning = playbook[0]["tasks"][0]
-    facts = {}
-    if stage != "before-openbao":
-        facts["openbao_effective_seal_key"] = "test-seal"
-    if stage == "seal-generated":
-        facts["openbao_generated_seal_key"] = {"stdout": "test-seal"}
-    if stage == "initialized":
-        facts.update(
-            openbao_root_token="test-root",
-            openbao_fresh_recovery_keys=["test-recovery"],
-        )
-    provisioning["block"] = []
-    if facts:
-        provisioning["block"].append({"ansible.builtin.set_fact": facts})
-    provisioning["block"].append(
-        {"ansible.builtin.fail": {"msg": "simulated provisioning failure"}}
+    matches = [
+        task for task in playbook[0]["tasks"] if task["name"] == PROVISIONING_TASK
+    ]
+    assert len(matches) == 1, f"expected one task named {PROVISIONING_TASK!r}"
+    return matches[0]
+
+
+def write_test_playbook(tmp_path: Path, facts: dict, fail: bool) -> Path:
+    """Write the real block/always task with its provisioning replaced by the given facts and outcome."""
+    task = provisioning_task()
+    task["block"] = [{"ansible.builtin.set_fact": facts}] if facts else []
+    task["block"].append(
+        {"ansible.builtin.fail": {"msg": FAILURE_MESSAGE}}
         if fail
         else {"ansible.builtin.debug": {"msg": "provisioning succeeded"}}
     )
-    for task in provisioning["always"]:
-        if "ansible.builtin.import_tasks" in task:
-            task["ansible.builtin.import_tasks"] = str(
-                PLAYBOOK_DIR / task["ansible.builtin.import_tasks"]
+    # import_tasks paths are relative to the real playbook
+    for always_task in task["always"]:
+        if "ansible.builtin.import_tasks" in always_task:
+            always_task["ansible.builtin.import_tasks"] = str(
+                PLAYBOOK_DIR / always_task["ansible.builtin.import_tasks"]
             )
     test_playbook = tmp_path / "provision.yml"
     test_playbook.write_text(
-        yaml.safe_dump(
-            [
-                {
-                    "hosts": "localhost",
-                    "gather_facts": False,
-                    "tasks": [provisioning],
-                }
-            ]
-        )
+        yaml.safe_dump([{"hosts": "localhost", "gather_facts": False, "tasks": [task]}])
     )
-    result = subprocess.run(
+    return test_playbook
+
+
+def run_playbook(test_playbook: Path, tmp_path: Path) -> subprocess.CompletedProcess:
+    """Run a playbook against localhost with Ansible's state kept in tmp_path."""
+    return subprocess.run(
         ["ansible-playbook", "-i", "localhost,", "-c", "local", str(test_playbook)],
         cwd=REPO_ROOT,
         env={
@@ -77,12 +72,33 @@ def test_credentials_reported_after_provisioning(
         timeout=60,
         check=False,
     )
+
+
+@pytest.mark.parametrize(
+    ("facts", "fail", "printed"),
+    [
+        pytest.param(
+            SEAL_KEY | INITIALIZED, False, CREDENTIALS, id="initialized-succeeds"
+        ),
+        pytest.param(SEAL_KEY | INITIALIZED, True, CREDENTIALS, id="initialized-fails"),
+        pytest.param(
+            SEAL_KEY | GENERATED_SEAL_KEY,
+            True,
+            ["test-seal"],
+            id="seal-generated-fails",
+        ),
+        pytest.param({}, True, [], id="fails-before-openbao"),
+    ],
+)
+def test_credentials_printed_after_provisioning(
+    tmp_path: Path, facts: dict, fail: bool, printed: list[str]
+):
+    """The always section prints exactly the generated credentials, and a failure still fails the run."""
+    result = run_playbook(write_test_playbook(tmp_path, facts, fail), tmp_path)
     output = result.stdout + result.stderr
+    hidden = [credential for credential in CREDENTIALS if credential not in printed]
+
     assert result.returncode == (2 if fail else 0), output
-    for credential in ["test-seal", "test-root", "test-recovery"]:
-        if credential in expected:
-            assert credential in output, output
-        else:
-            assert credential not in output, output
-    if fail:
-        assert "simulated provisioning failure" in output, output
+    assert all(credential in output for credential in printed), output
+    assert not any(credential in output for credential in hidden), output
+    assert (FAILURE_MESSAGE in output) == fail, output

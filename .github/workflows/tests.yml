@@ -73,16 +73,7 @@ jobs:
       - name: Install the project
         run: uv sync --all-extras --all-groups --frozen
       - name: unit tests
-        run: |
-          set -o pipefail && \
-          uv run pytest --cov=src/data_science_cluster --cov-report=term-missing:skip-covered --junitxml=pytest.xml \
-          | tee pytest-coverage.txt
-      - name: Pytest coverage comment
-        uses: MishaKav/pytest-coverage-comment@4cfb48edc8f875ac019afdcfd97c48d78ad2b723 # v1.13.1
-        continue-on-error: true
-        with:
-          pytest-coverage-path: ./pytest-coverage.txt
-          junitxml-path: ./pytest.xml
+        run: uv run pytest
   opentofu-unit:
     needs: release-only
     if: ${{ !cancelled() && needs.release-only.outputs.skip != 'true' }}

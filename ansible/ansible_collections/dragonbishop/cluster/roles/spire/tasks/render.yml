@@ -2,7 +2,7 @@
 - name: Substitute cluster-config values into SPIRE Helm values
   ansible.builtin.command:
     cmd: flux envsubst --strict
-    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/spire/spire-values.yaml') }}"
+    stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/spire/server/spire-values.yaml') }}"
   environment:
     SPIRE_AGENT_CPU_REQUEST: "{{ spire_agent_cpu_request }}"
     SPIRE_AGENT_MEM_LIMIT: "{{ spire_agent_mem_limit }}"

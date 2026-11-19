@@ -32,7 +32,7 @@ run "database_roles_allowed" {
   assert {
     condition = alltrue([
       for role in [
-        vault_database_secret_backend_role.postgres_app_role,
+        vault_database_secret_backend_role.ds_app_role,
       ] : contains(vault_database_secret_backend_connection.postgres_cluster.allowed_roles, role.name)
     ])
     error_message = "A database role is missing from postgres_cluster's allowed_roles."

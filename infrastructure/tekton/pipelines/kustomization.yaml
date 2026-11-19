@@ -3,4 +3,5 @@ kind: Kustomization
 resources:
   - tekton-pipelines-admission.yaml
   - tekton-pipelines-networkpolicy.yaml
-  - pipelines
+  - code-quality
+  - core-test

@@ -1,18 +1,18 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: gateway
+  name: gateway-server
   namespace: flux-system
 spec:
   interval: 1h
   retryInterval: 1m
   dependsOn:
-    - name: openbao
+    - name: openbao-server
     - name: cluster-config
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./infrastructure/gateway
+  path: ./infrastructure/gateway/server
   prune: true
   wait: true
   timeout: 3m

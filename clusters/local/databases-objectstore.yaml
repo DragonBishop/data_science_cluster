@@ -7,7 +7,7 @@ spec:
   interval: 1h
   retryInterval: 1m
   dependsOn:
-    - name: openbao
+    - name: openbao-server
     - name: databases-plugin
     - name: databases-security
     - name: seaweedfs

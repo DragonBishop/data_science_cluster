@@ -11,7 +11,7 @@ resource "vault_policy" "databases" {
   name = "databases-policy"
 
   policy = <<EOT
-path "database/creds/postgres-app-role" { capabilities = ["read"] }
+path "database/creds/ds-app-role" { capabilities = ["read"] }
 EOT
 }
 

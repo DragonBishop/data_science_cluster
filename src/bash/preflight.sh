@@ -62,6 +62,7 @@ EOF
 print_kubernetes_apt_setup() {
     local kubectl_minor="$1"
     cat <<EOF
+   sudo mkdir -p -m 755 /etc/apt/keyrings
    curl -fsSL https://pkgs.k8s.io/core:/stable:/v${kubectl_minor}/deb/Release.key | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
    echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${kubectl_minor}/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
    sudo apt update && sudo apt install -y kubectl
@@ -81,12 +82,20 @@ print_install_commands() {
     case "$tool:$package_manager" in
         tofu:dnf)
             cat <<'EOF'
-   curl -fsSL https://get.opentofu.org/install-opentofu.sh | sudo sh -s -- --install-method rpm
+   curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
+   chmod +x install-opentofu.sh
+   sudo ./install-opentofu.sh --install-method rpm
    sudo sed -i '/^sslcacert=/d' /etc/yum.repos.d/opentofu.repo
    sudo dnf swap -y opentofu tofu
 EOF
             ;;
-        tofu:apt) echo "   curl -fsSL https://get.opentofu.org/install-opentofu.sh | sudo sh -s -- --install-method deb" ;;
+        tofu:apt)
+            cat <<'EOF'
+   curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
+   chmod +x install-opentofu.sh
+   sudo ./install-opentofu.sh --install-method deb
+EOF
+            ;;
         helm:apt)
             cat <<'EOF'
    curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
@@ -117,8 +126,15 @@ EOF
         gh:apt)
             cat <<'EOF'
    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /usr/share/keyrings/githubcli-archive-keyring.gpg > /dev/null
-   echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
    sudo apt update && sudo apt install -y gh
+EOF
+            ;;
+        gh:dnf)
+            cat <<'EOF'
+   sudo dnf install -y 'dnf-command(config-manager)' 2>/dev/null || sudo dnf install -y dnf-plugins-core
+   sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+   sudo dnf install -y gh
 EOF
             ;;
         uv:*) echo "   curl -LsSf https://astral.sh/uv/install.sh | sh" ;;
@@ -316,6 +332,20 @@ report_summary() {
     echo "✅ Preflight passed."
 }
 
+# The CLI renders bootstrap manifests and must match the controllers gotk-components.yaml pins
+check_flux_version() {
+    local cli_version pinned_version
+    cli_version=$(flux version --client 2>/dev/null | awk '/^flux:/ {print $2}')
+    pinned_version=$(awk '/^# Flux Version: / {print $4; exit}' "$(get_repo_path clusters/local/flux-system/gotk-components.yaml)")
+    if [ "$cli_version" = "$pinned_version" ]; then
+        echo "✅ flux $cli_version matches gotk-components.yaml"
+        return 0
+    fi
+    echo "⚠️  flux ${cli_version:-unknown} differs from gotk-components.yaml's $pinned_version"
+    print_install_commands flux
+    return 1
+}
+
 check_kubectl_versions() {
     # Missing tools are reported as errors by check_kubectl_tooling.
     command -v kubectl >/dev/null 2>&1 || return 0
@@ -330,6 +360,9 @@ main() {
     local had_errors=false had_warnings=false
 
     check_host_tooling || had_errors=true
+    if command -v flux >/dev/null 2>&1; then
+        check_flux_version || had_warnings=true
+    fi
     echo ""
     check_optional_tooling || had_warnings=true
     echo ""
