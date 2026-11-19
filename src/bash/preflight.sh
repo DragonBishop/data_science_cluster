@@ -33,7 +33,7 @@ get_package_manager() {
     fi
 }
 
-# Reads versions.yaml directly; kubectl kustomize is unavailable when kubectl itself is missing
+# Read version pins without requiring kubectl
 get_kubectl_minor_version() {
     awk -F'"' '/^  KUBECTL_VERSION:/ {split($2, part, "."); print substr(part[1], 2) "." part[2]}' \
         "$(get_repo_path infrastructure/cluster-config/versions.yaml)"
@@ -164,7 +164,7 @@ print_cnpg_plugin_upgrade_commands() {
     esac
 }
 
-# Reports each missing command with its install commands, marking it with the given symbol
+# Report missing tools and their install commands
 check_commands_present() {
     local missing_marker="$1" tool all_present=true
     shift
@@ -187,7 +187,7 @@ check_host_tooling() {
     check_commands_present "❌" tofu helm flux git uv just
 }
 
-# Tools the bootstrap runs without; a recipe or workflow needs them later
+# Optional: fzf for fuzzypods, tkn for core-test
 check_optional_tooling() {
     echo "== Optional tooling =="
     check_commands_present "⚠️ " fzf tkn
@@ -332,7 +332,7 @@ report_summary() {
     echo "✅ Preflight passed."
 }
 
-# The CLI renders bootstrap manifests and must match the controllers gotk-components.yaml pins
+# Match the Flux CLI to the pinned controllers
 check_flux_version() {
     local cli_version pinned_version
     cli_version=$(flux version --client 2>/dev/null | awk '/^flux:/ {print $2}')
