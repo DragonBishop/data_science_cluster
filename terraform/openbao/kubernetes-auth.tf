@@ -102,7 +102,7 @@ path "sys/storage/raft/snapshot" { capabilities = ["read"] }
 EOT
 }
 
-# The chart's snapshot agent CronJob logs in once per run, takes one snapshot and exits
+# The snapshot CronJob logs in once per run
 resource "vault_kubernetes_auth_backend_role" "openbao_snapshot" {
   backend                          = vault_auth_backend.kubernetes.path
   role_name                        = "openbao-snapshot-role"
@@ -112,4 +112,23 @@ resource "vault_kubernetes_auth_backend_role" "openbao_snapshot" {
   token_policies                   = [vault_policy.openbao_snapshot.name]
   token_ttl                        = 600
   token_max_ttl                    = 600
+}
+
+resource "vault_policy" "desktop_issuer" {
+  name   = "desktop-issuer-policy"
+  policy = <<EOT
+path "pki_desktop/sign/desktop" { capabilities = ["update"] }
+EOT
+}
+
+# One role per desktop Issuer namespace
+resource "vault_kubernetes_auth_backend_role" "desktop_issuer" {
+  for_each                         = toset(["gateway", "kube-system", "tekton-pipelines"])
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "desktop-issuer-${each.key}-role"
+  bound_service_account_names      = ["openbao-desktop-issuer"]
+  bound_service_account_namespaces = [each.key]
+  audience                         = "vault://${each.key}/openbao-desktop-issuer"
+  token_policies                   = [vault_policy.desktop_issuer.name]
+  token_ttl                        = 3600 # 1h
 }

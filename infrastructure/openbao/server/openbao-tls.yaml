@@ -1,4 +1,4 @@
-# OpenBao's server certificate, and the OpenBao CA and PKI root Bundles
+# OpenBao TLS and CA Bundles
 
 # Server certificate for OpenBao
 apiVersion: cert-manager.io/v1
@@ -31,7 +31,7 @@ spec:
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
-  name: openbao-ca-bundle           # trust-manager names each target ConfigMap after the Bundle
+  name: openbao-ca-bundle           # Target ConfigMaps use this name
 spec:
   sources:
     - secret:
@@ -44,7 +44,7 @@ spec:
       matchLabels:
         data-cluster/ca-bundles: "true"
 ---
-# Leaf from openbao-pki-issuer; its ca.crt carries the PKI root for Bundle openbao-root-ca
+# Its ca.crt feeds Bundle openbao-root-ca
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -67,7 +67,7 @@ spec:
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
-  name: openbao-root-ca             # trust-manager names each target ConfigMap after the Bundle
+  name: openbao-root-ca             # Target ConfigMaps use this name
 spec:
   sources:
     - secret:
@@ -82,3 +82,25 @@ spec:
     namespaceSelector:
       matchLabels:
         data-cluster/ca-bundles: "true"
+---
+# OpenBao's CA for the desktop Issuers
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: openbao-issuer-ca
+spec:
+  sources:
+    - secret:
+        name: openbao-local-ca-secret
+        key: tls.crt
+  target:
+    secret:
+      key: ca.crt
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - gateway
+            - kube-system
+            - tekton-pipelines
