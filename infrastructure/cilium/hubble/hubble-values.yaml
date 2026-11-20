@@ -1,4 +1,4 @@
-# Cilium Helm values for Hubble Relay
+# Cilium Helm values for Hubble
 hubble:
   eventBufferCapacity: "${HUBBLE_EVENT_BUFFER_CAPACITY}"
   relay:
@@ -12,8 +12,23 @@ hubble:
       server:
         enabled: true
         mtls: true
+  # localhost-tls serves HTTPS to the workstation
   ui:
-    enabled: false
+    enabled: true
+    frontend:
+      resources:
+        requests:
+          cpu: ${HUBBLE_UI_FRONTEND_CPU_REQUEST}
+          memory: ${HUBBLE_UI_FRONTEND_MEM_REQUEST}
+        limits:
+          memory: ${HUBBLE_UI_FRONTEND_MEM_LIMIT}
+    backend:
+      resources:
+        requests:
+          cpu: ${HUBBLE_UI_BACKEND_CPU_REQUEST}
+          memory: ${HUBBLE_UI_BACKEND_MEM_REQUEST}
+        limits:
+          memory: ${HUBBLE_UI_BACKEND_MEM_LIMIT}
   tls:
     auto:
       enabled: true

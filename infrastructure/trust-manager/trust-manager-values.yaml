@@ -7,6 +7,7 @@ defaultPackage:
 secretTargets:
   enabled: true
   authorizedSecrets:
+    - openbao-issuer-ca
     - openbao-root-ca
     - postgres-client-ca
 app:

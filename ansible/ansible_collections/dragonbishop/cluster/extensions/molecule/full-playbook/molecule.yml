@@ -7,6 +7,8 @@ ansible:
         - --extra-vars=opentofu_state_encryption_passphrase={{ 'full-playbook-state' | hash('sha256') }}
         - --extra-vars=opentofu_postgres_superuser_password={{ 'full-playbook-superuser' | hash('sha256') }}
         - --extra-vars=opentofu_binary=${OPENTOFU_BINARY}
+        # Testing installs the CAs
+        - --extra-vars=opentofu_desktop_trust=yes
 
 scenario:
   test_sequence:

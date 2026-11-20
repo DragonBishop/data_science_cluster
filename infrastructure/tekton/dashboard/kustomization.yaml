@@ -1,0 +1,104 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # renovate: datasource=github-releases depName=tektoncd/dashboard
+  - https://infra.tekton.dev/tekton-releases/dashboard/previous/v0.74.0/release.yaml
+  - tekton-dashboard-tls.yaml
+  - tekton-dashboard-localhost.yaml
+patches:
+  # Verify upstream flags before selecting the operator namespaces
+  - target:
+      kind: Deployment
+      name: tekton-dashboard
+    patch: |
+      - op: test
+        path: /spec/template/spec/containers/0/args/6
+        value: --pipelines-namespace=tekton-pipelines
+      - op: replace
+        path: /spec/template/spec/containers/0/args/6
+        value: --pipelines-namespace=tekton
+      - op: test
+        path: /spec/template/spec/containers/0/args/10
+        value: --triggers-namespace=tekton-pipelines
+      - op: replace
+        path: /spec/template/spec/containers/0/args/10
+        value: --triggers-namespace=tekton
+  - target:
+      kind: Deployment
+      name: tekton-dashboard
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: tekton-dashboard
+      spec:
+        template:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: tekton-dashboard
+                securityContext:
+                  readOnlyRootFilesystem: true
+                resources:
+                  requests:
+                    cpu: ${TEKTON_DASHBOARD_CPU_REQUEST}
+                    memory: ${TEKTON_DASHBOARD_MEM_REQUEST}
+                  limits:
+                    cpu: ${TEKTON_DASHBOARD_CPU_LIMIT}
+                    memory: ${TEKTON_DASHBOARD_MEM_LIMIT}
+  # Terminate HTTPS inside the Dashboard pod
+  - target:
+      kind: Deployment
+      name: tekton-dashboard
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/-
+        value:
+          name: localhost-tls
+          image: ghostunnel/ghostunnel:${GHOSTUNNEL_VERSION}
+          args:
+            - server
+            - --listen=0.0.0.0:8443
+            - --target=127.0.0.1:9097
+            - --cert=/tls/tls.crt
+            - --key=/tls/tls.key
+            # Access is restricted to the host
+            - --disable-authentication
+            # Picks up cert-manager's renewal
+            - --timed-reload=1h
+          ports:
+            - name: localhost-tls
+              containerPort: 8443
+              protocol: TCP
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: ${LOCALHOST_TLS_CPU_REQUEST}
+              memory: ${LOCALHOST_TLS_MEM_REQUEST}
+            limits:
+              cpu: ${TEKTON_DASHBOARD_TLS_CPU_LIMIT}
+              memory: ${LOCALHOST_TLS_MEM_LIMIT}
+          volumeMounts:
+            - name: localhost-tls
+              mountPath: /tls
+              readOnly: true
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: localhost-tls
+          secret:
+            secretName: tekton-dashboard-localhost-tls

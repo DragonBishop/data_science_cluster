@@ -17,7 +17,7 @@ spec:
             - port: "9090"
               protocol: TCP
   egress:
-    # Wildcard vendor-owned hosts; list tenant hosts (one owner per subdomain) by name
+    # Wildcard vendor hosts; name tenant hosts explicitly
     - toFQDNs:
         # Git forge: clone, API, codeload
         - matchName: "github.com"
@@ -29,6 +29,9 @@ spec:
         - matchName: "kubernetes-sigs.github.io"
         - matchName: "seaweedfs.github.io"
         - matchName: "spiffe.github.io"
+        # Tekton Dashboard release and its redirect target
+        - matchName: "infra.tekton.dev"
+        - matchName: "objectstorage.us-ashburn-1.oraclecloud.com"
         # Quay: registry and CDN
         - matchName: "quay.io"
         - matchPattern: "*.quay.io"

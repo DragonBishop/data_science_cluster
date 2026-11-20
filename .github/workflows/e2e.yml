@@ -65,6 +65,20 @@ jobs:
         with:
           tofu_version: v1.13.9
           tofu_wrapper: false
+      - &install_tkn
+        name: Install the pinned Tekton CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tkn_version="$(yq '.data.TKN_VERSION' infrastructure/cluster-config/versions.yaml)"
+          tkn_archive="tkn_${tkn_version}_Linux_x86_64.tar.gz"
+          tkn_dir="$(mktemp -d "$RUNNER_TEMP/tkn.XXXXXX")"
+          cd "$tkn_dir"
+          gh release download "v$tkn_version" --repo tektoncd/cli \
+            --pattern "$tkn_archive" --pattern checksums.txt
+          sha256sum --check --ignore-missing checksums.txt
+          tar -xzf "$tkn_archive" tkn
+          echo "$tkn_dir" >> "$GITHUB_PATH"
 
       - &install_python_environment
         name: Install the Python environment
@@ -96,9 +110,42 @@ jobs:
           export GITHUB_APP_INSTALLATION_ID='$GITHUB_APP_INSTALLATION_ID'
           export GITHUB_APP_PRIVATE_KEY_PATH=/tmp/flux-github-app.pem
           export FLUX_GIT_BRANCH='$FLUX_GIT_BRANCH'
+          export FLUX_CI_MANAGED_TESTS=true
           export OPENTOFU_BINARY="\$(command -v tofu)"
           uv --directory '$REPO_DIR/ansible/ansible_collections/dragonbishop/cluster' \
             run molecule test --scenario-name full-playbook
+          EOF
+
+      - &run_tekton_pipelines
+        name: Run the Tekton integration pipelines
+        run: |
+          $ON_NODE bash -se -o pipefail <<'EOF'
+          flux reconcile source git flux-system
+          kubectl -n flux-system wait --for=create --for=condition=Ready --timeout=20m \
+            kustomization/tekton-tasks kustomization/tekton-pipelines
+          revision="$(kubectl -n flux-system get gitrepository flux-system \
+            -o jsonpath='{.status.artifact.revision}')"
+          [[ -n "$revision" ]]
+
+          tkn pipeline start core-test -n tekton-pipelines --serviceaccount core-test \
+            --param "revision=$revision" --showlog --exit-with-pipelinerun-error
+
+          if [[ "$revision" != main@* ]]; then
+            kubectl -n flux-system wait --for=create --for=condition=Ready --timeout=20m \
+              kustomization/tekton-triggers
+            # Use the workspace and service accounts from the Trigger Flux applied.
+            run_name="$(kubectl -n tekton-triggers get trigger pull-request -o json |
+              jq -e --arg revision "$revision" '
+                .spec.template.spec.resourcetemplates[]
+                | select(.spec.pipelineRef.name == "code-quality")
+                | .metadata |= (del(.name) + {generateName: "code-quality-"})
+                | (.spec.params[] | select(.name == "revision") | .value) = $revision
+              ' | kubectl -n tekton-pipelines create -f - -o jsonpath='{.metadata.name}')"
+            tkn pipelinerun logs -n tekton-pipelines "$run_name" --follow
+            succeeded="$(kubectl -n tekton-pipelines get pipelinerun "$run_name" \
+              -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}')"
+            [[ "$succeeded" == True ]]
+          fi
           EOF
 
       - &show_flux_objects
@@ -151,6 +198,7 @@ jobs:
       - *read_flux_version
       - *setup_flux
       - *setup_opentofu
+      - *install_tkn
       - uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
         with:
           version: v2.3.0
@@ -161,7 +209,7 @@ jobs:
             --cpus=4 --memory=12 --disk=60 template:fedora-44
 
       - name: Install the VM's packages
-        run: $ON_NODE sudo dnf install --assumeyes rsync firewalld git gnupg2 openssl
+        run: $ON_NODE sudo dnf install --assumeyes rsync firewalld git gnupg2 jq openssl
 
       - name: Start firewalld in the VM
         run: $ON_NODE sudo systemctl enable --now firewalld
@@ -173,7 +221,7 @@ jobs:
 
       - name: Copy the tools into the VM
         run: |
-          for tool_name in uv kubectl helm flux tofu; do
+          for tool_name in uv kubectl helm flux tofu tkn; do
             tool_path="$(command -v "$tool_name")"
             rsync --copy-links --executability --rsync-path='sudo rsync' \
               "$tool_path" "lima-node:/usr/local/bin/$tool_name"
@@ -186,6 +234,7 @@ jobs:
       - *install_collection
       - *write_flux_private_key
       - *run_full_playbook
+      - *run_tekton_pipelines
       - *show_flux_objects
       - *show_cluster_state
 

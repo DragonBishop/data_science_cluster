@@ -32,13 +32,32 @@ uninstall_k3s() {
 clear_cilium_host_files() {
     echo "🧹 Clearing Cilium files that persist across reboots..."
     sudo rm -f /etc/cni/net.d/05-cilium.conflist
-    # Restore CNI configs Cilium set aside, as its own post-uninstall-cleanup does
+    # Restore the CNI configs Cilium set aside
     if [ -d /etc/cni/net.d ]; then
         sudo find /etc/cni/net.d -name '*.cilium_bak' -exec sh -c 'mv "$1" "${1%.cilium_bak}"' _ {} \;
     fi
     sudo rm -f /opt/cni/bin/cilium-cni
     sudo rm -f /etc/sysctl.d/99-zzz-override_cilium.conf
     sudo rm -rf /var/lib/cilium
+}
+
+# Installed by the opentofu role's trust prompt
+remove_trust_anchors() {
+    local anchor_dir update_command anchor_name
+    if [ -d /etc/pki/ca-trust/source/anchors ]; then
+        anchor_dir=/etc/pki/ca-trust/source/anchors
+        update_command=update-ca-trust
+    elif [ -d /usr/local/share/ca-certificates ]; then
+        anchor_dir=/usr/local/share/ca-certificates
+        update_command=update-ca-certificates
+    else
+        return 0
+    fi
+    echo "🧹 Removing the cluster's CA certificates from the system trust store..."
+    for anchor_name in data-science-cluster-desktop-ca.crt data-science-cluster-openbao-ca.crt; do
+        sudo rm -f "$anchor_dir/$anchor_name"
+    done
+    sudo "$update_command"
 }
 
 clear_openbao_cache() {
@@ -61,6 +80,7 @@ main() {
     acquire_sudo
     uninstall_k3s
     clear_cilium_host_files
+    remove_trust_anchors
 
     clear_openbao_cache
     clear_terraform_state

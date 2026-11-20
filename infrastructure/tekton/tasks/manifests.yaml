@@ -70,10 +70,10 @@ spec:
           /manifests/rendered/
     - name: trivy-manifests
       image: aquasec/trivy:${TRIVY_VERSION}
-      workingDir: /manifests/rendered
       script: |
         #!/bin/sh
         set -eu
+        cd /manifests/rendered
         trivy config --quiet --skip-check-update --exit-code 1 --ignorefile "$(workspaces.source.path)/.trivyignore.yaml" .
     - name: trivy-terraform
       image: aquasec/trivy:${TRIVY_VERSION}

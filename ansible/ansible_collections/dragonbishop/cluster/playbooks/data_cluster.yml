@@ -12,6 +12,10 @@
       prompt: "Postgres superuser password"
       private: true
       default: ""
+    - name: opentofu_desktop_trust
+      prompt: "Trust the cluster's desktop and OpenBao CAs in this machine's trust store, for browsers and VS Code? (yes/no)"
+      private: false
+      default: "yes"
 
   pre_tasks:
     - name: Prompt for the OpenBao root token if OpenBao is already initialized
@@ -83,4 +87,5 @@
       ansible.builtin.import_role:
         name: dragonbishop.cluster.flux
         tasks_from: core_test
+      when: not flux_ci_managed_tests
       tags: always

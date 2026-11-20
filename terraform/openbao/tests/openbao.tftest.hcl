@@ -51,6 +51,9 @@ run "auth_roles_bound_narrowly" {
         vault_kubernetes_auth_backend_role.barman_s3,
         vault_kubernetes_auth_backend_role.openbao_snapshot_s3,
         vault_kubernetes_auth_backend_role.openbao_snapshot,
+        vault_kubernetes_auth_backend_role.desktop_issuer["gateway"],
+        vault_kubernetes_auth_backend_role.desktop_issuer["kube-system"],
+        vault_kubernetes_auth_backend_role.desktop_issuer["tekton-pipelines"],
       ] : length(role.bound_service_account_names) == 1 && length(role.bound_service_account_namespaces) == 1
     ])
     error_message = "A Kubernetes auth role is bound to more than one ServiceAccount or namespace."
@@ -69,6 +72,7 @@ run "leaf_profile_is_scoped" {
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, var.internal_domain) &&
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-grpc.cilium.io") &&
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-relay.cilium.io") &&
+      contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-ui.cilium.io") &&
       !contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "internal") &&
       !contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "cilium.io")
     )
@@ -118,5 +122,19 @@ run "csi_tokens_cover_secret_leases" {
       vault_kubernetes_auth_backend_role.openbao_snapshot_s3.token_max_ttl >= vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
     )
     error_message = "The OpenBao snapshot holder's CSI login token expires before its S3 lease, revoking the key before the next daily rotation."
+  }
+}
+
+run "desktop_ca_is_constrained" {
+  command = plan
+
+  assert {
+    condition = (
+      toset(vault_pki_secret_backend_root_sign_intermediate.desktop.permitted_dns_domains) == toset([var.internal_domain, "localhost"]) &&
+      toset(vault_pki_secret_backend_role.desktop.allowed_domains) == toset([var.internal_domain, "localhost"]) &&
+      !vault_pki_secret_backend_role.desktop.allow_ip_sans &&
+      !vault_pki_secret_backend_role.desktop.client_flag
+    )
+    error_message = "The desktop CA must sign only the internal domain and localhost, with no IP SANs or client certificates."
   }
 }

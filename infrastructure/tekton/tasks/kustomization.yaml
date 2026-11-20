@@ -9,7 +9,6 @@ resources:
   - manifests.yaml
   - mtls-required.yaml
   - postgres-database-applied.yaml
-  - prek.yaml
   - renovate-config.yaml
   - shellcheck.yaml
   - unauthorized-pod-denied.yaml

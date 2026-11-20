@@ -1,0 +1,21 @@
+# Dashboard on loopback; literal ports preserve their string type in Flux
+apiVersion: cilium.io/v2
+kind: CiliumLocalRedirectPolicy
+metadata:
+  name: tekton-dashboard-localhost
+  namespace: tekton-pipelines
+spec:
+  redirectFrontend:
+    addressMatcher:
+      ip: "127.0.0.1"
+      toPorts:
+        - port: "12001"
+          protocol: TCP
+  redirectBackend:
+    localEndpointSelector:
+      matchLabels:
+        app.kubernetes.io/name: dashboard
+        app.kubernetes.io/part-of: tekton-dashboard
+    toPorts:
+      - port: "8443"
+        protocol: TCP

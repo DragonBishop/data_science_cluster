@@ -8,7 +8,7 @@ locals {
   leaf_pki_domains = [
     var.internal_domain,
     "svc.cluster.local",
-    "hubble-grpc.cilium.io", "hubble-relay.cilium.io",
+    "hubble-grpc.cilium.io", "hubble-relay.cilium.io", "hubble-ui.cilium.io",
     "seaweedfs-s3", "seaweedfs-s3.seaweedfs", "seaweedfs-s3.seaweedfs.svc",
     "localhost",
   ]
@@ -75,5 +75,60 @@ resource "vault_pki_secret_backend_role" "internal_server" {
   key_type           = "any"
   ttl                = 2592000
   max_ttl            = 2592000
-  no_store           = true # cert-manager persists issued certs in a Secret.
+  no_store           = true # cert-manager stores the certificates
+}
+
+# Desktop CA for the internal domain and localhost
+locals {
+  desktop_pki_domains = [var.internal_domain, "localhost"]
+}
+
+resource "vault_mount" "pki_desktop" {
+  path                  = "pki_desktop"
+  type                  = "pki"
+  max_lease_ttl_seconds = 63072000 # 2y
+}
+
+resource "vault_pki_secret_backend_intermediate_cert_request" "desktop" {
+  backend     = vault_mount.pki_desktop.path
+  type        = "internal"
+  common_name = "data-science-cluster Desktop CA"
+  key_type    = "ec"
+  key_bits    = 256
+}
+
+resource "vault_pki_secret_backend_root_sign_intermediate" "desktop" {
+  backend               = vault_mount.pki_root.path
+  csr                   = vault_pki_secret_backend_intermediate_cert_request.desktop.csr
+  common_name           = "data-science-cluster Desktop CA"
+  ttl                   = "63072000"
+  permitted_dns_domains = local.desktop_pki_domains
+}
+
+resource "vault_pki_secret_backend_intermediate_set_signed" "desktop" {
+  backend     = vault_mount.pki_desktop.path
+  certificate = vault_pki_secret_backend_root_sign_intermediate.desktop.certificate_bundle
+}
+
+resource "vault_pki_secret_backend_role" "desktop" {
+  backend                     = vault_mount.pki_desktop.path
+  name                        = "desktop"
+  allowed_domains             = local.desktop_pki_domains
+  allow_bare_domains          = true
+  allow_subdomains            = true
+  allow_glob_domains          = false
+  allow_wildcard_certificates = true
+  allow_ip_sans               = false
+  server_flag                 = true
+  client_flag                 = false
+  require_cn                  = false
+  key_type                    = "any"
+  ttl                         = 2592000
+  max_ttl                     = 2592000
+  no_store                    = true # cert-manager stores the certificates
+}
+
+# The desktop intermediate for the workstation's trust store
+output "desktop_ca" {
+  value = vault_pki_secret_backend_root_sign_intermediate.desktop.certificate
 }

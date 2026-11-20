@@ -1,4 +1,4 @@
-# cert-manager ClusterIssuers for OpenBao, and OpenBao's local CA
+# OpenBao and desktop certificate issuers
 
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -7,8 +7,7 @@ metadata:
 spec:
   selfSigned: {}
 ---
-# ClusterIssuer backed by OpenBao's Intermediate PKI secrets engine.
-# Signs service and Hubble leaf certificates.
+# Signs service and Hubble certificates through pki_int
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -36,7 +35,7 @@ spec:
   ca:
     secretName: openbao-local-ca-secret
 ---
-# cert-manager requests only its own account's token for OpenBao authentication.
+# cert-manager requests only its own token
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -76,6 +75,177 @@ spec:
   privateKey:
     algorithm: ${CERT_KEY_ALGORITHM}
     size: ${CERT_KEY_SIZE}
+  # Signs only openbao-server-cert's names
+  nameConstraints:
+    critical: true
+    permitted:
+      dnsDomains:
+        - openbao
+        - openbao.openbao
+        - openbao.openbao.svc
+        - openbao.openbao.svc.cluster.local
+        - openbao-internal
+        - openbao-internal.openbao
+        - openbao-internal.openbao.svc.cluster.local
+        - localhost
+      ipRanges:
+        - 127.0.0.1/32
   issuerRef:
     name: openbao-selfsigned-bootstrap
     kind: ClusterIssuer
+---
+# Desktop CA Issuer; logs in as desktop-issuer-gateway-role
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-desktop-issuer
+  namespace: gateway
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-desktop-issuer-tokenrequest
+  namespace: gateway
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["openbao-desktop-issuer"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-desktop-issuer-tokenrequest
+  namespace: gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbao-desktop-issuer-tokenrequest
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: openbao-desktop-issuer
+  namespace: gateway
+spec:
+  vault:
+    server: https://openbao.openbao.svc.cluster.local:8200
+    path: pki_desktop/sign/desktop
+    # Synced by Bundle openbao-issuer-ca
+    caBundleSecretRef:
+      name: openbao-issuer-ca
+      key: ca.crt
+    auth:
+      kubernetes:
+        role: desktop-issuer-gateway-role
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: openbao-desktop-issuer
+---
+# Desktop CA Issuer; logs in as desktop-issuer-kube-system-role
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-desktop-issuer
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-desktop-issuer-tokenrequest
+  namespace: kube-system
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["openbao-desktop-issuer"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-desktop-issuer-tokenrequest
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbao-desktop-issuer-tokenrequest
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: openbao-desktop-issuer
+  namespace: kube-system
+spec:
+  vault:
+    server: https://openbao.openbao.svc.cluster.local:8200
+    path: pki_desktop/sign/desktop
+    # Synced by Bundle openbao-issuer-ca
+    caBundleSecretRef:
+      name: openbao-issuer-ca
+      key: ca.crt
+    auth:
+      kubernetes:
+        role: desktop-issuer-kube-system-role
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: openbao-desktop-issuer
+---
+# Desktop CA Issuer; logs in as desktop-issuer-tekton-pipelines-role
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-desktop-issuer
+  namespace: tekton-pipelines
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-desktop-issuer-tokenrequest
+  namespace: tekton-pipelines
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["openbao-desktop-issuer"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-desktop-issuer-tokenrequest
+  namespace: tekton-pipelines
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbao-desktop-issuer-tokenrequest
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: openbao-desktop-issuer
+  namespace: tekton-pipelines
+spec:
+  vault:
+    server: https://openbao.openbao.svc.cluster.local:8200
+    path: pki_desktop/sign/desktop
+    # Synced by Bundle openbao-issuer-ca
+    caBundleSecretRef:
+      name: openbao-issuer-ca
+      key: ca.crt
+    auth:
+      kubernetes:
+        role: desktop-issuer-tekton-pipelines-role
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: openbao-desktop-issuer

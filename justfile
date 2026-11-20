@@ -4,7 +4,7 @@ default:
 
 # --- Bootstrap (first-time install, see docs/INSTALLATION.md) --------------
 
-# Configure host firewall rules for Kubernetes and Cilium (Fedora firewalld or Ubuntu ufw)
+# Configure the host firewall for Kubernetes and Cilium
 setup-firewall:
   ./src/bash/setup-firewall.sh
 
@@ -12,7 +12,7 @@ setup-firewall:
 preflight:
   ./src/bash/preflight.sh
 
-# Run full cluster bootstrap via Ansible (prompts for sudo; accepts flags like --tags, --check, -v)
+# Bootstrap with Ansible (prompts for sudo; accepts playbook flags)
 bootstrap *ARGS:
   uv run ansible-galaxy collection install --upgrade -p ansible ansible/ansible_collections/dragonbishop/cluster
   uv run ansible-playbook dragonbishop.cluster.data_cluster --ask-become-pass {{ARGS}}
@@ -23,7 +23,7 @@ bootstrap *ARGS:
 start:
   ./src/bash/start-cluster.sh
 
-# Read-only cluster health check (Flux, Gateway/DNS, cert-manager, database, backups, SeaweedFS, Hubble)
+# Show cluster health
 status:
   #!/usr/bin/env bash
   set -uo pipefail
@@ -59,6 +59,16 @@ status:
   echo "== Hubble =="
   kubectl get pods -n kube-system -l k8s-app=hubble-relay
 
+# Run core-test, follow its logs, and return its result
+core-test:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  run_name=$(kubectl create -f infrastructure/tekton/pipelines/core-test/core-test-run.yaml -o jsonpath='{.metadata.name}')
+  echo "PipelineRun $run_name"
+  tkn pipelinerun logs "$run_name" -n tekton-pipelines --follow
+  succeeded=$(kubectl get pipelinerun "$run_name" -n tekton-pipelines -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}')
+  [[ $succeeded == True ]]
+
 # Stop the cluster (pass --force to skip confirmation on a stuck stop)
 stop *ARGS:
   ./src/bash/stop-cluster.sh {{ARGS}}
@@ -88,13 +98,29 @@ gateway-check DOMAIN HOST=`kubectl get gateway -n gateway internal-gateway -o js
 hubble *ARGS='status':
   kubectl exec -n kube-system ds/cilium -c cilium-agent --  hubble "$@"
 
+# Open hubble, tekton or openbao and print its URL
+ui NAME:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # Ports match the localhost redirect policies
+  case "{{NAME}}" in
+    hubble) url="https://localhost:12000/" ;;
+    tekton) url="https://localhost:12001/" ;;
+    openbao) url="https://localhost:8210/ui/" ;;
+    *) echo "Unknown UI {{NAME}}: use hubble, tekton or openbao." >&2; exit 2 ;;
+  esac
+  echo "$url"
+  if command -v xdg-open >/dev/null; then
+    xdg-open "$url"
+  fi
+
 # Open interactive shell in openbao-0 pod
 bao-shell:
   kubectl exec -it openbao-0 -n openbao -- sh -c 'unset BAO_TOKEN; exec sh'
 
 # --- Database ------------------------------------------------------------
 
-# Trigger a manual base backup of postgres-cluster to SeaweedFS through the Barman Cloud plugin
+# Back up PostgreSQL to SeaweedFS with Barman Cloud
 backup:
   kubectl cnpg backup postgres-cluster -n databases -m plugin --plugin-name barman-cloud.cloudnative-pg.io
 
