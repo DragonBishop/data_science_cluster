@@ -18,3 +18,28 @@ spec:
             name: postgres-server-cert
             key: ca.crt
         serverName: postgres-cluster-rw
+---
+# Barman Cloud plugin metrics, served on the instances' metrics port
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: postgres-cluster
+  namespace: databases
+spec:
+  groups:
+    - name: postgres-backups
+      rules:
+        - alert: PostgresBackupStale
+          expr: time() - max(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp) > ${POSTGRES_BACKUP_MAX_AGE_SECONDS}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: The newest postgres-cluster base backup is older than ${POSTGRES_BACKUP_MAX_AGE_SECONDS} seconds.
+        - alert: PostgresBackupFailed
+          expr: max(barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp) > max(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: The latest base backup of postgres-cluster failed after the last good one
