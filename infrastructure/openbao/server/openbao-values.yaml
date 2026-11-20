@@ -16,10 +16,15 @@ server:
       memory: ${OPENBAO_MEM_REQUEST}
     limits:
       memory: ${OPENBAO_MEM_LIMIT}
-  # Standalone has no standbys to order, and the static seal unseals each new pod
+  # The static seal unseals each new pod
   updateStrategyType: RollingUpdate
   extraEnvironmentVars:
     BAO_CACERT: /openbao/userconfig/openbao-server-cert/ca.crt
+  # The metrics-only listener below
+  extraPorts:
+    - name: metrics
+      containerPort: 8204
+      protocol: TCP
 
   extraVolumes:
     - type: secret
@@ -66,6 +71,26 @@ server:
         cluster_address  = "[::]:8201"
         tls_cert_file    = "/openbao/userconfig/openbao-server-cert/tls.crt"
         tls_key_file     = "/openbao/userconfig/openbao-server-cert/tls.key"
+        # Metrics come only from the listener on 8204
+        telemetry {
+          disallow_metrics = true
+        }
+      }
+
+      # Serves only /v1/sys/metrics, over TLS without a token
+      listener "tcp" {
+        address       = "[::]:8204"
+        tls_cert_file = "/openbao/userconfig/openbao-server-cert/tls.crt"
+        tls_key_file  = "/openbao/userconfig/openbao-server-cert/tls.key"
+        telemetry {
+          metrics_only                   = true
+          unauthenticated_metrics_access = true
+        }
+      }
+
+      telemetry {
+        prometheus_retention_time = "24h"
+        disable_hostname          = true
       }
 
       storage "raft" {
@@ -80,7 +105,7 @@ server:
 
 csi:
   enabled: true
-  # The agent's cache would hand back a leased login instead of a new one at each rotation
+  # Its cache returns the old login at rotation
   agent:
     enabled: false
   extraArgs:
@@ -115,14 +140,14 @@ snapshotAgent:
   s3CredentialsSecret: openbao-snapshot-s3
   config:
     s3Host: seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
-    # s3cmd's host-bucket template; no %(bucket)s selects path-style addressing for SeaweedFS
+    # No %(bucket)s: path-style addressing for SeaweedFS
     s3Bucket: seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
     s3Uri: s3://${OPENBAO_SNAPSHOT_BUCKET}
     s3ExpireDays: "${OPENBAO_SNAPSHOT_RETENTION_DAYS}"
     s3cmdExtraFlag: "--ca-certs=/openbao/root-ca/ca.crt"
     baoAuthPath: kubernetes
     baoRole: openbao-snapshot-role
-    # Projected below with the audience OpenBao's Kubernetes auth roles require
+    # Projected below with OpenBao's audience
     tokenPath: /var/run/secrets/openbao/token
   extraEnvironmentVars:
     BAO_CACERT: /openbao/ca-bundle/ca.crt
