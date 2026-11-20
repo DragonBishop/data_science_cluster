@@ -6,6 +6,14 @@ global:
     clusterName: data-science-cluster
 spire-server:
   caTTL: ${SPIRE_CA_TTL}
+  # Metrics over TLS with the SVID, admitting only Prometheus
+  telemetry:
+    prometheus:
+      enabled: true
+      tls:
+        mode: spireSVID
+        authorizedSPIFFEIDs:
+          - spiffe://cluster.internal/ns/observability/sa/prometheus
   upstreamAuthority:
     vault:
       enabled: true
@@ -50,6 +58,14 @@ spire-server:
         test-keys:
           enabled: false
 spire-agent:
+  # Metrics over TLS with the SVID, admitting only Prometheus
+  telemetry:
+    prometheus:
+      enabled: true
+      tls:
+        mode: spireSVID
+        authorizedSPIFFEIDs:
+          - spiffe://cluster.internal/ns/observability/sa/prometheus
   resources:
     requests:
       cpu: ${SPIRE_AGENT_CPU_REQUEST}
