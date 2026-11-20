@@ -41,6 +41,15 @@ spec:
         - ports:
             - port: "5432"
               protocol: TCP
+    # Metrics over TLS: Prometheus
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9187"
+              protocol: TCP
     # Grafana's database
     - fromEndpoints:
         - matchLabels:

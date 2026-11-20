@@ -1,0 +1,20 @@
+# The PodMonitor verifies the PostgreSQL server certificate.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: postgres-cluster
+  namespace: databases
+spec:
+  selector:
+    matchLabels:
+      cnpg.io/cluster: postgres-cluster
+  podMetricsEndpoints:
+    # monitoring.tls serves the PostgreSQL server certificate
+    - port: metrics
+      scheme: https
+      tlsConfig:
+        ca:
+          secret:
+            name: postgres-server-cert
+            key: ca.crt
+        serverName: postgres-cluster-rw

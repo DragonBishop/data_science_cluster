@@ -16,3 +16,23 @@ spec:
         - ports:
             - port: "9090"
               protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: cnpg-operator
+  namespace: cnpg-system
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudnative-pg
+  ingress:
+    # Ghostunnel metrics
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9445"
+              protocol: TCP

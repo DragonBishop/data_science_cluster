@@ -21,6 +21,10 @@ spec:
   superuserSecret:
     name: postgres-superuser-credentials
 
+  monitoring:
+    tls:
+      enabled: true
+
   # CNPG drops a removed role only through ensure: absent; delete this block once core_test is gone
   managed:
     roles:
