@@ -6,3 +6,4 @@ metadata:
   namespace: flux-system
 data:
   DATA_SCIENCE_DB_NAME: "data_science"
+  GRAFANA_DB_NAME: "grafana"

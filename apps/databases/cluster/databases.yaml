@@ -22,3 +22,14 @@ spec:
       schema: topology
     - name: postgis_tiger_geocoder
       schema: tiger
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: grafana
+  namespace: databases
+spec:
+  name: ${GRAFANA_DB_NAME}
+  owner: grafana_readwrite
+  cluster:
+    name: postgres-cluster

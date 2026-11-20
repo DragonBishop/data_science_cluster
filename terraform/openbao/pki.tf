@@ -3,6 +3,7 @@ locals {
     "localhost",
     "seaweedfs-s3", "seaweedfs-s3.seaweedfs", "seaweedfs-s3.seaweedfs.svc",
     "seaweedfs-s3.seaweedfs.svc.cluster.local",
+    "kube-prometheus-stack-operator", "kube-prometheus-stack-operator.observability.svc",
     "internal", "cilium.io", "cluster.local", "hubble-relay",
   ]
   leaf_pki_domains = [
@@ -10,6 +11,7 @@ locals {
     "svc.cluster.local",
     "hubble-grpc.cilium.io", "hubble-relay.cilium.io", "hubble-ui.cilium.io",
     "seaweedfs-s3", "seaweedfs-s3.seaweedfs", "seaweedfs-s3.seaweedfs.svc",
+    "kube-prometheus-stack-operator", "kube-prometheus-stack-operator.observability.svc",
     "localhost",
   ]
 }

@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: prometheus
+  labels:
+    data-cluster/volume: prometheus
+spec:
+  capacity:
+    storage: ${PROMETHEUS_STORAGE_SIZE}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: ${PROMETHEUS_HOST_PATH}
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: alertmanager
+  labels:
+    data-cluster/volume: alertmanager
+spec:
+  capacity:
+    storage: ${ALERTMANAGER_STORAGE_SIZE}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: ${ALERTMANAGER_HOST_PATH}
+    type: Directory

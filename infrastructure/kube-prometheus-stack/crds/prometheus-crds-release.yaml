@@ -1,0 +1,48 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: prometheus-community
+  namespace: observability
+spec:
+  interval: 24h
+  type: oci
+  url: oci://ghcr.io/prometheus-community/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: prometheus-crds
+  namespace: observability
+spec:
+  interval: 1h
+  driftDetection:
+    mode: enabled
+  releaseName: prometheus-crds
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "${KUBE_PROMETHEUS_STACK_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+  install:
+    crds: Create
+  upgrade:
+    crds: CreateReplace
+  values:
+    defaultRules:
+      create: false
+    alertmanager:
+      enabled: false
+    grafana:
+      enabled: false
+    kubernetesServiceMonitors:
+      enabled: false
+    kubeStateMetrics:
+      enabled: false
+    nodeExporter:
+      enabled: false
+    prometheusOperator:
+      enabled: false
+    prometheus:
+      enabled: false

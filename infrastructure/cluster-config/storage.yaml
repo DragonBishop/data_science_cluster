@@ -5,11 +5,15 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
+  ALERTMANAGER_HOST_PATH: "/var/lib/data-cluster/alertmanager"
+  ALERTMANAGER_STORAGE_SIZE: "1Gi"
   CNPG_BACKUP_BUCKET: "cnpg-backups"
   OPENBAO_DATA_STORAGE_SIZE: "10Gi"
   OPENBAO_SNAPSHOT_BUCKET: "openbao-snapshots"
   POSTGRES_STORAGE_CLASS: "local-path"
   POSTGRES_STORAGE_SIZE: "100Gi"
+  PROMETHEUS_HOST_PATH: "/var/lib/data-cluster/prometheus"
+  PROMETHEUS_STORAGE_SIZE: "20Gi"
   SEAWEEDFS_HOST_PATH: "/mnt/vault13/seaweedfs"
   SEAWEEDFS_MAX_VOLUMES: "90"
   SPIRE_SERVER_STORAGE_SIZE: "1Gi"

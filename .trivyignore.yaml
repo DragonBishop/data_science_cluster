@@ -17,6 +17,14 @@ misconfigurations:
       - cluster-config.yaml
       - openbao-server.yaml
     statement: The matched fields describe certificate key sizes and the seal key file path.
+  - id: KSV-0109
+    paths:
+      - kube-prometheus-stack-server.yaml
+    statement: Grafana reads its password from a CSI-mounted file and its admin credentials from a Secret.
+  - id: KSV-01010
+    paths:
+      - kube-prometheus-stack-server.yaml
+    statement: The chart values reference TLS Secret keys and certificate files.
   - id: KSV-0048
     paths:
       - tekton-pipelines.yaml

@@ -26,6 +26,9 @@ spec:
     roles:
       - name: core_test
         ensure: absent
+      - name: grafana_readwrite
+        ensure: present
+        login: false
 
   postgresql:
     pg_hba:

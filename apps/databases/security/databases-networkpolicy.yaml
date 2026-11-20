@@ -41,6 +41,15 @@ spec:
         - ports:
             - port: "5432"
               protocol: TCP
+    # Grafana's database
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            app.kubernetes.io/name: grafana
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
     # core-test checks the server certificate and logins
     - fromEndpoints:
         - matchLabels:

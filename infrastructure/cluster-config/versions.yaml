@@ -19,6 +19,8 @@ data:
   GHOSTUNNEL_VERSION: "v1.11.5"
   # renovate: datasource=github-releases depName=k3s-io/k3s
   K3S_VERSION: "v1.37.2+k3s1"
+  # renovate: datasource=helm depName=kube-prometheus-stack registryUrl=https://prometheus-community.github.io/helm-charts
+  KUBE_PROMETHEUS_STACK_VERSION: "93.3.1"
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
   KUBECTL_VERSION: "v1.37.2"
   # renovate: datasource=docker depName=alpine/k8s
@@ -43,6 +45,8 @@ data:
   SECRETS_STORE_CSI_DRIVER_VERSION: "1.6.2"
   # renovate: datasource=docker depName=koalaman/shellcheck-alpine
   SHELLCHECK_VERSION: "v0.11.0"
+  # renovate: datasource=docker depName=ghcr.io/spiffe/spiffe-helper
+  SPIFFE_HELPER_VERSION: "0.12.3"
   # renovate: datasource=helm depName=spire-crds registryUrl=https://spiffe.github.io/helm-charts-hardened
   SPIRE_CRDS_VERSION: "0.6.1"
   # renovate: datasource=helm depName=spire registryUrl=https://spiffe.github.io/helm-charts-hardened

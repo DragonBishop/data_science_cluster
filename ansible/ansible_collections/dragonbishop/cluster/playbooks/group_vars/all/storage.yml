@@ -1,6 +1,8 @@
 ---
 # --- cluster-config/storage.yaml ---
+alertmanager_host_path: "{{ cluster_config.ALERTMANAGER_HOST_PATH }}"
 cnpg_backup_bucket: "{{ cluster_config.CNPG_BACKUP_BUCKET }}"
 openbao_data_storage_size: "{{ cluster_config.OPENBAO_DATA_STORAGE_SIZE }}"
 openbao_snapshot_bucket: "{{ cluster_config.OPENBAO_SNAPSHOT_BUCKET }}"
+prometheus_host_path: "{{ cluster_config.PROMETHEUS_HOST_PATH }}"
 spire_server_storage_size: "{{ cluster_config.SPIRE_SERVER_STORAGE_SIZE }}"

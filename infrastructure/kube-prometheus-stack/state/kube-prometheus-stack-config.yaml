@@ -1,0 +1,24 @@
+# Sidecar and TLS configs for Prometheus and kube-state-metrics
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-sidecars
+  namespace: observability
+data:
+  # SVID files for scrapes
+  spiffe-helper.conf: |
+    agent_address = "/spiffe-workload-api/spire-agent.sock"
+    cert_dir = "/svid"
+    svid_file_name = "svid.pem"
+    svid_key_file_name = "svid_key.pem"
+    svid_bundle_file_name = "bundle.pem"
+    daemon_mode = true
+  # kube-state-metrics admits only Prometheus; files re-read per connection
+  kube-state-metrics-web.yaml: |
+    tls_server_config:
+      cert_file: /svid/svid.pem
+      key_file: /svid/svid_key.pem
+      client_ca_file: /svid/bundle.pem
+      client_auth_type: RequireAndVerifyClientCert
+      client_allowed_sans:
+        - spiffe://cluster.internal/ns/observability/sa/prometheus
