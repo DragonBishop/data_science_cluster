@@ -2,6 +2,7 @@
 # --- cluster-config/versions.yaml ---
 cert_manager_version: "{{ cluster_config.CERT_MANAGER_VERSION }}"
 cilium_version: "{{ cluster_config.CILIUM_VERSION }}"
+ghostunnel_version: "{{ cluster_config.GHOSTUNNEL_VERSION }}"
 k3s_version: "{{ cluster_config.K3S_VERSION }}"
 openbao_image_tag: "{{ cluster_config.OPENBAO_IMAGE_TAG }}"
 openbao_secrets_aws_version: "{{ cluster_config.OPENBAO_SECRETS_AWS_VERSION }}"

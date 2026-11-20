@@ -25,6 +25,14 @@ misconfigurations:
     paths:
       - kube-prometheus-stack-server.yaml
     statement: The chart values reference TLS Secret keys and certificate files.
+  - id: KSV-0109
+    paths:
+      - cilium-hubble.yaml
+    statement: The chart values name the Secret that holds the Cilium operator's TLS certificate.
+  - id: KSV-01010
+    paths:
+      - cilium-hubble.yaml
+    statement: The chart values include the key name for Hubble's CA bundle.
   - id: KSV-0048
     paths:
       - tekton-pipelines.yaml

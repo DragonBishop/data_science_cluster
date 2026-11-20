@@ -29,6 +29,8 @@ operator:
       memory: ${CILIUM_OPERATOR_MEM_LIMIT}
 
 envoy:
+  prometheus:
+    enabled: false
   resources:
     requests:
       cpu: ${CILIUM_ENVOY_CPU_REQUEST}
@@ -52,3 +54,47 @@ egressGateway:
 
 # Enables the CiliumLocalRedirectPolicy CRD.
 localRedirectPolicy: true
+
+# Agent metrics on loopback; Ghostunnel serves them to Prometheus with the SPIRE socket over hostPath
+extraConfig:
+  prometheus-serve-addr: "127.0.0.1:9962"
+podLabels:
+  data-cluster/metrics-tls: "true"
+extraVolumes:
+  - name: spire-agent-socket
+    hostPath:
+      path: /run/spire/agent-sockets
+      type: DirectoryOrCreate
+extraContainers:
+  - name: metrics-tls
+    image: ghostunnel/ghostunnel:${GHOSTUNNEL_VERSION}
+    args:
+      - server
+      - --listen=0.0.0.0:${METRICS_TLS_PORT}
+      - --target=127.0.0.1:9962
+      - --use-workload-api-addr=unix:///run/spire/agent-sockets/spire-agent.sock
+      - --use-workload-api-timeout=0
+      - --allow-uri=spiffe://cluster.internal/ns/observability/sa/prometheus
+    ports:
+      - name: metrics-tls
+        containerPort: ${METRICS_TLS_PORT}
+        protocol: TCP
+    securityContext:
+      runAsUser: 65532
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: ${METRICS_TLS_CPU_REQUEST}
+        memory: ${METRICS_TLS_MEM_REQUEST}
+      limits:
+        memory: ${METRICS_TLS_MEM_LIMIT}
+    volumeMounts:
+      - name: spire-agent-socket
+        mountPath: /run/spire/agent-sockets
+        readOnly: true

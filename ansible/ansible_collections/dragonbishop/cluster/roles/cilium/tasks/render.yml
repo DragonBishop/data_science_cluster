@@ -13,8 +13,13 @@
     CILIUM_OPERATOR_MEM_LIMIT: "{{ cilium_operator_mem_limit }}"
     CILIUM_OPERATOR_MEM_REQUEST: "{{ cilium_operator_mem_request }}"
     CILIUM_OPERATOR_REPLICAS: "{{ cilium_operator_replicas }}"
+    GHOSTUNNEL_VERSION: "{{ ghostunnel_version }}"
     K3S_API_HOST: "{{ k3s_api_host }}"
     K3S_API_PORT: "{{ k3s_api_port }}"
+    METRICS_TLS_CPU_REQUEST: "{{ metrics_tls_cpu_request }}"
+    METRICS_TLS_MEM_LIMIT: "{{ metrics_tls_mem_limit }}"
+    METRICS_TLS_MEM_REQUEST: "{{ metrics_tls_mem_request }}"
+    METRICS_TLS_PORT: "{{ metrics_tls_port }}"
     POD_CIDR: "{{ pod_cidr }}"
   register: cilium_values_substituted
   changed_when: false

@@ -29,6 +29,12 @@ spire-server:
     limits:
       memory: ${SPIRE_SERVER_MEM_LIMIT}
   controllerManager:
+    # Cilium and the Secrets Store CSI driver need metrics SVIDs in kube-system.
+    ignoreNamespaces:
+      - kube-public
+      - local-path-storage
+      - openshift-.*
+      - ibm-.*
     resources:
       requests:
         cpu: ${SPIRE_CONTROLLER_MANAGER_CPU_REQUEST}

@@ -32,7 +32,13 @@ spec:
         - host
       toPorts:
         - ports:
+            - port: "9445"
+              protocol: TCP
             - port: "9446"
+              protocol: TCP
+            - port: "9965"
+              protocol: TCP
+            - port: "9963"
               protocol: TCP
             - port: "10250"
               protocol: TCP

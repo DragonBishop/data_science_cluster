@@ -9,7 +9,7 @@ locals {
   leaf_pki_domains = [
     var.internal_domain,
     "svc.cluster.local",
-    "hubble-grpc.cilium.io", "hubble-relay.cilium.io", "hubble-ui.cilium.io",
+    "hubble-grpc.cilium.io", "hubble-relay.cilium.io", "hubble-metrics.cilium.io", "hubble-ui.cilium.io",
     "seaweedfs-s3", "seaweedfs-s3.seaweedfs", "seaweedfs-s3.seaweedfs.svc",
     "kube-prometheus-stack-operator", "kube-prometheus-stack-operator.observability.svc",
     "localhost",
