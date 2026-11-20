@@ -37,7 +37,7 @@ specs:
             rules:
               dns:
                 - matchPattern: "*"
-  # 6. LAN and node into the Gateway
+  # 6. LAN, node, and the in-cluster HTTPS route check into the Gateway
   - endpointSelector:
       matchExpressions:
         - key: reserved:ingress
@@ -46,3 +46,20 @@ specs:
       - fromCIDR:
           - "${LAN_CIDR}"
           - 127.0.0.1/32
+      - fromEndpoints:
+          - matchLabels:
+              k8s:io.kubernetes.pod.namespace: tekton-pipelines
+              tekton.dev/pipeline: core-test
+              tekton.dev/pipelineTask: gateway-tls
+  - endpointSelector:
+      matchLabels:
+        k8s:io.kubernetes.pod.namespace: tekton-pipelines
+        tekton.dev/pipeline: core-test
+        tekton.dev/pipelineTask: gateway-tls
+    egress:
+      - toEntities:
+          - ingress
+        toPorts:
+          - ports:
+              - port: "443"
+                protocol: TCP

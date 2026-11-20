@@ -6,6 +6,7 @@ resources:
   - delete-probes.yaml
   - fetch-source.yaml
   - flux-ready.yaml
+  - gateway-tls.yaml
   - manifests.yaml
   - mtls-required.yaml
   - postgres-database-applied.yaml

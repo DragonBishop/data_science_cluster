@@ -51,6 +51,15 @@ spec:
           - name: job
             value:
               - tekton-pipelines-controller
+    - name: gateway-tls
+      runAfter: [flux-ready]
+      taskRef:
+        name: gateway-tls
+      matrix:
+        params:
+          - name: hostname
+            value:
+              - grafana.${INTERNAL_DOMAIN}
     - name: postgres-database-applied
       runAfter: [flux-ready]
       taskRef:
@@ -83,6 +92,7 @@ spec:
               - tekton-pipelines-webhook.tekton.svc.cluster.local:443
               - tekton-triggers-webhook.tekton.svc.cluster.local:443
               - tekton-triggers-core-interceptors.tekton.svc.cluster.local:8443
+              - kube-prometheus-stack-grafana.observability.svc.cluster.local:3000
               - kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090
               - kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
   finally:

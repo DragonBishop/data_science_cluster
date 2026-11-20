@@ -81,18 +81,6 @@ uninstall:
 fuzzypods:
   kubectl get pods -A --no-headers | fzf | awk '{print $2, $1}' | xargs -n 2 sh -c 'kubectl describe pod $0 -n $1'
 
-# Verify TLS and routing for a Gateway hostname (HOST defaults to the live Gateway IP)
-gateway-check DOMAIN HOST=`kubectl get gateway -n gateway internal-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null`:
-  #!/usr/bin/env bash
-  set -uo pipefail
-  if [ -z "{{HOST}}" ]; then
-    echo "Error: Could not determine the Gateway IP. Pass it explicitly: just gateway-check {{DOMAIN}} <HOST>" >&2
-    exit 1
-  fi
-  curl -v --resolve "{{DOMAIN}}:443:{{HOST}}" \
-    --cacert <(kubectl get secret -n gateway internal-edge-cert -o jsonpath='{.data.ca\.crt}' | base64 -d) \
-    "https://{{DOMAIN}}/"
-
 # Run a Hubble CLI command inside the Cilium agent (defaults to status)
 [positional-arguments]
 hubble *ARGS='status':

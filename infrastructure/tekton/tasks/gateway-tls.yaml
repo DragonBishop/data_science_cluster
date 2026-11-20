@@ -1,0 +1,32 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: gateway-tls
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: hostname
+      description: An HTTPRoute hostname on the internal-gateway https listener
+      type: string
+  volumes:
+    # The desktop CA is an intermediate under this root
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+  steps:
+    - name: route-serves
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      securityContext:
+        runAsUser: 65532
+      env:
+        - name: ROUTE_HOSTNAME
+          value: $(params.hostname)
+      volumeMounts:
+        - name: openbao-root-ca
+          mountPath: /ca/root
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        curl --silent --show-error --fail --cacert /ca/root/ca.crt \
+          --connect-to "$ROUTE_HOSTNAME:443:cilium-gateway-internal-gateway.gateway.svc.cluster.local:443" \
+          --output /dev/null --write-out '%{http_code}\n' "https://$ROUTE_HOSTNAME/"
