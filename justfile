@@ -23,41 +23,29 @@ bootstrap *ARGS:
 start:
   ./src/bash/start-cluster.sh
 
-# Show cluster health
+# Show Flux readiness, alerts, scrape failures and database status
 status:
   #!/usr/bin/env bash
   set -uo pipefail
-  echo "== Flux =="
-  flux get kustomizations
+  # Alertmanager and Prometheus through the API server's service proxy
+  proxy=/api/v1/namespaces/observability/services
+  echo "== Flux Kustomizations not Ready =="
+  flux get kustomizations --status-selector ready=false
 
   echo ""
-  echo "== Gateway / DNS =="
-  kubectl get ciliumloadbalancerippool
-  kubectl get gateway -n gateway internal-gateway -o wide
-  kubectl get svc -n kube-system coredns-external
+  echo "== Firing alerts (Watchdog and InfoInhibitor always fire) =="
+  kubectl get --raw "$proxy/https:kube-prometheus-stack-alertmanager:9093/proxy/api/v2/alerts?active=true&silenced=false&inhibited=false" \
+    | jq -r '.[] | select(.labels.alertname != "Watchdog" and .labels.alertname != "InfoInhibitor")
+        | "\(.labels.severity // "-")\t\(.labels.alertname)\t\(.labels.namespace // "-")\t\(.annotations.summary // .annotations.description // "")"'
 
   echo ""
-  echo "== cert-manager =="
-  kubectl get clusterissuer openbao-pki-issuer
+  echo "== Prometheus scrape targets not up =="
+  kubectl get --raw "$proxy/https:kube-prometheus-stack-prometheus:9090/proxy/api/v1/targets?state=active" \
+    | jq -r '.data.activeTargets[] | select(.health != "up") | "\(.labels.job)\t\(.health)\t\(.lastError)"'
 
   echo ""
   echo "== Database =="
   kubectl cnpg status postgres-cluster -n databases
-  kubectl get database -n databases
-  echo -n "TCPRoute: "; kubectl get tcproute -n databases postgres-external -o jsonpath='{.status.parents[*].conditions[*].message}'; echo
-
-  echo ""
-  echo "== Backups =="
-  kubectl get scheduledbackup -n databases
-  kubectl rollout status deployment -n cnpg-system plugin-barman-cloud --timeout=10s
-
-  echo ""
-  echo "== SeaweedFS =="
-  kubectl get svc,pods -n seaweedfs -l app.kubernetes.io/instance=seaweedfs
-
-  echo ""
-  echo "== Hubble =="
-  kubectl get pods -n kube-system -l k8s-app=hubble-relay
 
 # Run core-test, follow its logs, and return its result
 core-test:

@@ -187,10 +187,10 @@ check_host_tooling() {
     check_commands_present "❌" tofu helm flux git uv just
 }
 
-# Optional: fzf for fuzzypods, tkn for core-test
+# Optional: fzf for fuzzypods, jq for status, tkn for core-test
 check_optional_tooling() {
     echo "== Optional tooling =="
-    check_commands_present "⚠️ " fzf tkn
+    check_commands_present "⚠️ " fzf jq tkn
 }
 
 get_minor_version() {
