@@ -84,3 +84,23 @@ spec:
         - ports:
             - port: "4244"
               protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: secrets-store-csi-driver
+  namespace: kube-system
+spec:
+  endpointSelector:
+    matchLabels:
+      app: secrets-store-csi-driver
+  ingress:
+    # Ghostunnel metrics
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9445"
+              protocol: TCP

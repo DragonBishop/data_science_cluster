@@ -16,6 +16,78 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: jetstack
+  # Flux only: the monitor needs the Prometheus CRDs
+  values:
+    app:
+      metrics:
+        service:
+          enabled: true
+          servicemonitor:
+            enabled: true
+            endpointAdditionalProperties:
+              scheme: https
+              tlsConfig:
+                serverName: cert-manager.metrics.spiffe
+  # Ghostunnel serves metrics to Prometheus; appended last
+  postRenderers:
+    - kustomize:
+        patches:
+          # Scrape Ghostunnel, not the plaintext port
+          - target:
+              kind: ServiceMonitor
+              name: trust-manager
+            patch: |
+              - op: replace
+                path: /spec/endpoints/0/targetPort
+                value: metrics-tls
+          - target:
+              kind: Deployment
+              name: trust-manager
+            patch: |
+              - op: add
+                path: /spec/template/metadata/labels/data-cluster~1metrics-tls
+                value: "true"
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: spiffe-workload-api
+                  csi:
+                    driver: csi.spiffe.io
+                    readOnly: true
+              - op: add
+                path: /spec/template/spec/containers/-
+                value:
+                  name: metrics-tls
+                  image: ghostunnel/ghostunnel:${GHOSTUNNEL_VERSION}
+                  args:
+                    - server
+                    - --listen=0.0.0.0:${METRICS_TLS_PORT}
+                    - --target=127.0.0.1:9402
+                    - --use-workload-api-addr=unix:///spiffe-workload-api/spire-agent.sock
+                    - --allow-uri=spiffe://cluster.internal/ns/observability/sa/prometheus
+                  ports:
+                    - name: metrics-tls
+                      containerPort: ${METRICS_TLS_PORT}
+                      protocol: TCP
+                  securityContext:
+                    runAsUser: 65532
+                    runAsNonRoot: true
+                    allowPrivilegeEscalation: false
+                    readOnlyRootFilesystem: true
+                    capabilities:
+                      drop: [ALL]
+                    seccompProfile:
+                      type: RuntimeDefault
+                  resources:
+                    requests:
+                      cpu: ${METRICS_TLS_CPU_REQUEST}
+                      memory: ${METRICS_TLS_MEM_REQUEST}
+                    limits:
+                      memory: ${METRICS_TLS_MEM_LIMIT}
+                  volumeMounts:
+                    - name: spiffe-workload-api
+                      mountPath: /spiffe-workload-api
+                      readOnly: true
   valuesFrom:
     - kind: ConfigMap
       name: trust-manager-values
