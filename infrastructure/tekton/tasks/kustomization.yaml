@@ -9,6 +9,8 @@ resources:
   - manifests.yaml
   - mtls-required.yaml
   - postgres-database-applied.yaml
+  - prometheus-job-check.yaml
+  - prometheus-targets.yaml
   - renovate-config.yaml
   - shellcheck.yaml
   - unauthorized-pod-denied.yaml

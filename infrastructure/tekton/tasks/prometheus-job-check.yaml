@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: prometheus-job-check
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: job
+      description: A Prometheus job label, scraped or pushed over OTLP, whose series must be in Prometheus
+      type: string
+  volumes:
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: QUERY_URL
+        value: https://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090/api/v1/query
+      - name: QUERY
+        value: count({job="$(params.job)"})
+    volumeMounts:
+      - name: openbao-root-ca
+        mountPath: /ca/root
+  steps:
+    - name: series-stored
+      # Scrape and OTLP export intervals are up to 60s
+      timeout: 3m
+      script: |
+        #!/usr/bin/env bash
+        set -uo pipefail
+        until
+          series_count=$(curl --silent --show-error --fail --cacert /ca/root/ca.crt --get "$QUERY_URL" \
+            --data-urlencode "query=$QUERY" \
+            | jq --raw-output '.data.result[0].value[1] // 0') \
+            && (( series_count > 0 ))
+        do
+          echo "no recent series for $QUERY"
+          sleep 10
+        done
+        echo "$series_count series match $QUERY"

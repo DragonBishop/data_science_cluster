@@ -1,0 +1,47 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: prometheus-targets
+  namespace: tekton-pipelines
+spec:
+  volumes:
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: TARGETS_URL
+        value: https://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090/api/v1/targets?state=active
+    volumeMounts:
+      - name: openbao-root-ca
+        mountPath: /ca/root
+  steps:
+    - name: targets-discovered
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        response=$(curl --silent --show-error --fail --cacert /ca/root/ca.crt "$TARGETS_URL")
+        target_count=$(jq '.data.activeTargets | length' <<< "$response")
+        echo "$target_count active targets"
+        (( target_count > 0 ))
+    - name: targets-up
+      # Sidecars may still await their SVID; 60s is the longest chart scrape interval
+      timeout: 3m
+      script: |
+        #!/usr/bin/env bash
+        set -uo pipefail
+        until
+          not_up_targets=$(curl --silent --show-error --fail --cacert /ca/root/ca.crt "$TARGETS_URL" \
+            | jq --raw-output '.data.activeTargets
+                | if length == 0 then "no active targets"
+                  else .[] | select(.health != "up")
+                    | "\(.labels.job // "-") \(.labels.namespace // "-")/\(.labels.pod // "-") \(.scrapeUrl) \(.health): \(.lastError)"
+                  end') \
+            && [[ -z $not_up_targets ]]
+        do
+          echo "$not_up_targets"
+          sleep 10
+        done
