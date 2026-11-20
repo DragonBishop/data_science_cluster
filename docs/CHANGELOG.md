@@ -1,3 +1,34 @@
+## [2.7.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.6.0...v2.7.0) - 2026-11-17
+
+### 🚀 Features
+
+- *(tekton)* Add the fetch-source and flux-ready Tasks ([5060506](https://github.com/DragonBishop/data_science_cluster/commit/506050601bd412efeb584491e4884a2d0ec37c4d))
+- *(tekton)* Add the OpenBao and PostgreSQL SVID login Tasks ([f0b9ada](https://github.com/DragonBishop/data_science_cluster/commit/f0b9ada6e951d978047c76a1042258f1805021bd))
+- *(tekton)* Run the new Tasks in core-test ([d564224](https://github.com/DragonBishop/data_science_cluster/commit/d564224a4fdeb63003ecf0ef736565c7d9993bfa))
+- *(tekton)* Add the postgres-database-applied and workloads-ready Tasks ([4930872](https://github.com/DragonBishop/data_science_cluster/commit/4930872fc0686165e1c4a0e25ed7adbb2ceea342))
+- *(tekton)* Check that OpenBao and PostgreSQL refuse logins without a client certificate ([932c431](https://github.com/DragonBishop/data_science_cluster/commit/932c4314c934ce8475e3fe829bd331eaf275e65e))
+- *(tekton)* Check client-certificate refusals and network-policy denials in core-test ([33c6652](https://github.com/DragonBishop/data_science_cluster/commit/33c6652f8fe4984f20d193f23bd07904f5c59f89))
+
+### 🐛 Bug Fixes
+
+- *(tekton)* Make the spire, login and fetch-source Tasks fail correctly ([8ae7f5e](https://github.com/DragonBishop/data_science_cluster/commit/8ae7f5e5f81b6a9de2a3fd58bff493b984731bc5))
+- Raise the SPIRE agent memory limit and Hubble flow buffer, and admit instance status checks ([0fcafd1](https://github.com/DragonBishop/data_science_cluster/commit/0fcafd149918f27daf32fb6252f98ad1b34aba22))
+- *(flux)* Correct drift in every HelmRelease ([a23d4e1](https://github.com/DragonBishop/data_science_cluster/commit/a23d4e12a336f0cde876e62178184462250fc423))
+- *(databases)* Reject PostgreSQL connections without TLS ([78abd07](https://github.com/DragonBishop/data_science_cluster/commit/78abd078c1223e61cc08cfcc2ad584bb3a33ad71))
+
+### 📚 Documentation
+
+- *(openbao)* Remove the retired GPG recovery-key backup ([b63758d](https://github.com/DragonBishop/data_science_cluster/commit/b63758d14159fe3e07910a4b3f34ac6dff42b302))
+- Describe core-test's checks, Pipeline access and PostgreSQL's TLS requirement ([63d90ff](https://github.com/DragonBishop/data_science_cluster/commit/63d90ff74f03af9f5a52fd1c7b86db3e2cef672f))
+
+### ♻️ Refactor
+
+- *(tekton)* Read cluster state through the view ClusterRole ([832c14c](https://github.com/DragonBishop/data_science_cluster/commit/832c14c4f0928216308afe7d88f5290a819c0b6c))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(postgres)* Remove the Tekton Results database and role tombstones ([e273645](https://github.com/DragonBishop/data_science_cluster/commit/e27364578db638631057b3bb4788817a50617400))
+
 ## [2.6.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.5.0...v2.6.0) - 2026-11-14
 
 ### 🚀 Features
