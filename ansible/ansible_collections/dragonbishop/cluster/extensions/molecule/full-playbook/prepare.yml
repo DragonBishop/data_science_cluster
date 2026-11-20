@@ -3,6 +3,27 @@
   hosts: localhost
   gather_facts: false
   tasks:
+    - name: Read the runner's inotify limits
+      ansible.builtin.command:
+        argv: [sysctl, -n, "{{ item.name }}"]
+      loop:
+        - name: fs.inotify.max_user_instances
+          minimum: 8192
+        - name: fs.inotify.max_user_watches
+          minimum: 1048576
+      register: runner_inotify_limits
+      changed_when: false
+
+    - name: Raise the runner's inotify limits for live pod logs
+      ansible.builtin.command:
+        argv: [sysctl, -w, "{{ item.item.name }}={{ item.item.minimum }}"]
+      loop: "{{ runner_inotify_limits.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: item.stdout | int < item.item.minimum
+      become: true
+      changed_when: true
+
     - name: Create the SeaweedFS host path
       ansible.builtin.file:
         path: "{{ cluster_config.SEAWEEDFS_HOST_PATH }}"

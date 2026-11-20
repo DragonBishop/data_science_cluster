@@ -2,6 +2,7 @@
 ansible_remote_tmp: "{{ lookup('ansible.builtin.config', 'ANSIBLE_HOME') }}/tmp"
 repo_root: "{{ lookup('ansible.builtin.pipe', 'git rev-parse --show-toplevel') }}"
 kubeconfig_path: "{{ ansible_facts.env.HOME }}/.kube/config"
+flux_ci_managed_tests: "{{ lookup('ansible.builtin.env', 'FLUX_CI_MANAGED_TESTS', default='false') | bool }}"
 
 openbao_namespace: openbao
 openbao_pod: openbao-0

@@ -23,6 +23,34 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/args/10
         value: --triggers-namespace=tekton
+  - target:
+      kind: Deployment
+      name: tekton-dashboard
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: tekton-dashboard
+      spec:
+        template:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: tekton-dashboard
+                securityContext:
+                  readOnlyRootFilesystem: true
+                resources:
+                  requests:
+                    cpu: ${TEKTON_DASHBOARD_CPU_REQUEST}
+                    memory: ${TEKTON_DASHBOARD_MEM_REQUEST}
+                  limits:
+                    cpu: ${TEKTON_DASHBOARD_CPU_LIMIT}
+                    memory: ${TEKTON_DASHBOARD_MEM_LIMIT}
   # Terminate HTTPS inside the Dashboard pod
   - target:
       kind: Deployment
@@ -49,6 +77,7 @@ patches:
               protocol: TCP
           securityContext:
             runAsUser: 65532
+            runAsGroup: 65532
             runAsNonRoot: true
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -61,6 +90,7 @@ patches:
               cpu: ${LOCALHOST_TLS_CPU_REQUEST}
               memory: ${LOCALHOST_TLS_MEM_REQUEST}
             limits:
+              cpu: ${TEKTON_DASHBOARD_TLS_CPU_LIMIT}
               memory: ${LOCALHOST_TLS_MEM_LIMIT}
           volumeMounts:
             - name: localhost-tls

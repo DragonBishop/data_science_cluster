@@ -133,7 +133,7 @@ The **Tekton Operator** installs **Tekton Pipelines** and **Tekton Triggers**, w
 
 | Component | Version | Description |
 | --- | --- | --- |
-| `code-quality` | `infrastructure/tekton-pipelines/pipelines/code-quality/` (planned for 3.0) | The Pipeline that checks a pull request's commit on the workstation while Flux follows its branch: ShellCheck, Renovate's config validator, zizmor, the prek hooks, kubeconform against the live cluster's CRD schemas, and Trivy on the rendered manifests, OpenTofu and Dockerfiles. |
+| `code-quality` | `infrastructure/tekton/pipelines/code-quality/` (planned for 3.0) | The Pipeline that checks a pull request's commit on the workstation while Flux follows its branch: ShellCheck, Renovate's config validator, zizmor, kubeconform against the live cluster's CRD schemas, and Trivy on the rendered manifests, OpenTofu and Dockerfiles. |
 | `core-test` | `infrastructure/tekton-pipelines/pipelines/core-test/` (planned for 3.0) | The Pipeline that checks the live core at the end of every bootstrap, and on a pull request's commits on the workstation and in GitHub e2e: Flux, workloads, CA bundles, servers that refuse clients without a certificate, the data-science client's OpenBao and PostgreSQL login with their refusals, and network policies that drop unauthorized pods. |
 | Tekton Operator | `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator --> | Installs Pipelines, Triggers and the pruner from one `TektonConfig`. |
 | Tekton Pipelines | `v1.15.5` (via Tekton Operator `v0.81.3` <!-- renovate: datasource=github-releases depName=tektoncd/operator -->) | Cluster-native CI engine with Pipelines/Tasks/PipelineRuns from CRDs. |

@@ -43,13 +43,6 @@ spec:
       workspaces:
         - name: source
           workspace: source
-    - name: prek
-      runAfter: [fetch-source]
-      taskRef:
-        name: prek
-      workspaces:
-        - name: source
-          workspace: source
     - name: manifests
       runAfter: [fetch-source]
       taskRef:

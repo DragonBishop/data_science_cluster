@@ -2,20 +2,21 @@ misconfigurations:
   - id: KSV-0037
     paths:
       - cilium.yaml
-      - hubble.yaml
+      - cilium-hubble.yaml
+      - openbao-server.yaml
       - secrets-store-csi-driver.yaml
-    statement: Cilium, its kube-system policies, CoreDNS's LAN Service, Hubble Relay's redirect and the Secrets Store CSI driver belong in kube-system
+    statement: Cilium, CoreDNS's LAN Service, Hubble UI's certificate and redirect, its namespaced desktop Issuer, and the CSI driver serve kube-system workloads.
   - id: KSV-0109
     paths:
       - cluster-config.yaml
       - databases-objectstore.yaml
-      - openbao.yaml
-    statement: The check matches key names such as SECRETS_STORE_*, serverTLSSecret and s3CredentialsSecret; these ConfigMaps hold settings and Secret names, no secret values
+      - openbao-server.yaml
+    statement: These ConfigMaps store configuration and Secret references.
   - id: KSV-01010
     paths:
       - cluster-config.yaml
-      - openbao.yaml
-    statement: The check matches key names such as CERT_KEY_SIZE and the seal's current_key file path; these ConfigMaps hold no secret values
+      - openbao-server.yaml
+    statement: The matched fields describe certificate key sizes and the seal key file path.
   - id: KSV-0048
     paths:
       - tekton-pipelines.yaml
@@ -25,6 +26,10 @@ misconfigurations:
       - databases-objectstore.yaml
       - openbao-snapshot.yaml
     statement: The cluster's images come from registry.k8s.io, ghcr.io, quay.io and Docker Hub, which the check's default trusted list does not name
+  - id: KSV-0125
+    paths:
+      - tekton-dashboard.yaml
+    statement: The Dashboard uses Tekton's digest-pinned GHCR release and Ghostunnel's pinned Docker Hub release.
   - id: DS-0026
     paths:
       - cluster/Dockerfile

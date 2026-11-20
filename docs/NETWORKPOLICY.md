@@ -6,7 +6,7 @@
 
 **One policy for the cluster, one per namespace.** `cluster-default` is the one policy for the whole cluster. Every other rule belongs to one namespace, and lives in the policy file of the component that deploys into that namespace, beside its resources. Each component writes policy into its own namespace. A caller from another namespace, or from a module, gets its rule in the receiver's file, where it stays while the module is off.
 
-The cluster baseline, `cluster-default` in [`infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml):
+The cluster baseline, `cluster-default` in [`infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml):
 
 1. Every pod starts closed.
 2. The node reaches any pod.
@@ -52,7 +52,7 @@ Policies add up. A pod selected by three policies accepts the traffic any of the
 
 ## The Baseline
 
-Each numbered comment in the [baseline manifest](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml) marks the rule below with the same number.
+Each numbered comment in the [baseline manifest](../infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml) marks the rule below with the same number.
 
 **1. Every pod starts closed.** The first entry selects every pod (`endpointSelector: {}`) and has both an `ingress` and an `egress` section. Rules 2 to 5 are the traffic it lets through.
 
@@ -94,7 +94,7 @@ flowchart LR
   run -->|443| sites[Git forge, PyPI]
 ```
 
-[`infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml)
+[`infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml)
 
 ```yaml
   egress:
@@ -123,7 +123,7 @@ flowchart LR
   relay -->|4244| agent["Node: Cilium agent's Hubble server"]
 ```
 
-[`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml)
+[`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml)
 
 ```yaml
   egress:
@@ -233,7 +233,7 @@ Reuse `databases-route.yaml` as the TCPRoute pattern. A different raw TCP servic
 
 ## Conventions
 
-* The cluster has one policy file, `infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`.
+* The cluster has one policy file, `infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml`.
 * Each namespace that needs more than the baseline has one policy file, `<component>-networkpolicy.yaml`, holding every policy object for that namespace.
 * A namespace has a policy file when it needs more than the baseline.
 * A policy is named after the workload it selects, and holds that workload's incoming and outgoing rules.
@@ -258,16 +258,16 @@ Flux needs network access before it can deliver any policy, and so do the worklo
 
 | Policy | File | Allows |
 | --- | --- | --- |
-| `cluster-default` | [`infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/cilium-clusterwide-networkpolicy.yaml) | Baseline rules 1 to 6 |
-| `coredns` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | LAN and every pod on 53. CoreDNS to upstream resolvers on 53 |
-| `metrics-server` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | metrics-server to the kubelet on 10250 |
-| `hubble-relay` | [`infrastructure/cilium/kube-system-networkpolicy.yaml`](../infrastructure/cilium/kube-system-networkpolicy.yaml) | Hubble Relay to the agent's Hubble server on 4244 |
+| `cluster-default` | [`infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml) | Baseline rules 1 to 6 |
+| `coredns` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | LAN and every pod on 53. CoreDNS to upstream resolvers on 53 |
+| `metrics-server` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | metrics-server to the kubelet on 10250 |
+| `hubble-relay` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | Hubble Relay to the agent's Hubble server on 4244 |
 | `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090. Flux to its source hosts on 443 |
-| `openbao` | [`infrastructure/openbao/openbao-networkpolicy.yaml`](../infrastructure/openbao/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200. OpenBao to the secrets-aws plugin's registry on 443 |
+| `openbao` | [`infrastructure/openbao/server/openbao-networkpolicy.yaml`](../infrastructure/openbao/server/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200. OpenBao to the secrets-aws plugin's registry on 443 |
 | `plugin-barman-cloud` | [`apps/databases/plugin/cnpg-system-networkpolicy.yaml`](../apps/databases/plugin/cnpg-system-networkpolicy.yaml) | The CNPG operator to the plugin on 9090 |
 | `postgres-cluster` | [`apps/databases/security/databases-networkpolicy.yaml`](../apps/databases/security/databases-networkpolicy.yaml) | Gateway, instances, OpenBao and `core-test` on 5432. The CNPG operator and the other instances on 8000 |
 | SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other. Postgres, OpenBao and `core-test` to S3 on `SEAWEEDFS_S3_PORT`. `core-test` to the master, filer and volume gRPC ports 19333, 18888 and 18080 |
-| `remote-resolvers` | [`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443 |
-| `core-interceptors` | [`infrastructure/tekton/tekton-networkpolicy.yaml`](../infrastructure/tekton/tekton-networkpolicy.yaml) | EventListener `flux-events` to the Triggers core interceptors on 8443 |
-| `flux-events` | [`infrastructure/tekton-triggers/tekton-triggers-networkpolicy.yaml`](../infrastructure/tekton-triggers/tekton-triggers-networkpolicy.yaml) | notification-controller to EventListener `flux-events` on 8080, the pod port behind Service port 8443 |
-| `taskrun` | [`infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton-pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443 |
+| `remote-resolvers` | [`infrastructure/tekton/config/tekton-networkpolicy.yaml`](../infrastructure/tekton/config/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443 |
+| `core-interceptors` | [`infrastructure/tekton/config/tekton-networkpolicy.yaml`](../infrastructure/tekton/config/tekton-networkpolicy.yaml) | EventListener `flux-events` to the Triggers core interceptors on 8443 |
+| `flux-events` | [`infrastructure/tekton/triggers/tekton-triggers-networkpolicy.yaml`](../infrastructure/tekton/triggers/tekton-triggers-networkpolicy.yaml) | notification-controller to EventListener `flux-events` on 8080, the pod port behind Service port 8443 |
+| `taskrun` | [`infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443 |
