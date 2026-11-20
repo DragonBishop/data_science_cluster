@@ -8,6 +8,8 @@ spec:
   retryInterval: 1m
   dependsOn:
     - name: cert-manager
+    # openbao-root-ca verifies the OTLP push
+    - name: openbao-server
     - name: cluster-config
   sourceRef:
     kind: GitRepository

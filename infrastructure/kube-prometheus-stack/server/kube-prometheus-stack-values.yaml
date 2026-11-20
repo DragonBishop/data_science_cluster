@@ -300,6 +300,10 @@ prometheus:
   prometheusSpec:
     retention: ${PROMETHEUS_RETENTION}
     retentionSize: ${PROMETHEUS_RETENTION_SIZE}
+    # Accept Tekton's OTLP metrics with a 30-minute out-of-order window.
+    enableOTLPReceiver: true
+    tsdb:
+      outOfOrderTimeWindow: 30m
     resources:
       requests:
         cpu: ${PROMETHEUS_CPU_REQUEST}

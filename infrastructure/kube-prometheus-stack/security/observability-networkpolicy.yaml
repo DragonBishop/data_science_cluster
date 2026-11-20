@@ -26,6 +26,19 @@ spec:
         - ports:
             - port: "9090"
               protocol: TCP
+    # Tekton's OTLP push
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-operator
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-triggers
+            eventlistener: flux-events
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
   egress:
     # Host-network targets
     - toEntities:

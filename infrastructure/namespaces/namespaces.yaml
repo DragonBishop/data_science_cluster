@@ -70,6 +70,7 @@ metadata:
   name: tekton-operator
   labels:
     pod-security.kubernetes.io/enforce: baseline
+    data-cluster/ca-bundles: "true"
 ---
 apiVersion: v1
 kind: Namespace

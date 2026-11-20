@@ -1,0 +1,51 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: el-flux-events-otlp-ca
+spec:
+  # Reuse the OpenBao CA mounted with the EventListener TLS Secret.
+  failurePolicy: Fail
+  reinvocationPolicy: Never
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  matchConditions:
+    - name: el-flux-events
+      expression: object.metadata.name == "el-flux-events"
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >
+          Object{
+            spec: Object.spec{
+              template: Object.spec.template{
+                spec: Object.spec.template.spec{
+                  containers: [
+                    Object.spec.template.spec.containers{
+                      name: "event-listener",
+                      env: [
+                        Object.spec.template.spec.containers.env{
+                          name: "OTEL_EXPORTER_OTLP_CERTIFICATE",
+                          value: "/etc/triggers/tls/ca.crt"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: el-flux-events-otlp-ca
+spec:
+  policyName: el-flux-events-otlp-ca
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: tekton-triggers
