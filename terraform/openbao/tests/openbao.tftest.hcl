@@ -72,6 +72,7 @@ run "leaf_profile_is_scoped" {
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, var.internal_domain) &&
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-grpc.cilium.io") &&
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-relay.cilium.io") &&
+      contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-ui.cilium.io") &&
       !contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "internal") &&
       !contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "cilium.io")
     )
