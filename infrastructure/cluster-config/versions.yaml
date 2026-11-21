@@ -5,6 +5,8 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
+  # renovate: datasource=helm depName=alloy registryUrl=https://grafana.github.io/helm-charts
+  ALLOY_VERSION: "1.16.0"
   # renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts
   BARMAN_CLOUD_VERSION: "0.8.1"
   # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io

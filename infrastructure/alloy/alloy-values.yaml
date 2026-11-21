@@ -1,0 +1,136 @@
+# Helm values for Alloy
+alloy:
+  configMap:
+    content: |
+      http {
+        tls {
+          cert_file = "/etc/alloy-tls/tls.crt"
+          key_file  = "/etc/alloy-tls/tls.key"
+        }
+      }
+
+      // Pod logs through the Kubernetes API
+      discovery.kubernetes "pods" {
+        role = "pod"
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + sys.env("NODE_NAME")
+        }
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.pods.receiver]
+      }
+
+      // Pod names change per run; keep them out of stream labels
+      loki.process "pods" {
+        stage.structured_metadata {
+          values = { pod = "" }
+        }
+        stage.label_drop {
+          values = ["instance", "job"]
+        }
+        forward_to = [loki.write.loki.receiver]
+      }
+
+      // Events outlive Kubernetes' one-hour retention in Loki
+      loki.source.kubernetes_events "cluster" {
+        job_name   = "kubernetes-events"
+        forward_to = [loki.write.loki.receiver]
+      }
+
+      loki.write "loki" {
+        endpoint {
+          url = "https://loki.observability.svc.cluster.local:3100/loki/api/v1/push"
+          tls_config {
+            ca_file = "/etc/openbao-root-ca/ca.crt"
+          }
+        }
+      }
+  # Positions on PVC alloy
+  storagePath: /var/lib/alloy
+  listenScheme: HTTPS
+  enableReporting: false
+  extraEnv:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+  mounts:
+    extra:
+      - name: alloy-tls
+        mountPath: /etc/alloy-tls
+        readOnly: true
+      - name: openbao-root-ca
+        mountPath: /etc/openbao-root-ca
+        readOnly: true
+      - name: storage
+        mountPath: /var/lib/alloy
+  resources:
+    requests:
+      cpu: ${ALLOY_CPU_REQUEST}
+      memory: ${ALLOY_MEM_REQUEST}
+    limits:
+      memory: ${ALLOY_MEM_LIMIT}
+
+# Only what the two Kubernetes sources read; the chart joins both lists, neither may be empty
+rbac:
+  rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list", "watch"]
+  clusterRules:
+    - apiGroups: [""]
+      resources: ["pods/log"]
+      verbs: ["get"]
+    - apiGroups: [""]
+      resources: ["events"]
+      verbs: ["get", "list", "watch"]
+
+# The checksum annotation rolls the pod on config changes
+configReloader:
+  enabled: false
+
+controller:
+  type: daemonset
+  volumes:
+    extra:
+      - name: alloy-tls
+        secret:
+          secretName: alloy-tls
+      - name: openbao-root-ca
+        configMap:
+          name: openbao-root-ca
+      - name: storage
+        persistentVolumeClaim:
+          claimName: alloy
+
+serviceMonitor:
+  enabled: true
+  tlsConfig:
+    serverName: alloy.observability.svc.cluster.local
+    ca:
+      configMap:
+        name: openbao-root-ca
+        key: ca.crt

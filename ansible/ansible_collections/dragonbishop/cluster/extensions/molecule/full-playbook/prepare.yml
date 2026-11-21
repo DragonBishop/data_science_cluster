@@ -38,6 +38,13 @@
         mode: "0777"
       become: true
 
+    - name: Create the Alloy host path
+      ansible.builtin.file:
+        path: "{{ cluster_config.ALLOY_HOST_PATH }}"
+        state: directory
+        mode: "0777"
+      become: true
+
     - name: Run the host firewall setup
       ansible.builtin.command:
         cmd: src/bash/setup-firewall.sh
