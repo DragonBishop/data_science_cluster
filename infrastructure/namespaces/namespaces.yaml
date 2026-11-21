@@ -94,3 +94,12 @@ metadata:
   labels:
     data-cluster/ca-bundles: "true"
     pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zot
+  labels:
+    data-cluster/ca-bundles: "true"
+    data-cluster/gateway-access: "true"
+    pod-security.kubernetes.io/enforce: baseline
