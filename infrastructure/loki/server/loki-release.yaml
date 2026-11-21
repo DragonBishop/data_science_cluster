@@ -1,0 +1,30 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: grafana
+  namespace: observability
+spec:
+  interval: 24h
+  url: https://grafana.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: observability
+spec:
+  interval: 1h
+  driftDetection:
+    mode: enabled
+  releaseName: loki
+  chart:
+    spec:
+      chart: loki
+      version: "${LOKI_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+  valuesFrom:
+    - kind: ConfigMap
+      name: loki-values
+      valuesKey: values.yaml

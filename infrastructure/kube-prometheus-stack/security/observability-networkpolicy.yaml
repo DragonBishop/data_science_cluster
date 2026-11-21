@@ -52,6 +52,8 @@ spec:
               protocol: TCP
             - port: "9446"
               protocol: TCP
+            - port: "9447"
+              protocol: TCP
             - port: "9988"
               protocol: TCP
             - port: "9965"
@@ -152,4 +154,59 @@ spec:
       toPorts:
         - ports:
             - port: "3000"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: loki
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  ingress:
+    # Compactor gRPC and memberlist through its own Services
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: loki
+      toPorts:
+        - ports:
+            - port: "9095"
+              protocol: TCP
+            - port: "7946"
+              protocol: TCP
+    # Push, query, and scrape
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: alloy
+        - matchLabels:
+            app.kubernetes.io/name: grafana
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+            tekton.dev/pipeline: core-test
+      toPorts:
+        - ports:
+            - port: "3100"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: alloy
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  ingress:
+    # Scrape
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "12345"
               protocol: TCP

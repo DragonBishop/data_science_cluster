@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - alloy-storage.yaml
+  - alloy-tls.yaml
+  - alloy-release.yaml
+configMapGenerator:
+  - name: alloy-values
+    namespace: observability
+    files:
+      - values.yaml=alloy-values.yaml
+    options:
+      disableNameSuffixHash: true
+      labels:
+        reconcile.fluxcd.io/watch: Enabled

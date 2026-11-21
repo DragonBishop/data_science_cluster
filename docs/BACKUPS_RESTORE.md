@@ -48,7 +48,7 @@ An interrupted base backup leaves an unfinished multipart upload in SeaweedFS. T
 
 ## Reinstall Continuity
 
-The SeaweedFS data directory survives `just uninstall`. Each bootstrap continues the backup history stored there.
+`just uninstall` keeps the SeaweedFS data directory by default. Each bootstrap continues the backup history stored there. Selecting SeaweedFS for deletion during uninstall removes that history along with all other buckets.
 
 The `postgres-bootstrap` Job in the `databases-objectstore` Kustomization creates `postgres-cluster` once, before Flux manages it. The Job asks Barman what the archive at `s3://cnpg-backups/postgres-cluster/` contains:
 

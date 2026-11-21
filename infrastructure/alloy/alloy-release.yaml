@@ -1,0 +1,22 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: observability
+spec:
+  interval: 1h
+  driftDetection:
+    mode: enabled
+  releaseName: alloy
+  chart:
+    spec:
+      chart: alloy
+      version: "${ALLOY_VERSION}"
+      # From loki
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+  valuesFrom:
+    - kind: ConfigMap
+      name: alloy-values
+      valuesKey: values.yaml

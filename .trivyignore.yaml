@@ -46,6 +46,18 @@ misconfigurations:
     paths:
       - tekton-dashboard.yaml
     statement: The Dashboard uses Tekton's digest-pinned GHCR release and Ghostunnel's pinned Docker Hub release.
+  - id: KSV-01010
+    paths:
+      - loki.yaml
+    statement: Loki's values name a Secret key and compare the mounted access key at runtime. The ConfigMap contains no credential values.
+  - id: KSV-01010
+    paths:
+      - alloy.yaml
+    statement: Alloy's chart values name the CA bundle key in the openbao-root-ca ConfigMap.
+  - id: KSV-0037
+    paths:
+      - tetragon-server.yaml
+    statement: Tetragon's Helm release, repository and alert rule live with its privileged node agent in kube-system.
   - id: DS-0026
     paths:
       - cluster/Dockerfile

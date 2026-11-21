@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tetragon
+  namespace: kube-system
+spec:
+  groups:
+    - name: tetragon
+      rules:
+        # Kernel updates land at the nightly reboot
+        - alert: TetragonPolicyNotLoaded
+          expr: sum by (state, node) (tetragon_tracingpolicy_loaded{state!="enabled"}) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: A TracingPolicy is {{ .Labels.state }} on {{ .Labels.node }}
+        # Inside pods only; host processes carry an empty namespace
+        - alert: SensitiveFileAccess
+          expr: sum by (namespace, pod, binary) (increase(tetragon_policy_events_total{policy="sensitive-files", namespace!=""}[10m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ .Labels.binary }} in {{ .Labels.namespace }}/{{ .Labels.pod }} accessed a file TracingPolicy sensitive-files watches"
+            description: 'The file and the operation are in Loki: {namespace="kube-system", container="export-stdout"} |= "{{ .Labels.pod }}"'

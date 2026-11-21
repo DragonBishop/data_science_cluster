@@ -41,6 +41,23 @@ spec:
       runAfter: [flux-ready]
       taskRef:
         name: prometheus-targets
+    - name: loki-logs
+      runAfter: [flux-ready]
+      taskRef:
+        name: loki-logs
+      params:
+        - name: query
+          value: '{namespace="tekton-pipelines"} | pod="$(tasks.flux-ready.results.pod-name)"'
+    - name: tetragon-events
+      runAfter: [flux-ready]
+      taskRef:
+        name: loki-logs
+      params:
+        - name: query
+          value: >-
+            {namespace="kube-system", container="export-stdout"}
+            |= "$(tasks.flux-ready.results.pod-name)"
+            | json | process_exec_process_pod_name="$(tasks.flux-ready.results.pod-name)"
     - name: prometheus-job-check
       runAfter: [flux-ready]
       taskRef:
@@ -95,6 +112,7 @@ spec:
               - kube-prometheus-stack-grafana.observability.svc.cluster.local:3000
               - kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090
               - kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
+              - loki.observability.svc.cluster.local:3100
   finally:
     - name: delete-probes
       taskRef:

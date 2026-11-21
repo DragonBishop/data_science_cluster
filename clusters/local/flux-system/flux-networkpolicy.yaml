@@ -35,9 +35,12 @@ spec:
         - matchPattern: "*.githubusercontent.com"
         # GitHub Pages Helm repos
         - matchName: "cloudnative-pg.github.io"
+        - matchName: "grafana.github.io"
         - matchName: "kubernetes-sigs.github.io"
         - matchName: "seaweedfs.github.io"
         - matchName: "spiffe.github.io"
+        # Tetragon's Helm repository
+        - matchName: "helm.cilium.io"
         # Tekton Dashboard release and its redirect target
         - matchName: "infra.tekton.dev"
         - matchName: "objectstorage.us-ashburn-1.oraclecloud.com"

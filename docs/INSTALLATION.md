@@ -418,6 +418,10 @@ just uninstall
 sudo reboot
 ```
 
+`just uninstall` keeps persistent host data by default. In a terminal it asks about each store separately. Enter `y` to delete that store, or press Enter to keep it. The prompts read paths from `infrastructure/cluster-config/storage.yaml` and work while the cluster is offline.
+
+The stores are SeaweedFS, Prometheus, Alertmanager, Loki's local WAL and compactor state, and Alloy's log collection positions. SeaweedFS stores its buckets together. Clearing it deletes every bucket, including the PostgreSQL backups, OpenBao snapshots and Loki's stored logs. To clear all Loki data, also select its local state.
+
 ### Data Migration (if restoring an existing database)
 
 Have a plain-SQL dump ready to restore once the CNPG cluster exists (see [Verify Database Deployment](VERIFICATION.md#verify-database-deployment)). Make it with `pg_dump --no-owner --no-privileges`, which leaves ownership and grants out of the file:

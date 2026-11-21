@@ -39,3 +39,8 @@ variable "snapshot_bucket" {
   type        = string
   description = "Bucket OpenBao's Raft snapshots go to (cluster-config OPENBAO_SNAPSHOT_BUCKET)."
 }
+
+variable "loki_bucket" {
+  type        = string
+  description = "Bucket Loki's S3 logins are scoped to (cluster-config LOKI_BUCKET)."
+}

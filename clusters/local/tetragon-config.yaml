@@ -1,0 +1,18 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tetragon-config
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 1m
+  # The operator registers the TracingPolicy CRD at runtime
+  dependsOn:
+    - name: tetragon-server
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./infrastructure/tetragon/config
+  prune: true
+  wait: true
+  timeout: 5m

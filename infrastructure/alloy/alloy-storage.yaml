@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: alloy
+  labels:
+    data-cluster/volume: alloy
+spec:
+  capacity:
+    storage: ${ALLOY_STORAGE_SIZE}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: ${ALLOY_HOST_PATH}
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alloy
+  namespace: observability
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  selector:
+    matchLabels:
+      data-cluster/volume: alloy
+  resources:
+    requests:
+      storage: ${ALLOY_STORAGE_SIZE}

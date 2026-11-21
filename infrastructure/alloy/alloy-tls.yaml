@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: alloy-tls
+  namespace: observability
+spec:
+  secretName: alloy-tls
+  dnsNames:
+    - alloy.observability.svc.cluster.local
+  usages:
+    - server auth
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  issuerRef:
+    name: openbao-pki-issuer
+    kind: ClusterIssuer

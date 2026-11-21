@@ -16,5 +16,6 @@
     TF_VAR_seaweedfs_s3_port: "{{ seaweedfs_s3_port }}"
     TF_VAR_backup_bucket: "{{ cnpg_backup_bucket }}"
     TF_VAR_snapshot_bucket: "{{ openbao_snapshot_bucket }}"
+    TF_VAR_loki_bucket: "{{ loki_bucket }}"
   register: opentofu_apply
   no_log: true

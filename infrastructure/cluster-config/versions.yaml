@@ -5,6 +5,8 @@ metadata:
   name: cluster-config
   namespace: flux-system
 data:
+  # renovate: datasource=helm depName=alloy registryUrl=https://grafana.github.io/helm-charts
+  ALLOY_VERSION: "1.16.0"
   # renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts
   BARMAN_CLOUD_VERSION: "0.8.1"
   # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io
@@ -25,6 +27,8 @@ data:
   KUBECTL_VERSION: "v1.37.2"
   # renovate: datasource=docker depName=alpine/k8s
   ALPINE_K8S_VERSION: "1.37.2"
+  # renovate: datasource=helm depName=loki registryUrl=https://grafana.github.io/helm-charts
+  LOKI_VERSION: "7.6.0"
   # renovate: datasource=docker depName=openbao/openbao
   OPENBAO_IMAGE_TAG: "2.7.2"
   # renovate: datasource=docker depName=ghcr.io/openbao/openbao-plugin-secrets-aws
@@ -55,6 +59,8 @@ data:
   TEKTON_OPERATOR_VERSION: "0.81.3"
   # renovate: datasource=github-releases depName=tektoncd/cli extractVersion=^v(?<version>.+)$
   TKN_VERSION: "0.46.2"
+  # renovate: datasource=helm depName=tetragon registryUrl=https://helm.cilium.io
+  TETRAGON_VERSION: "1.8.0"
   # renovate: datasource=helm depName=trust-manager registryUrl=https://charts.jetstack.io
   TRUST_MANAGER_VERSION: "v0.26.0"
   # renovate: datasource=docker depName=aquasec/trivy
