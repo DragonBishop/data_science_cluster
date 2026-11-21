@@ -56,14 +56,8 @@ spec:
             params:
               - name: revision
                 value: $(tt.params.revision)
-            # Only fetch-source and manifests read the API
             taskRunTemplate:
-              serviceAccountName: code-quality-branch
-            taskRunSpecs:
-              - pipelineTaskName: fetch-source
-                serviceAccountName: code-quality
-              - pipelineTaskName: manifests
-                serviceAccountName: code-quality
+              serviceAccountName: code-quality
             workspaces:
               - name: source
                 volumeClaimTemplate:

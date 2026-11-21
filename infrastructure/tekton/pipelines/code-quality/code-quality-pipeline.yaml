@@ -22,27 +22,6 @@ spec:
       workspaces:
         - name: source
           workspace: source
-    - name: shellcheck
-      runAfter: [fetch-source]
-      taskRef:
-        name: shellcheck
-      workspaces:
-        - name: source
-          workspace: source
-    - name: renovate-config
-      runAfter: [fetch-source]
-      taskRef:
-        name: renovate-config
-      workspaces:
-        - name: source
-          workspace: source
-    - name: zizmor
-      runAfter: [fetch-source]
-      taskRef:
-        name: zizmor
-      workspaces:
-        - name: source
-          workspace: source
     - name: manifests
       runAfter: [fetch-source]
       taskRef:

@@ -13,8 +13,5 @@ resources:
   - postgres-database-applied.yaml
   - prometheus-job-check.yaml
   - prometheus-targets.yaml
-  - renovate-config.yaml
-  - shellcheck.yaml
   - unauthorized-pod-denied.yaml
   - workloads-ready.yaml
-  - zizmor.yaml
