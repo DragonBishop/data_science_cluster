@@ -57,7 +57,7 @@ core-test:
   succeeded=$(kubectl get pipelinerun "$run_name" -n tekton-pipelines -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}')
   [[ $succeeded == True ]]
 
-# Stop the cluster (pass --force to skip confirmation on a stuck stop)
+# Stop the cluster (--force stops k3s even when hibernation isn't confirmed)
 stop *ARGS:
   ./src/bash/stop-cluster.sh {{ARGS}}
 
@@ -67,12 +67,12 @@ uninstall:
 
 # Fuzzy-select a pod (all namespaces) and describe it
 fuzzypods:
-  kubectl get pods -A --no-headers | fzf | awk '{print $2, $1}' | xargs -n 2 sh -c 'kubectl describe pod $0 -n $1'
+  kubectl get pods -A --no-headers | fzf | awk '{print "-n", $1, $2}' | xargs kubectl describe pod
 
 # Run a Hubble CLI command inside the Cilium agent (defaults to status)
 [positional-arguments]
 hubble *ARGS='status':
-  kubectl exec -n kube-system ds/cilium -c cilium-agent --  hubble "$@"
+  kubectl exec -n kube-system ds/cilium -c cilium-agent -- hubble "$@"
 
 # Open hubble, tekton or openbao and print its URL
 ui NAME:
@@ -90,9 +90,22 @@ ui NAME:
     xdg-open "$url"
   fi
 
-# Open interactive shell in openbao-0 pod
-bao-shell:
-  kubectl exec -it openbao-0 -n openbao -- sh -c 'unset BAO_TOKEN; exec sh'
+# Open a shell in openbao-0; pass --login to authenticate first
+[positional-arguments]
+bao-shell OPTION='':
+  #!/bin/sh
+  case "${1:-}" in
+    ''|--login) ;;
+    *) echo 'Usage: just bao-shell [--login]' >&2; exit 2 ;;
+  esac
+  kubectl exec -it openbao-0 -n openbao -- sh -c '
+    unset BAO_TOKEN
+    if [ "$1" = --login ]; then
+      BAO_TOKEN=$(bao login -token-only) || exit
+      export BAO_TOKEN
+    fi
+    exec sh
+  ' sh "${1:-}"
 
 # --- Database ------------------------------------------------------------
 
