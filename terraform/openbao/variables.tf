@@ -44,3 +44,8 @@ variable "loki_bucket" {
   type        = string
   description = "Bucket Loki's S3 logins are scoped to (cluster-config LOKI_BUCKET)."
 }
+
+variable "zot_bucket" {
+  type        = string
+  description = "Bucket Zot's S3 logins are scoped to (cluster-config ZOT_BUCKET)."
+}

@@ -3,6 +3,7 @@
 alertmanager_host_path: "{{ cluster_config.ALERTMANAGER_HOST_PATH }}"
 cnpg_backup_bucket: "{{ cluster_config.CNPG_BACKUP_BUCKET }}"
 loki_bucket: "{{ cluster_config.LOKI_BUCKET }}"
+zot_bucket: "{{ cluster_config.ZOT_BUCKET }}"
 openbao_data_storage_size: "{{ cluster_config.OPENBAO_DATA_STORAGE_SIZE }}"
 openbao_snapshot_bucket: "{{ cluster_config.OPENBAO_SNAPSHOT_BUCKET }}"
 prometheus_host_path: "{{ cluster_config.PROMETHEUS_HOST_PATH }}"

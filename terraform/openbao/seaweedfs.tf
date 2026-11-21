@@ -55,3 +55,17 @@ resource "vault_aws_secret_backend_role" "loki" {
     }]
   })
 }
+
+resource "vault_aws_secret_backend_role" "zot" {
+  backend         = vault_aws_secret_backend.seaweedfs.path
+  name            = "zot"
+  credential_type = "iam_user"
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:*"]
+      Resource = ["arn:aws:s3:::${var.zot_bucket}", "arn:aws:s3:::${var.zot_bucket}/*"]
+    }]
+  })
+}
