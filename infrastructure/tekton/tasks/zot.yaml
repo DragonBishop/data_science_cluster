@@ -1,0 +1,37 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: zot
+  namespace: tekton-pipelines
+spec:
+  volumes:
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+  steps:
+    - name: registry
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      securityContext:
+        runAsUser: 65532
+      volumeMounts:
+        - name: openbao-root-ca
+          mountPath: /ca/root
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        host=zot.${INTERNAL_DOMAIN}
+        registry() {
+          local path=$1
+          shift
+          curl --silent --show-error --max-time 180 --cacert /ca/root/ca.crt \
+            --connect-to "$host:443:cilium-gateway-internal-gateway.gateway.svc.cluster.local:443" \
+            "$@" "https://$host$path"
+        }
+
+        registry /v2/ --fail
+        registry /metrics --fail --output /dev/null
+        status=$(registry /v2/dev/core-test/blobs/uploads/ --request POST --output /dev/null --write-out '%{http_code}')
+        [[ $status == 401 ]]
+        registry /v2/docker.io/library/busybox/manifests/1.37.0 --fail \
+          --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+          --output /dev/null

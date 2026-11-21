@@ -206,3 +206,40 @@
               exec {{ postgres_cluster.resources[0].status.currentPrimary }} -c postgres --
               pg_isready --host={{ gateway_address }} --port=5432 --timeout=10
           changed_when: false
+
+    - name: Verify k3s can pull through Zot
+      vars:
+        zot_hostname: "zot.{{ live_cluster_config.resources[0].data.INTERNAL_DOMAIN }}"
+        zot_ca_path: /etc/rancher/k3s/zot-ca.crt
+        zot_cache_tag: "1.37.0-musl"
+      block:
+        - name: Pull the test image through Zot's on-demand proxy
+          ansible.builtin.uri:
+            url: "https://{{ zot_hostname }}/v2/docker.io/library/busybox/manifests/{{ zot_cache_tag }}"
+            ca_path: "{{ zot_ca_path }}"
+            use_proxy: false
+            timeout: 60
+            status_code: [200, 404]
+            headers:
+              Accept: "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json"
+          register: zot_manifest
+          until: zot_manifest.status == 200
+          retries: 5
+          delay: 10
+
+        - name: Pull a public image through k3s
+          ansible.builtin.command: "k3s crictl pull docker.io/library/busybox:{{ zot_cache_tag }}"
+          become: true
+          changed_when: false
+
+        - name: Read the cached tags from Zot over verified TLS
+          ansible.builtin.uri:
+            url: "https://{{ zot_hostname }}/v2/docker.io/library/busybox/tags/list"
+            ca_path: "{{ zot_ca_path }}"
+            use_proxy: false
+          register: zot_cached_tags
+
+        - name: It should cache the tag pulled by k3s
+          ansible.builtin.assert:
+            that: zot_cache_tag in zot_cached_tags.json.tags
+            fail_msg: k3s pulled BusyBox without caching the requested tag in Zot.
