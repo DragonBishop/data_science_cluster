@@ -1,4 +1,4 @@
-# CiliumLocalRedirectPolicy exposing the OpenBao API and UI on the node's loopback interface at 8210
+# Serves the OpenBao API and UI on the node's 127.0.0.1:8210
 apiVersion: cilium.io/v2
 kind: CiliumLocalRedirectPolicy
 metadata:
