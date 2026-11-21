@@ -24,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           RELEASE_FILES: '\.release-please-manifest\.json|docs/CHANGELOG\.md|src/data_science_cluster/__init__\.py|ansible/ansible_collections/dragonbishop/cluster/(galaxy\.yml|CHANGELOG\.md)'
-          E2E_PATHS: '^(ansible|clusters|infrastructure|apps|terraform|components|modules|scripts|src/bash)/|^\.github/workflows/e2e\.yml$|^(ansible\.cfg|pyproject\.toml|uv\.lock)$'
+          E2E_PATHS: '^(ansible|clusters|infrastructure|apps|terraform|src/bash|\.devcontainer)/|^(ansible\.cfg|pyproject\.toml|uv\.lock|\.trivyignore\.yaml|\.github/workflows/e2e\.yml)$'
         run: |
           cluster_files="$(
             gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' |
@@ -69,12 +69,13 @@ jobs:
         name: Install the pinned Tekton CLI
         env:
           GH_TOKEN: ${{ github.token }}
+          # renovate: datasource=github-releases depName=tektoncd/cli
+          TKN_VERSION: v0.46.2
         run: |
-          tkn_version="$(yq '.data.TKN_VERSION' infrastructure/cluster-config/versions.yaml)"
-          tkn_archive="tkn_${tkn_version}_Linux_x86_64.tar.gz"
+          tkn_archive="tkn_${TKN_VERSION#v}_Linux_x86_64.tar.gz"
           tkn_dir="$(mktemp -d "$RUNNER_TEMP/tkn.XXXXXX")"
           cd "$tkn_dir"
-          gh release download "v$tkn_version" --repo tektoncd/cli \
+          gh release download "$TKN_VERSION" --repo tektoncd/cli \
             --pattern "$tkn_archive" --pattern checksums.txt
           sha256sum --check --ignore-missing checksums.txt
           tar -xzf "$tkn_archive" tkn
@@ -99,25 +100,29 @@ jobs:
           printf '%s\n' "$FLUX_GITHUB_APP_PRIVATE_KEY" | $ON_NODE tee /tmp/flux-github-app.pem > /dev/null
 
       - &run_full_playbook
-        name: Bootstrap the cluster with the full-playbook scenario
+        name: Complete the full-playbook Molecule scenario
         env:
           GITHUB_APP_ID: ${{ secrets.FLUX_GITHUB_APP_ID }}
           GITHUB_APP_INSTALLATION_ID: ${{ secrets.FLUX_GITHUB_APP_INSTALLATION_ID }}
           FLUX_GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          $ON_NODE bash -s <<EOF
-          export GITHUB_APP_ID='$GITHUB_APP_ID'
-          export GITHUB_APP_INSTALLATION_ID='$GITHUB_APP_INSTALLATION_ID'
+          {
+            printf 'export %s=%q\n' \
+              GITHUB_APP_ID "$GITHUB_APP_ID" \
+              GITHUB_APP_INSTALLATION_ID "$GITHUB_APP_INSTALLATION_ID" \
+              FLUX_GIT_BRANCH "$FLUX_GIT_BRANCH" \
+              REPO_DIR "$REPO_DIR"
+            cat <<'EOF'
           export GITHUB_APP_PRIVATE_KEY_PATH=/tmp/flux-github-app.pem
-          export FLUX_GIT_BRANCH='$FLUX_GIT_BRANCH'
           export FLUX_CI_MANAGED_TESTS=true
-          export OPENTOFU_BINARY="\$(command -v tofu)"
-          uv --directory '$REPO_DIR/ansible/ansible_collections/dragonbishop/cluster' \
+          export OPENTOFU_BINARY="$(command -v tofu)"
+          uv --directory "$REPO_DIR/ansible/ansible_collections/dragonbishop/cluster" \
             run molecule test --scenario-name full-playbook
           EOF
+          } | $ON_NODE bash -se
 
       - &run_tekton_pipelines
-        name: Run the Tekton integration pipelines
+        name: Run Tekton core-test and code-quality
         run: |
           $ON_NODE bash -se -o pipefail <<'EOF'
           flux reconcile source git flux-system
@@ -130,22 +135,21 @@ jobs:
           tkn pipeline start core-test -n tekton-pipelines --serviceaccount core-test \
             --param "revision=$revision" --showlog --exit-with-pipelinerun-error
 
-          if [[ "$revision" != main@* ]]; then
-            kubectl -n flux-system wait --for=create --for=condition=Ready --timeout=20m \
-              kustomization/tekton-triggers
-            # Use the workspace and service accounts from the Trigger Flux applied.
-            run_name="$(kubectl -n tekton-triggers get trigger pull-request -o json |
-              jq -e --arg revision "$revision" '
-                .spec.template.spec.resourcetemplates[]
-                | select(.spec.pipelineRef.name == "code-quality")
-                | .metadata |= (del(.name) + {generateName: "code-quality-"})
-                | (.spec.params[] | select(.name == "revision") | .value) = $revision
-              ' | kubectl -n tekton-pipelines create -f - -o jsonpath='{.metadata.name}')"
-            tkn pipelinerun logs -n tekton-pipelines "$run_name" --follow
-            succeeded="$(kubectl -n tekton-pipelines get pipelinerun "$run_name" \
-              -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}')"
-            [[ "$succeeded" == True ]]
-          fi
+          workspace_size="$(kubectl -n flux-system get configmap cluster-config \
+            -o jsonpath='{.data.TEKTON_SOURCE_WORKSPACE_SIZE}')"
+          [[ -n "$workspace_size" ]]
+          workspace_template="$(mktemp --suffix=.yaml)"
+          trap 'rm -f "$workspace_template"' EXIT
+          cat > "$workspace_template" <<PVC
+          spec:
+            accessModes: [ReadWriteOnce]
+            resources:
+              requests:
+                storage: "$workspace_size"
+          PVC
+          tkn pipeline start code-quality -n tekton-pipelines --serviceaccount code-quality \
+            --param "revision=$revision" --workspace "name=source,volumeClaimTemplateFile=$workspace_template" \
+            --showlog --exit-with-pipelinerun-error
           EOF
 
       - &show_flux_objects
