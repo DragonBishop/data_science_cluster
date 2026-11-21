@@ -46,6 +46,20 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: observability
+  labels:
+    data-cluster/ca-bundles: "true"
+    data-cluster/gateway-access: "true"
+    pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-exporter
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: spire
   labels:
     data-cluster/ca-bundles: "true"
@@ -56,6 +70,7 @@ metadata:
   name: tekton-operator
   labels:
     pod-security.kubernetes.io/enforce: baseline
+    data-cluster/ca-bundles: "true"
 ---
 apiVersion: v1
 kind: Namespace

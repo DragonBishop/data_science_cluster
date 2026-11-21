@@ -1,6 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - tekton-triggers-admission.yaml
   - tekton-triggers-networkpolicy.yaml
   - tekton-triggers-tls.yaml
   - tekton-triggers-rbac.yaml

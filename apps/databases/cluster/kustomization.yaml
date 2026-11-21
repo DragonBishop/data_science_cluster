@@ -5,3 +5,4 @@ resources:
   - databases.yaml
   - databases-localhost.yaml
   - databases-route.yaml
+  - databases-monitors.yaml

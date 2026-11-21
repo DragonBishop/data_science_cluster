@@ -8,6 +8,7 @@ spec:
   retryInterval: 1m
   dependsOn:
     - name: gateway-server
+    - name: kube-prometheus-stack-crds
     - name: cluster-config
   sourceRef:
     kind: GitRepository

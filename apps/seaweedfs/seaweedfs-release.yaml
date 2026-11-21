@@ -31,11 +31,83 @@ spec:
     remediation:
       retries: ${SEAWEEDFS_HELM_RETRIES}
       remediateLastFailure: true
+  # Ghostunnel serves metrics to Prometheus; appended last
+  postRenderers:
+    - kustomize:
+        patches:
+          # Chart monitors verify Ghostunnel's SPIRE DNS name.
+          - target:
+              kind: ServiceMonitor
+              name: seaweedfs-(master|filer|volume|s3)
+            patch: |
+              - op: remove
+                path: /spec/endpoints/0/port
+              - op: add
+                path: /spec/endpoints/0/targetPort
+                value: metrics-tls
+              - op: add
+                path: /spec/endpoints/0/scheme
+                value: https
+              - op: add
+                path: /spec/endpoints/0/tlsConfig
+                value:
+                  serverName: seaweedfs.metrics.spiffe
+          - target:
+              kind: (StatefulSet|Deployment)
+              labelSelector: app.kubernetes.io/component in (master,filer,volume,s3)
+            patch: |
+              - op: add
+                path: /spec/template/metadata/labels/data-cluster~1metrics-tls
+                value: "true"
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: spiffe-workload-api
+                  csi:
+                    driver: csi.spiffe.io
+                    readOnly: true
+              - op: add
+                path: /spec/template/spec/containers/-
+                value:
+                  name: metrics-tls
+                  image: ghostunnel/ghostunnel:${GHOSTUNNEL_VERSION}
+                  args:
+                    - server
+                    - --listen=0.0.0.0:${METRICS_TLS_PORT}
+                    - --target=127.0.0.1:9327
+                    - --use-workload-api-addr=unix:///spiffe-workload-api/spire-agent.sock
+                    - --allow-uri=spiffe://cluster.internal/ns/observability/sa/prometheus
+                  ports:
+                    - name: metrics-tls
+                      containerPort: ${METRICS_TLS_PORT}
+                      protocol: TCP
+                  securityContext:
+                    runAsUser: 65532
+                    runAsNonRoot: true
+                    allowPrivilegeEscalation: false
+                    readOnlyRootFilesystem: true
+                    capabilities:
+                      drop: [ALL]
+                    seccompProfile:
+                      type: RuntimeDefault
+                  resources:
+                    requests:
+                      cpu: ${METRICS_TLS_CPU_REQUEST}
+                      memory: ${METRICS_TLS_MEM_REQUEST}
+                    limits:
+                      memory: ${METRICS_TLS_MEM_LIMIT}
+                  volumeMounts:
+                    - name: spiffe-workload-api
+                      mountPath: /spiffe-workload-api
+                      readOnly: true
   values:
     # gRPC mTLS between master, filer, volume and S3, from the chart's own cert-manager CA
     global:
       seaweedfs:
         enableSecurity: true
+        # Chart ServiceMonitors; no push gateway
+        monitoring:
+          enabled: true
         createClusterRole: false
         automountServiceAccountToken: false
         # HTTPS between master, filer, volume and S3, each client verifying against the chart's CA
@@ -58,6 +130,17 @@ spec:
       components:
         s3:
           extraIngress:
+            # Ghostunnel metrics
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: observability
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: prometheus
+              ports:
+                - protocol: TCP
+                  port: ${METRICS_TLS_PORT}
             # Barman Cloud WAL archiving and base backups
             - from:
                 - namespaceSelector:
@@ -104,6 +187,17 @@ spec:
                   port: ${SEAWEEDFS_S3_PORT}
         master:
           extraIngress:
+            # Ghostunnel metrics
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: observability
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: prometheus
+              ports:
+                - protocol: TCP
+                  port: ${METRICS_TLS_PORT}
             # core-test checks that gRPC refuses a client without a certificate
             - from:
                 - namespaceSelector:
@@ -117,6 +211,17 @@ spec:
                   port: 19333
         filer:
           extraIngress:
+            # Ghostunnel metrics
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: observability
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: prometheus
+              ports:
+                - protocol: TCP
+                  port: ${METRICS_TLS_PORT}
             # core-test checks that gRPC refuses a client without a certificate
             - from:
                 - namespaceSelector:
@@ -130,6 +235,17 @@ spec:
                   port: 18888
         volume:
           extraIngress:
+            # Ghostunnel metrics
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: observability
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: prometheus
+              ports:
+                - protocol: TCP
+                  port: ${METRICS_TLS_PORT}
             # core-test checks that gRPC refuses a client without a certificate
             - from:
                 - namespaceSelector:
@@ -143,6 +259,7 @@ spec:
                   port: 18080
     master:
       ipBind: "0.0.0.0"
+      metricsIp: 127.0.0.1
       # Deletes multipart uploads a killed backup left unfinished
       config: |-
         [master.maintenance]
@@ -172,6 +289,7 @@ spec:
           memory: ${SEAWEEDFS_MASTER_MEM_LIMIT}
     filer:
       ipBind: "0.0.0.0"
+      metricsIp: 127.0.0.1
       extraEnvironmentVars:
         WEED_HTTPS_FILER_CERT: /usr/local/share/ca-certificates/filer/tls.crt
         WEED_HTTPS_FILER_KEY: /usr/local/share/ca-certificates/filer/tls.key
@@ -192,6 +310,7 @@ spec:
         limits:
           memory: ${SEAWEEDFS_FILER_MEM_LIMIT}
     volume:
+      metricsIp: 127.0.0.1
       extraEnvironmentVars:
         WEED_HTTPS_VOLUME_CERT: /usr/local/share/ca-certificates/volume/tls.crt
         WEED_HTTPS_VOLUME_KEY: /usr/local/share/ca-certificates/volume/tls.key
@@ -239,6 +358,7 @@ spec:
         - "-config=/var/run/secrets/seaweedfs-config/config"
         # The static identity is fixed; OpenBao manages the rest through the IAM API
         - "-iam.readOnly=false"
+        - "-metricsIp=127.0.0.1"
       extraVolumeMounts: |
         - name: seaweedfs-tls
           mountPath: /var/run/secrets/seaweedfs.io

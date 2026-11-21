@@ -29,3 +29,16 @@ spec:
     - kind: ConfigMap
       name: cert-manager-values
       valuesKey: values.yaml
+  # Flux only: the monitor needs the Prometheus CRDs
+  values:
+    prometheus:
+      servicemonitor:
+        enabled: true
+        endpointAdditionalProperties:
+          scheme: https
+          tlsConfig:
+            serverName: cert-manager-metrics
+            ca:
+              secret:
+                name: cert-manager-metrics-ca
+                key: tls.crt

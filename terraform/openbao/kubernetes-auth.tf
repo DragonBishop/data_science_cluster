@@ -114,6 +114,25 @@ resource "vault_kubernetes_auth_backend_role" "openbao_snapshot" {
   token_max_ttl                    = 600
 }
 
+resource "vault_policy" "grafana" {
+  name   = "grafana-policy"
+  policy = <<EOT
+path "database/creds/grafana-app-role" { capabilities = ["read"] }
+path "secret/data/grafana/admin" { capabilities = ["read"] }
+EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "grafana" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "grafana-role"
+  bound_service_account_names      = ["grafana"]
+  bound_service_account_namespaces = ["observability"]
+  audience                         = "openbao"
+  token_policies                   = [vault_policy.grafana.name]
+  token_ttl                        = vault_database_secret_backend_role.grafana_app_role.default_ttl
+  token_max_ttl                    = vault_database_secret_backend_role.grafana_app_role.max_ttl
+}
+
 resource "vault_policy" "desktop_issuer" {
   name   = "desktop-issuer-policy"
   policy = <<EOT

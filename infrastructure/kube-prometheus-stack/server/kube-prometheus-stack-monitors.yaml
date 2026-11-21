@@ -1,0 +1,27 @@
+# Apply the Flux monitor after the Prometheus CRDs.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  jobLabel: app
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - source-controller
+          - kustomize-controller
+          - helm-controller
+          - notification-controller
+  podMetricsEndpoints:
+    # Ghostunnel; SVIDs are named <namespace>.metrics.spiffe
+    - port: metrics-tls
+      scheme: https
+      tlsConfig:
+        serverName: flux-system.metrics.spiffe
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_phase]
+          action: keep
+          regex: Running

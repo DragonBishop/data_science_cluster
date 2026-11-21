@@ -1,0 +1,63 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: observability
+spec:
+  interval: 1h
+  driftDetection:
+    mode: enabled
+  releaseName: kube-prometheus-stack
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "${KUBE_PROMETHEUS_STACK_VERSION}"
+      # From prometheus-crds
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+  valuesFrom:
+    - kind: ConfigMap
+      name: kube-prometheus-stack-values
+      valuesKey: values.yaml
+  # node-exporter on loopback; the chart allows it only with kube-rbac-proxy
+  postRenderers:
+    - kustomize:
+        patches:
+          # mTLS refuses the kubelet's HTTPS probes
+          - target:
+              kind: Deployment
+              name: kube-prometheus-stack-kube-state-metrics
+            patch: |
+              - op: replace
+                path: /spec/template/spec/containers/0/livenessProbe
+                value:
+                  tcpSocket:
+                    port: http
+              - op: replace
+                path: /spec/template/spec/containers/0/readinessProbe
+                value:
+                  tcpSocket:
+                    port: metrics
+          - target:
+              kind: DaemonSet
+              name: kube-prometheus-stack-prometheus-node-exporter
+            patch: |
+              apiVersion: apps/v1
+              kind: DaemonSet
+              metadata:
+                name: kube-prometheus-stack-prometheus-node-exporter
+              spec:
+                template:
+                  spec:
+                    containers:
+                      - name: node-exporter
+                        env:
+                          - name: HOST_IP
+                            value: 127.0.0.1
+                        livenessProbe:
+                          httpGet:
+                            host: 127.0.0.1
+                        readinessProbe:
+                          httpGet:
+                            host: 127.0.0.1

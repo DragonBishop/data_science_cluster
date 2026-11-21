@@ -6,9 +6,12 @@ resources:
   - delete-probes.yaml
   - fetch-source.yaml
   - flux-ready.yaml
+  - gateway-tls.yaml
   - manifests.yaml
   - mtls-required.yaml
   - postgres-database-applied.yaml
+  - prometheus-job-check.yaml
+  - prometheus-targets.yaml
   - renovate-config.yaml
   - shellcheck.yaml
   - unauthorized-pod-denied.yaml

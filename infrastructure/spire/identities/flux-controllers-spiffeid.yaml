@@ -5,6 +5,8 @@ metadata:
 spec:
   className: spire-spire
   spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  dnsNameTemplates:
+    - "{{ .PodMeta.Namespace }}.metrics.spiffe"
   namespaceSelector:
     matchLabels:
       kubernetes.io/metadata.name: flux-system

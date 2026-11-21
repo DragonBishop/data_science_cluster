@@ -1,0 +1,85 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: prometheus-web-tls
+  namespace: observability
+spec:
+  secretName: prometheus-web-tls
+  dnsNames:
+    - kube-prometheus-stack-prometheus.observability.svc.cluster.local
+    - prometheus-operated.observability.svc.cluster.local
+    # config-reloader
+    - localhost
+  usages:
+    - server auth
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  issuerRef:
+    name: openbao-pki-issuer
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: alertmanager-web-tls
+  namespace: observability
+spec:
+  secretName: alertmanager-web-tls
+  dnsNames:
+    - kube-prometheus-stack-alertmanager.observability.svc.cluster.local
+    - alertmanager-operated.observability.svc.cluster.local
+    # config-reloader
+    - localhost
+  usages:
+    - server auth
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  issuerRef:
+    name: openbao-pki-issuer
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana-tls
+  namespace: observability
+spec:
+  secretName: grafana-tls
+  dnsNames:
+    - kube-prometheus-stack-grafana.observability.svc.cluster.local
+    # Provisioning sidecars
+    - localhost
+  usages:
+    - server auth
+  duration: ${OPENBAO_PKI_CERT_DURATION}
+  renewBefore: ${OPENBAO_PKI_CERT_RENEW_BEFORE}
+  privateKey:
+    algorithm: ${CERT_KEY_ALGORITHM}
+    size: ${CERT_KEY_SIZE}
+  issuerRef:
+    name: openbao-pki-issuer
+    kind: ClusterIssuer
+---
+# Gateway to Grafana
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: grafana
+  namespace: observability
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: kube-prometheus-stack-grafana
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: openbao-root-ca
+    hostname: kube-prometheus-stack-grafana.observability.svc.cluster.local

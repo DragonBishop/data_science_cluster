@@ -1,5 +1,18 @@
 # Cilium Helm values for Hubble
 hubble:
+  metrics:
+    enabled:
+      - dns
+      - drop
+    tls:
+      enabled: true
+    serviceMonitor:
+      enabled: true
+      tlsConfig:
+        ca:
+          configMap:
+            name: openbao-root-ca
+            key: ca.crt
   eventBufferCapacity: "${HUBBLE_EVENT_BUFFER_CAPACITY}"
   relay:
     resources:
@@ -38,3 +51,18 @@ hubble:
         group: cert-manager.io
         kind: ClusterIssuer
         name: openbao-pki-issuer
+operator:
+  prometheus:
+    metricsService: true
+    tls:
+      enabled: true
+      server:
+        existingSecret: cilium-operator-metrics-tls
+    serviceMonitor:
+      enabled: true
+      # Beside openbao-root-ca
+      namespace: observability
+# Hubble's monitor reads the agent's key
+prometheus:
+  serviceMonitor:
+    namespace: observability

@@ -1,0 +1,17 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: metrics-targets
+spec:
+  className: spire-spire
+  fallback: true
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  dnsNameTemplates:
+    - "{{ .PodMeta.Namespace }}.metrics.spiffe"
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: Exists
+  podSelector:
+    matchLabels:
+      data-cluster/metrics-tls: "true"

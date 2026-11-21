@@ -10,12 +10,13 @@ spec:
     - name: cluster-config
     - name: namespaces
     - name: openbao-server
+    - name: kube-prometheus-stack-crds
   sourceRef:
     kind: GitRepository
     name: flux-system
   path: ./apps/seaweedfs
   prune: true
-  # Ready only once the HelmRelease's post-install hook has created the backup bucket
+  # Waits for the post-install hook's backup bucket
   wait: true
   timeout: 5m
   postBuild:

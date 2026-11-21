@@ -3,6 +3,8 @@ kind: Kustomization
 resources:
   - hubble-localhost.yaml
   - hubble-tls.yaml
+  - cilium-operator-tls.yaml
+  - cilium-monitors.yaml
 configMapGenerator:
   - name: hubble-values
     namespace: kube-system

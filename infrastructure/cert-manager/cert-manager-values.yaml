@@ -1,5 +1,13 @@
 # Helm values for cert-manager
 
+# cert-manager manages the metrics CA Secret.
+config:
+  metricsTLSConfig:
+    dynamic:
+      secretNamespace: cert-manager
+      secretName: cert-manager-metrics-ca
+      dnsNames:
+        - cert-manager-metrics
 resources:
   requests:
     cpu: ${CERT_MANAGER_CPU_REQUEST}
@@ -7,6 +15,13 @@ resources:
   limits:
     memory: ${CERT_MANAGER_MEM_LIMIT}
 webhook:
+  config:
+    metricsTLSConfig:
+      dynamic:
+        secretNamespace: cert-manager
+        secretName: cert-manager-metrics-ca
+        dnsNames:
+          - cert-manager-metrics
   resources:
     requests:
       cpu: ${CERT_MANAGER_WEBHOOK_CPU_REQUEST}
@@ -14,6 +29,13 @@ webhook:
     limits:
       memory: ${CERT_MANAGER_WEBHOOK_MEM_LIMIT}
 cainjector:
+  config:
+    metricsTLSConfig:
+      dynamic:
+        secretNamespace: cert-manager
+        secretName: cert-manager-metrics-ca
+        dnsNames:
+          - cert-manager-metrics
   resources:
     requests:
       cpu: ${CERT_MANAGER_CAINJECTOR_CPU_REQUEST}

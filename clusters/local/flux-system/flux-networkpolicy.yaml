@@ -16,6 +16,15 @@ spec:
         - ports:
             - port: "9090"
               protocol: TCP
+    # Ghostunnel metrics
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9445"
+              protocol: TCP
   egress:
     # Wildcard vendor hosts; name tenant hosts explicitly
     - toFQDNs:

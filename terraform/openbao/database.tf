@@ -6,8 +6,8 @@ resource "vault_mount" "db" {
 resource "vault_database_secret_backend_connection" "postgres_cluster" {
   backend       = vault_mount.db.path
   name          = "postgres-cluster"
-  allowed_roles = ["ds-app-role"]
-  # postgres-cluster-rw is created later in the Flux chain, downstream of this apply.
+  allowed_roles = ["ds-app-role", "grafana-app-role"]
+  # Flux creates postgres-cluster-rw after this apply
   verify_connection = false
 
   postgresql {
@@ -27,4 +27,15 @@ resource "vault_database_secret_backend_role" "ds_app_role" {
   ]
   default_ttl = 10800 # 3h
   max_ttl     = 86400 # 24h
+}
+
+resource "vault_database_secret_backend_role" "grafana_app_role" {
+  backend = vault_mount.db.path
+  name    = "grafana-app-role"
+  db_name = vault_database_secret_backend_connection.postgres_cluster.name
+  creation_statements = [
+    "CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}' IN ROLE grafana_readwrite; ALTER ROLE \"{{name}}\" SET role = grafana_readwrite;"
+  ]
+  default_ttl = 345600 # 4d
+  max_ttl     = 345600 # 4d
 }

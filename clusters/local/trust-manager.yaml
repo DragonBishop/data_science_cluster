@@ -8,6 +8,7 @@ spec:
   retryInterval: 1m
   dependsOn:
     - name: cert-manager
+    - name: kube-prometheus-stack-crds
     - name: cluster-config
   sourceRef:
     kind: GitRepository

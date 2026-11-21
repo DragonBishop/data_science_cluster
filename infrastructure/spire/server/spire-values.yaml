@@ -6,6 +6,14 @@ global:
     clusterName: data-science-cluster
 spire-server:
   caTTL: ${SPIRE_CA_TTL}
+  # Metrics over TLS with the SVID, admitting only Prometheus
+  telemetry:
+    prometheus:
+      enabled: true
+      tls:
+        mode: spireSVID
+        authorizedSPIFFEIDs:
+          - spiffe://cluster.internal/ns/observability/sa/prometheus
   upstreamAuthority:
     vault:
       enabled: true
@@ -29,6 +37,12 @@ spire-server:
     limits:
       memory: ${SPIRE_SERVER_MEM_LIMIT}
   controllerManager:
+    # Cilium and the Secrets Store CSI driver need metrics SVIDs in kube-system.
+    ignoreNamespaces:
+      - kube-public
+      - local-path-storage
+      - openshift-.*
+      - ibm-.*
     resources:
       requests:
         cpu: ${SPIRE_CONTROLLER_MANAGER_CPU_REQUEST}
@@ -44,6 +58,14 @@ spire-server:
         test-keys:
           enabled: false
 spire-agent:
+  # Metrics over TLS with the SVID, admitting only Prometheus
+  telemetry:
+    prometheus:
+      enabled: true
+      tls:
+        mode: spireSVID
+        authorizedSPIFFEIDs:
+          - spiffe://cluster.internal/ns/observability/sa/prometheus
   resources:
     requests:
       cpu: ${SPIRE_AGENT_CPU_REQUEST}

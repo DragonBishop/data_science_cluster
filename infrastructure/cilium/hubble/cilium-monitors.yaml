@@ -1,0 +1,20 @@
+# Scrape the agent through Ghostunnel while metrics bind to loopback.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cilium-agent
+  namespace: kube-system
+spec:
+  jobLabel: k8s-app
+  selector:
+    matchLabels:
+      k8s-app: cilium
+  podMetricsEndpoints:
+    # Ghostunnel; SVIDs are named <namespace>.metrics.spiffe
+    - port: metrics-tls
+      scheme: https
+      tlsConfig:
+        serverName: kube-system.metrics.spiffe
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: instance

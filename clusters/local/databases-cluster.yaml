@@ -9,6 +9,7 @@ spec:
   # databases-objectstore waits for postgres-bootstrap, which creates the Cluster this Kustomization then manages
   dependsOn:
     - name: databases-objectstore
+    - name: kube-prometheus-stack-crds
     # The TCPRoute attaches to the shared Gateway
     - name: gateway-server
   sourceRef:

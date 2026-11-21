@@ -5,6 +5,9 @@
 - name: Load containerd's AppArmor profile
   ansible.builtin.import_tasks: apparmor.yml
 
+- name: Create the observability host paths
+  ansible.builtin.import_tasks: host_paths.yml
+
 - name: Install k3s
   ansible.builtin.import_tasks: install.yml
 

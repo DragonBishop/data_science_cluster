@@ -33,6 +33,7 @@ run "database_roles_allowed" {
     condition = alltrue([
       for role in [
         vault_database_secret_backend_role.ds_app_role,
+        vault_database_secret_backend_role.grafana_app_role,
       ] : contains(vault_database_secret_backend_connection.postgres_cluster.allowed_roles, role.name)
     ])
     error_message = "A database role is missing from postgres_cluster's allowed_roles."
@@ -51,6 +52,7 @@ run "auth_roles_bound_narrowly" {
         vault_kubernetes_auth_backend_role.barman_s3,
         vault_kubernetes_auth_backend_role.openbao_snapshot_s3,
         vault_kubernetes_auth_backend_role.openbao_snapshot,
+        vault_kubernetes_auth_backend_role.grafana,
         vault_kubernetes_auth_backend_role.desktop_issuer["gateway"],
         vault_kubernetes_auth_backend_role.desktop_issuer["kube-system"],
         vault_kubernetes_auth_backend_role.desktop_issuer["tekton-pipelines"],
@@ -72,6 +74,7 @@ run "leaf_profile_is_scoped" {
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, var.internal_domain) &&
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-grpc.cilium.io") &&
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-relay.cilium.io") &&
+      contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-metrics.cilium.io") &&
       contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "hubble-ui.cilium.io") &&
       !contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "internal") &&
       !contains(vault_pki_secret_backend_role.internal_server.allowed_domains, "cilium.io")
@@ -90,6 +93,7 @@ run "policies_read_only" {
         vault_policy.barman_s3,
         vault_policy.openbao_snapshot_s3,
         vault_policy.openbao_snapshot,
+        vault_policy.grafana,
       ] : length(regexall("capabilities\\s*=\\s*\\[\"read\"\\]", policy.policy)) == length(regexall("capabilities", policy.policy))
     ])
     error_message = "A policy grants more than read."
@@ -122,6 +126,14 @@ run "csi_tokens_cover_secret_leases" {
       vault_kubernetes_auth_backend_role.openbao_snapshot_s3.token_max_ttl >= vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
     )
     error_message = "The OpenBao snapshot holder's CSI login token expires before its S3 lease, revoking the key before the next daily rotation."
+  }
+
+  assert {
+    condition = (
+      vault_kubernetes_auth_backend_role.grafana.token_ttl >= vault_database_secret_backend_role.grafana_app_role.default_ttl &&
+      vault_kubernetes_auth_backend_role.grafana.token_max_ttl >= vault_database_secret_backend_role.grafana_app_role.max_ttl
+    )
+    error_message = "Grafana's CSI login token expires before its database lease, revoking the login before the next daily rotation."
   }
 }
 

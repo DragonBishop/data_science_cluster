@@ -1,0 +1,27 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: spire-server
+  namespace: spire
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: server
+  ingress:
+    # SVID-authenticated metrics
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9988"
+              protocol: TCP
+  ingressDeny:
+    # The controller-manager's plaintext metrics; nothing scrapes them
+    - fromEntities:
+        - all
+      toPorts:
+        - ports:
+            - port: "8082"
+              protocol: TCP

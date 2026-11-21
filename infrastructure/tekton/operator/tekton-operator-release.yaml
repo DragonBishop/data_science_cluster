@@ -28,6 +28,12 @@ spec:
   values:
     installCRDs: true
     webhook:
+      # Without it, knative looks for config-observability, which this namespace lacks
+      additionalEnvs:
+        - name: CONFIG_OBSERVABILITY_NAME
+          value: tekton-operator-observability
+        - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+          value: /etc/openbao-root-ca/ca.crt
       resources:
         requests:
           cpu: ${TEKTON_OPERATOR_WEBHOOK_CPU_REQUEST}
@@ -36,9 +42,64 @@ spec:
           memory: ${TEKTON_OPERATOR_WEBHOOK_MEM_LIMIT}
     operator:
       autoInstallComponents: false
+      additionalEnvs:
+        - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+          value: /etc/openbao-root-ca/ca.crt
       resources:
         requests:
           cpu: ${TEKTON_OPERATOR_CPU_REQUEST}
           memory: ${TEKTON_OPERATOR_MEM_REQUEST}
         limits:
           memory: ${TEKTON_OPERATOR_MEM_LIMIT}
+  # Patch OTLP settings and CA mounts into the rendered chart.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: ConfigMap
+              name: tekton-operator-observability
+            patch: |
+              - op: add
+                path: /data/metrics-protocol
+                value: http/protobuf
+              - op: add
+                path: /data/metrics-endpoint
+                value: https://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090/api/v1/otlp/v1/metrics
+          - target:
+              kind: Deployment
+              name: tekton-operator
+            patch: |
+              - op: add
+                path: /spec/template/spec/volumes
+                value:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts
+                value:
+                  - name: openbao-root-ca
+                    mountPath: /etc/openbao-root-ca
+                    readOnly: true
+              - op: add
+                path: /spec/template/spec/containers/1/volumeMounts
+                value:
+                  - name: openbao-root-ca
+                    mountPath: /etc/openbao-root-ca
+                    readOnly: true
+          - target:
+              kind: Deployment
+              name: tekton-operator-webhook
+            patch: |
+              - op: add
+                path: /spec/template/spec/volumes
+                value:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts
+                value:
+                  - name: openbao-root-ca
+                    mountPath: /etc/openbao-root-ca
+                    readOnly: true

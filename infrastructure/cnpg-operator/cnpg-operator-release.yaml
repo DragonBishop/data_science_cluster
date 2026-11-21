@@ -15,7 +15,78 @@ metadata:
 spec:
   driftDetection:
     mode: enabled
+  # Ghostunnel serves metrics to Prometheus; appended last
+  postRenderers:
+    - kustomize:
+        patches:
+          # The monitor verifies Ghostunnel's SPIRE DNS name.
+          - target:
+              kind: PodMonitor
+              name: cnpg-cloudnative-pg
+            patch: |
+              - op: replace
+                path: /spec/podMetricsEndpoints/0/port
+                value: metrics-tls
+              - op: add
+                path: /spec/podMetricsEndpoints/0/scheme
+                value: https
+              - op: add
+                path: /spec/podMetricsEndpoints/0/tlsConfig
+                value:
+                  serverName: cnpg-system.metrics.spiffe
+          - target:
+              kind: Deployment
+              labelSelector: app.kubernetes.io/name=cloudnative-pg
+            patch: |
+              - op: add
+                path: /spec/template/metadata/labels/data-cluster~1metrics-tls
+                value: "true"
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: spiffe-workload-api
+                  csi:
+                    driver: csi.spiffe.io
+                    readOnly: true
+              - op: add
+                path: /spec/template/spec/containers/-
+                value:
+                  name: metrics-tls
+                  image: ghostunnel/ghostunnel:${GHOSTUNNEL_VERSION}
+                  args:
+                    - server
+                    - --listen=0.0.0.0:${METRICS_TLS_PORT}
+                    - --target=127.0.0.1:8080
+                    - --use-workload-api-addr=unix:///spiffe-workload-api/spire-agent.sock
+                    - --allow-uri=spiffe://cluster.internal/ns/observability/sa/prometheus
+                  ports:
+                    - name: metrics-tls
+                      containerPort: ${METRICS_TLS_PORT}
+                      protocol: TCP
+                  securityContext:
+                    runAsUser: 65532
+                    runAsNonRoot: true
+                    allowPrivilegeEscalation: false
+                    readOnlyRootFilesystem: true
+                    capabilities:
+                      drop: [ALL]
+                    seccompProfile:
+                      type: RuntimeDefault
+                  resources:
+                    requests:
+                      cpu: ${METRICS_TLS_CPU_REQUEST}
+                      memory: ${METRICS_TLS_MEM_REQUEST}
+                    limits:
+                      memory: ${METRICS_TLS_MEM_LIMIT}
+                  volumeMounts:
+                    - name: spiffe-workload-api
+                      mountPath: /spiffe-workload-api
+                      readOnly: true
   values:
+    monitoring:
+      podMonitorEnabled: true
+    additionalArgs:
+      - --metrics-bind-address=127.0.0.1:8080
     rbac:
       # Adds CNPG read access to the built-in view ClusterRole
       aggregateClusterRoles: true

@@ -1,0 +1,155 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  ingress:
+    # Self-scrape
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+    # Queries
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: grafana
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+            tekton.dev/pipeline: core-test
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+    # Tekton's OTLP push
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-operator
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-triggers
+            eventlistener: flux-events
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+  egress:
+    # Host-network targets
+    - toEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "9445"
+              protocol: TCP
+            - port: "9446"
+              protocol: TCP
+            - port: "9988"
+              protocol: TCP
+            - port: "9965"
+              protocol: TCP
+            - port: "9963"
+              protocol: TCP
+            - port: "10250"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: alertmanager
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+  ingress:
+    # Alerts and scrapes
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9093"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+    # Alert view
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: grafana
+      toPorts:
+        - ports:
+            - port: "9093"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus-operator
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app: kube-prometheus-stack-operator
+  ingress:
+    # Scrape; webhook calls come from the host
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "10250"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: kube-state-metrics
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  ingress:
+    # mTLS metrics
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: grafana
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  ingress:
+    # LAN through the Gateway
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    # Scrape
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP

@@ -55,3 +55,37 @@ spec:
     - kind: ConfigMap
       name: spire-values
       valuesKey: values.yaml
+  # Flux only: the monitors need the Prometheus CRDs
+  values:
+    spire-server:
+      telemetry:
+        prometheus:
+          podMonitor:
+            enabled: true
+    spire-agent:
+      telemetry:
+        prometheus:
+          podMonitor:
+            enabled: true
+  # Server SVIDs lack DNS SANs. SPIRE verifies Prometheus's client SVID.
+  postRenderers:
+    - kustomize:
+        patches:
+          # The controller-manager's 8082 has no TLS
+          - target:
+              kind: PodMonitor
+              name: spire-server
+            patch: |
+              - op: remove
+                path: /spec/podMetricsEndpoints/1
+          - target:
+              kind: PodMonitor
+              name: (spire-server|spire-agent)
+            patch: |
+              - op: add
+                path: /spec/podMetricsEndpoints/0/scheme
+                value: https
+              - op: add
+                path: /spec/podMetricsEndpoints/0/tlsConfig
+                value:
+                  insecureSkipVerify: true

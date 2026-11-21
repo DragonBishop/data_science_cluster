@@ -20,6 +20,11 @@ spec:
                   memory: ${TEKTON_STEP_MEM_REQUEST}
                 limits:
                   memory: ${TEKTON_STEP_MEM_LIMIT}
+        # OTLP push to Prometheus
+        config-observability:
+          data:
+            metrics-protocol: http/protobuf
+            metrics-endpoint: https://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090/api/v1/otlp/v1/metrics
       deployments:
         tekton-pipelines-controller:
           spec:
@@ -33,6 +38,17 @@ spec:
                         memory: ${TEKTON_PIPELINES_CONTROLLER_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_PIPELINES_CONTROLLER_MEM_LIMIT}
+                    env:
+                      - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                        value: /etc/openbao-root-ca/ca.crt
+                    volumeMounts:
+                      - name: openbao-root-ca
+                        mountPath: /etc/openbao-root-ca
+                        readOnly: true
+                volumes:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
         tekton-pipelines-webhook:
           spec:
             template:
@@ -45,6 +61,17 @@ spec:
                         memory: ${TEKTON_PIPELINES_WEBHOOK_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_PIPELINES_WEBHOOK_MEM_LIMIT}
+                    env:
+                      - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                        value: /etc/openbao-root-ca/ca.crt
+                    volumeMounts:
+                      - name: openbao-root-ca
+                        mountPath: /etc/openbao-root-ca
+                        readOnly: true
+                volumes:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
         tekton-pipelines-remote-resolvers:
           spec:
             template:
@@ -57,6 +84,17 @@ spec:
                         memory: ${TEKTON_RESOLVERS_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_RESOLVERS_MEM_LIMIT}
+                    env:
+                      - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                        value: /etc/openbao-root-ca/ca.crt
+                    volumeMounts:
+                      - name: openbao-root-ca
+                        mountPath: /etc/openbao-root-ca
+                        readOnly: true
+                volumes:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
         tekton-events-controller:
           spec:
             template:
@@ -69,6 +107,18 @@ spec:
                         memory: ${TEKTON_EVENTS_CONTROLLER_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_EVENTS_CONTROLLER_MEM_LIMIT}
+                    env:
+                      - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                        value: /etc/openbao-root-ca/ca.crt
+                    volumeMounts:
+                      - name: openbao-root-ca
+                        mountPath: /etc/openbao-root-ca
+                        readOnly: true
+                volumes:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
+        # Reads Pipelines' config-observability
         tekton-operator-proxy-webhook:
           spec:
             template:
@@ -81,9 +131,26 @@ spec:
                         memory: ${TEKTON_PROXY_WEBHOOK_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_PROXY_WEBHOOK_MEM_LIMIT}
+                    env:
+                      - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                        value: /etc/openbao-root-ca/ca.crt
+                    volumeMounts:
+                      - name: openbao-root-ca
+                        mountPath: /etc/openbao-root-ca
+                        readOnly: true
+                volumes:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
   trigger:
     disabled: false
     options:
+      configMaps:
+        # OTLP push to Prometheus; also copied into EventListener pods
+        config-observability-triggers:
+          data:
+            metrics-protocol: http/protobuf
+            metrics-endpoint: https://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090/api/v1/otlp/v1/metrics
       deployments:
         tekton-triggers-controller:
           spec:
@@ -97,6 +164,18 @@ spec:
                         memory: ${TEKTON_TRIGGERS_CONTROLLER_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_TRIGGERS_CONTROLLER_MEM_LIMIT}
+                    env:
+                      - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                        value: /etc/openbao-root-ca/ca.crt
+                    volumeMounts:
+                      - name: openbao-root-ca
+                        mountPath: /etc/openbao-root-ca
+                        readOnly: true
+                volumes:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
+        # Reads Pipelines' config-observability
         tekton-triggers-webhook:
           spec:
             template:
@@ -109,6 +188,17 @@ spec:
                         memory: ${TEKTON_TRIGGERS_WEBHOOK_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_TRIGGERS_WEBHOOK_MEM_LIMIT}
+                    env:
+                      - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                        value: /etc/openbao-root-ca/ca.crt
+                    volumeMounts:
+                      - name: openbao-root-ca
+                        mountPath: /etc/openbao-root-ca
+                        readOnly: true
+                volumes:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
         tekton-triggers-core-interceptors:
           spec:
             template:
@@ -121,6 +211,17 @@ spec:
                         memory: ${TEKTON_TRIGGERS_INTERCEPTORS_MEM_REQUEST}
                       limits:
                         memory: ${TEKTON_TRIGGERS_INTERCEPTORS_MEM_LIMIT}
+                    env:
+                      - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                        value: /etc/openbao-root-ca/ca.crt
+                    volumeMounts:
+                      - name: openbao-root-ca
+                        mountPath: /etc/openbao-root-ca
+                        readOnly: true
+                volumes:
+                  - name: openbao-root-ca
+                    configMap:
+                      name: openbao-root-ca
   pruner:
     disabled: false
     schedule: "${TEKTON_PRUNER_SCHEDULE}"
