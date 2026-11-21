@@ -59,3 +59,5 @@ data:
   TRUST_MANAGER_VERSION: "v0.26.0"
   # renovate: datasource=docker depName=aquasec/trivy
   TRIVY_VERSION: "0.76.2"
+  # renovate: datasource=helm depName=zot registryUrl=https://zotregistry.dev/helm-charts
+  ZOT_VERSION: "0.1.134"

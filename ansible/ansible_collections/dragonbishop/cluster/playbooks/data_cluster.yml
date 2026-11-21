@@ -83,6 +83,12 @@
           ansible.builtin.import_tasks: tasks/openbao_credentials.yml
           tags: always
 
+    - name: Configure k3s to use the cluster registry
+      ansible.builtin.import_role:
+        name: dragonbishop.cluster.k3s
+        tasks_from: registries
+      tags: [flux]
+
     - name: Run core-test for workstation bootstrap
       ansible.builtin.include_role:
         name: dragonbishop.cluster.flux

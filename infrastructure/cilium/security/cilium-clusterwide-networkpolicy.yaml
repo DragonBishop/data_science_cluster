@@ -50,12 +50,18 @@ specs:
           - matchLabels:
               k8s:io.kubernetes.pod.namespace: tekton-pipelines
               tekton.dev/pipeline: core-test
-              tekton.dev/pipelineTask: gateway-tls
+            matchExpressions:
+              - key: tekton.dev/pipelineTask
+                operator: In
+                values: [gateway-tls, zot]
   - endpointSelector:
       matchLabels:
         k8s:io.kubernetes.pod.namespace: tekton-pipelines
         tekton.dev/pipeline: core-test
-        tekton.dev/pipelineTask: gateway-tls
+      matchExpressions:
+        - key: tekton.dev/pipelineTask
+          operator: In
+          values: [gateway-tls, zot]
     egress:
       - toEntities:
           - ingress

@@ -21,7 +21,7 @@ select_persistent_storage() {
     local config="$REPO_ROOT/infrastructure/cluster-config/storage.yaml"
     local store key path answer
 
-    echo "Deleting SeaweedFS removes all buckets, including database backups, OpenBao snapshots and Loki logs."
+    echo "Deleting SeaweedFS removes all buckets, including database backups, OpenBao snapshots, Loki logs and Zot images."
     for store in SEAWEEDFS PROMETHEUS ALERTMANAGER LOKI ALLOY; do
         key="${store}_HOST_PATH"
         # An empty local patch lets kubectl read the file without a cluster.
@@ -129,6 +129,9 @@ main() {
     acquire_sudo
     select_persistent_storage
     uninstall_k3s
+    if grep -q ' # data-science-cluster-zot$' /etc/hosts; then
+        sudo sed -i '/ # data-science-cluster-zot$/d' /etc/hosts
+    fi
     clear_cilium_host_files
     remove_trust_anchors
 

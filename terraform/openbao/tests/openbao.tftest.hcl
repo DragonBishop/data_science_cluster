@@ -12,6 +12,7 @@ variables {
   backup_bucket               = "foo-backups"
   snapshot_bucket             = "foo-snapshots"
   loki_bucket                 = "foo-loki"
+  zot_bucket                  = "foo-zot"
 }
 
 run "postgres_tls_is_verified" {
@@ -55,6 +56,7 @@ run "auth_roles_bound_narrowly" {
         vault_kubernetes_auth_backend_role.openbao_snapshot,
         vault_kubernetes_auth_backend_role.grafana,
         vault_kubernetes_auth_backend_role.loki_s3,
+        vault_kubernetes_auth_backend_role.zot,
         vault_kubernetes_auth_backend_role.desktop_issuer["gateway"],
         vault_kubernetes_auth_backend_role.desktop_issuer["kube-system"],
         vault_kubernetes_auth_backend_role.desktop_issuer["tekton-pipelines"],
@@ -97,6 +99,7 @@ run "policies_read_only" {
         vault_policy.openbao_snapshot,
         vault_policy.grafana,
         vault_policy.loki_s3,
+        vault_policy.zot,
       ] : length(regexall("capabilities\\s*=\\s*\\[\"read\"\\]", policy.policy)) == length(regexall("capabilities", policy.policy))
     ])
     error_message = "A policy grants more than read."
@@ -109,6 +112,22 @@ run "seaweedfs_lease_ttl" {
   assert {
     condition     = vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds == 345600 && vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds == 345600
     error_message = "The seaweedfs mount's lease is not 4 days, so each daily rotation leaves a SeaweedFS IAM user alive for longer."
+  }
+}
+
+run "zot_credentials_are_scoped" {
+  command = plan
+
+  assert {
+    condition = (
+      toset(jsondecode(vault_aws_secret_backend_role.zot.policy_document).Statement[0].Resource) ==
+      toset(["arn:aws:s3:::${var.zot_bucket}", "arn:aws:s3:::${var.zot_bucket}/*"]) &&
+      toset(vault_kubernetes_auth_backend_role.zot.bound_service_account_names) == toset(["zot"]) &&
+      toset(vault_kubernetes_auth_backend_role.zot.bound_service_account_namespaces) == toset(["zot"]) &&
+      vault_kubernetes_auth_backend_role.zot.audience == "openbao" &&
+      vault_kubernetes_auth_backend_role.zot.token_ttl >= vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds
+    )
+    error_message = "Zot must get credentials for its own bucket and only from its ServiceAccount."
   }
 }
 

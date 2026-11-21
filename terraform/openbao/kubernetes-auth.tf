@@ -158,6 +158,25 @@ path "pki_desktop/sign/desktop" { capabilities = ["update"] }
 EOT
 }
 
+resource "vault_policy" "zot" {
+  name   = "zot-policy"
+  policy = <<EOT
+path "seaweedfs/creds/zot" { capabilities = ["read"] }
+path "secret/data/zot-push" { capabilities = ["read"] }
+EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "zot" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "zot-role"
+  bound_service_account_names      = ["zot"]
+  bound_service_account_namespaces = ["zot"]
+  audience                         = "openbao"
+  token_policies                   = [vault_policy.zot.name]
+  token_ttl                        = vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds
+  token_max_ttl                    = vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
+}
+
 # One role per desktop Issuer namespace
 resource "vault_kubernetes_auth_backend_role" "desktop_issuer" {
   for_each                         = toset(["gateway", "kube-system", "tekton-pipelines"])

@@ -41,6 +41,10 @@ spec:
       runAfter: [flux-ready]
       taskRef:
         name: prometheus-targets
+    - name: zot
+      runAfter: [flux-ready]
+      taskRef:
+        name: zot
     - name: loki-logs
       runAfter: [flux-ready]
       taskRef:
@@ -68,6 +72,7 @@ spec:
           - name: job
             value:
               - tekton-pipelines-controller
+              - zot
     - name: gateway-tls
       runAfter: [flux-ready]
       taskRef:
@@ -113,6 +118,7 @@ spec:
               - kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090
               - kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
               - loki.observability.svc.cluster.local:3100
+              - zot.zot.svc.cluster.local:5000
   finally:
     - name: delete-probes
       taskRef:

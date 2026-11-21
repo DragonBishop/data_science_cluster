@@ -39,6 +39,7 @@ spec:
         - matchName: "kubernetes-sigs.github.io"
         - matchName: "seaweedfs.github.io"
         - matchName: "spiffe.github.io"
+        - matchName: "zotregistry.dev"
         # Tetragon's Helm repository
         - matchName: "helm.cilium.io"
         # Tekton Dashboard release and its redirect target

@@ -186,6 +186,17 @@ spec:
               ports:
                 - protocol: TCP
                   port: ${SEAWEEDFS_S3_PORT}
+            # Zot's registry bucket
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: zot
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: zot
+              ports:
+                - protocol: TCP
+                  port: ${SEAWEEDFS_S3_PORT}
             # core-test checks the S3 certificate
             - from:
                 - namespaceSelector:
@@ -357,6 +368,7 @@ spec:
         - name: ${CNPG_BACKUP_BUCKET}
         - name: ${OPENBAO_SNAPSHOT_BUCKET}
         - name: ${LOKI_BUCKET}
+        - name: ${ZOT_BUCKET}
       livenessProbe:
         httpGet:
           scheme: HTTPS

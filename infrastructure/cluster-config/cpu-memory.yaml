@@ -79,6 +79,11 @@ data:
   LOKI_MEM_LIMIT: "1Gi"
   LOKI_MEM_REQUEST: "256Mi"
 
+  # --- Zot ---
+  ZOT_CPU_REQUEST: "50m"
+  ZOT_MEM_REQUEST: "128Mi"
+  ZOT_MEM_LIMIT: "512Mi"
+
   # --- localhost-tls ---
   LOCALHOST_TLS_CPU_REQUEST: "2m"
   LOCALHOST_TLS_MEM_LIMIT: "32Mi"
