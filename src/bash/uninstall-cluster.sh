@@ -5,12 +5,61 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+storage_to_remove=()
 
 acquire_sudo() {
     if ! sudo -v; then
         echo "❌ ERROR: sudo authentication failed. Cannot uninstall k3s."
         exit 1
     fi
+}
+
+select_persistent_storage() {
+    [[ -t 0 && -t 2 ]] || return 0
+
+    local -a paths=() selected=()
+    local config="$REPO_ROOT/infrastructure/cluster-config/storage.yaml"
+    local store key path answer
+
+    echo "Deleting SeaweedFS removes all buckets, including database backups, OpenBao snapshots and Loki logs."
+    for store in SEAWEEDFS PROMETHEUS ALERTMANAGER LOKI ALLOY; do
+        key="${store}_HOST_PATH"
+        # An empty local patch lets kubectl read the file without a cluster.
+        if ! path=$(kubectl patch --local -f "$config" --type=merge -p '{}' -o "jsonpath={.data.$key}") ||
+            ! is_storage_path "$path" "${paths[@]}"; then
+            echo "⚠️  Invalid or overlapping storage path for $key. Preserving persistent data." >&2
+            return 0
+        fi
+        paths+=("$path")
+
+        read -r -p "Permanently delete local $store storage [$path]? [y/N] " answer || return 0
+        [[ $answer == [yY] ]] || continue
+        selected+=("$path")
+    done
+    storage_to_remove=("${selected[@]}")
+}
+
+is_storage_path() {
+    local path="$1" other
+    shift
+
+    # Require a specific absolute directory and reject symlinks and parent references.
+    [[ $path == /*/*/* && $path != *[[:cntrl:]]* ]] || return 1
+    [[ $path == "$(sudo realpath -m -- "$path")" ]] || return 1
+
+    for other in "$@"; do
+        [[ $path == "$other" || $path == "$other/"* || $other == "$path/"* ]] && return 1
+    done
+    return 0
+}
+
+clear_selected_storage() {
+    local path
+    for path in "${storage_to_remove[@]}"; do
+        sudo test -d "$path" || continue
+        echo "🧹 Clearing persistent data in $path..."
+        sudo find "$path" -xdev -mindepth 1 -delete
+    done
 }
 
 uninstall_k3s() {
@@ -78,12 +127,14 @@ report_summary() {
 
 main() {
     acquire_sudo
+    select_persistent_storage
     uninstall_k3s
     clear_cilium_host_files
     remove_trust_anchors
 
     clear_openbao_cache
     clear_terraform_state
+    clear_selected_storage
 
     report_summary
 }
