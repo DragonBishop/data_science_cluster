@@ -9,6 +9,8 @@ data:
   ALERTMANAGER_STORAGE_SIZE: "1Gi"
   CNPG_BACKUP_BUCKET: "cnpg-backups"
   LOKI_BUCKET: "loki"
+  LOKI_HOST_PATH: "/mnt/vault13/loki"
+  LOKI_STORAGE_SIZE: "10Gi"
   OPENBAO_DATA_STORAGE_SIZE: "10Gi"
   OPENBAO_SNAPSHOT_BUCKET: "openbao-snapshots"
   POSTGRES_STORAGE_CLASS: "local-path"

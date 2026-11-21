@@ -31,6 +31,13 @@
         mode: "0755"
       become: true
 
+    - name: Create the Loki host path
+      ansible.builtin.file:
+        path: "{{ cluster_config.LOKI_HOST_PATH }}"
+        state: directory
+        mode: "0777"
+      become: true
+
     - name: Run the host firewall setup
       ansible.builtin.command:
         cmd: src/bash/setup-firewall.sh

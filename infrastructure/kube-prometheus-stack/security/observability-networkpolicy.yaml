@@ -153,3 +153,32 @@ spec:
         - ports:
             - port: "3000"
               protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: loki
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  ingress:
+    # Compactor gRPC and memberlist through its own Services
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: loki
+      toPorts:
+        - ports:
+            - port: "9095"
+              protocol: TCP
+            - port: "7946"
+              protocol: TCP
+    # Prometheus scrape
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "3100"
+              protocol: TCP

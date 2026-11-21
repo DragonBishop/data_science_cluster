@@ -1,0 +1,179 @@
+# Helm values for Loki
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  # Fixed; append new schemas
+  schemaConfig:
+    configs:
+      - from: "2026-11-18"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  # Login from AWS_* env
+  storage:
+    type: s3
+    bucketNames:
+      chunks: ${LOKI_BUCKET}
+      ruler: ${LOKI_BUCKET}
+      admin: ${LOKI_BUCKET}
+    s3:
+      endpoint: https://seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}
+      region: us-east-1
+      s3ForcePathStyle: true
+      http_config:
+        ca_file: /etc/openbao-root-ca/ca.crt
+  limits_config:
+    retention_period: ${LOKI_RETENTION}
+  compactor:
+    retention_enabled: true
+    delete_request_store: s3
+  server:
+    http_tls_config:
+      cert_file: /etc/loki/tls/tls.crt
+      key_file: /etc/loki/tls/tls.key
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http-metrics
+      scheme: HTTPS
+    periodSeconds: 10
+    initialDelaySeconds: 15
+    timeoutSeconds: 1
+  # No internet egress
+  analytics:
+    reporting_enabled: false
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: ${LOKI_CPU_REQUEST}
+      memory: ${LOKI_MEM_REQUEST}
+    limits:
+      memory: ${LOKI_MEM_LIMIT}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: loki-s3
+          key: AWS_ACCESS_KEY_ID
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: loki-s3
+          key: AWS_SECRET_ACCESS_KEY
+  extraVolumes:
+    - name: loki-tls
+      secret:
+        secretName: loki-tls
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+    - name: loki-s3
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: loki
+  extraVolumeMounts:
+    - name: loki-tls
+      mountPath: /etc/loki/tls
+      readOnly: true
+    - name: openbao-root-ca
+      mountPath: /etc/openbao-root-ca
+      readOnly: true
+    - name: loki-s3
+      mountPath: /mnt/loki-s3
+      readOnly: true
+  # In-place restart on S3 rotation
+  initContainers:
+    - name: credential-watch
+      image: alpine/k8s:${ALPINE_K8S_VERSION}
+      restartPolicy: Always
+      restartPolicyRules:
+        - action: RestartAllContainers
+          exitCodes:
+            operator: In
+            values: [3]
+      command: [bash, -c]
+      args:
+        - |
+          while true; do
+            current_key=$(< /credential/AWS_ACCESS_KEY_ID) || exit 1
+            [[ $current_key == "$STARTED_WITH" ]] || exit 3
+            sleep 60
+          done
+      env:
+        - name: STARTED_WITH
+          valueFrom:
+            secretKeyRef:
+              name: loki-s3
+              key: AWS_ACCESS_KEY_ID
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      resources:
+        requests:
+          cpu: ${LOKI_CREDENTIAL_WATCH_CPU_REQUEST}
+          memory: ${LOKI_CREDENTIAL_WATCH_MEM_REQUEST}
+        limits:
+          memory: ${LOKI_CREDENTIAL_WATCH_MEM_LIMIT}
+      volumeMounts:
+        - name: loki-s3
+          mountPath: /credential
+          readOnly: true
+  # Keeps the claim on PV loki
+  persistence:
+    enableStatefulSetAutoDeletePVC: false
+    whenDeleted: Retain
+    whenScaled: Retain
+    storageClass: "-"
+    size: ${LOKI_STORAGE_SIZE}
+    selector:
+      matchLabels:
+        data-cluster/volume: loki
+
+# Single process
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+gateway:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+# No Loki rules
+sidecar:
+  rules:
+    enabled: false
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    scheme: https
+    tlsConfig:
+      serverName: loki.observability.svc.cluster.local
+      ca:
+        configMap:
+          name: openbao-root-ca
+          key: ca.crt
+    metricsInstance:
+      enabled: false
