@@ -4,14 +4,6 @@ metadata:
   name: code-quality
   namespace: tekton-pipelines
 ---
-# Runs the Tasks that read only the pull request's files; its pods get no API token
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: code-quality-branch
-  namespace: tekton-pipelines
-automountServiceAccountToken: false
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

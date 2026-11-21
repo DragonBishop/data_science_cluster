@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 
-REQUIRED_TOOLS = ["kubectl", "flux", "ansible", "ansible-playbook"]
+REQUIRED_TOOLS = ["kubectl", "ansible", "ansible-playbook"]
 
 
 def pytest_sessionstart(session: pytest.Session):

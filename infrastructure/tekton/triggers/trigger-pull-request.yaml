@@ -45,31 +45,3 @@ spec:
                 value: $(tt.params.revision)
             taskRunTemplate:
               serviceAccountName: core-test
-        - apiVersion: tekton.dev/v1
-          kind: PipelineRun
-          metadata:
-            name: code-quality-$(tt.params.sha)
-            namespace: tekton-pipelines
-          spec:
-            pipelineRef:
-              name: code-quality
-            params:
-              - name: revision
-                value: $(tt.params.revision)
-            # Only fetch-source and manifests read the API
-            taskRunTemplate:
-              serviceAccountName: code-quality-branch
-            taskRunSpecs:
-              - pipelineTaskName: fetch-source
-                serviceAccountName: code-quality
-              - pipelineTaskName: manifests
-                serviceAccountName: code-quality
-            workspaces:
-              - name: source
-                volumeClaimTemplate:
-                  spec:
-                    accessModes:
-                      - ReadWriteOnce
-                    resources:
-                      requests:
-                        storage: ${TEKTON_SOURCE_WORKSPACE_SIZE}

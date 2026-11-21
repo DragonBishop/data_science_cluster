@@ -43,12 +43,8 @@ data:
   PAUSE_IMAGE_TAG: "3.10.2"
   # renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm
   SEAWEEDFS_VERSION: "4.52.0"
-  # renovate: datasource=docker depName=renovate/renovate
-  RENOVATE_VERSION: "44.251.0"
   # renovate: datasource=helm depName=secrets-store-csi-driver registryUrl=https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
   SECRETS_STORE_CSI_DRIVER_VERSION: "1.6.2"
-  # renovate: datasource=docker depName=koalaman/shellcheck-alpine
-  SHELLCHECK_VERSION: "v0.11.0"
   # renovate: datasource=docker depName=ghcr.io/spiffe/spiffe-helper
   SPIFFE_HELPER_VERSION: "0.12.3"
   # renovate: datasource=helm depName=spire-crds registryUrl=https://spiffe.github.io/helm-charts-hardened
@@ -57,13 +53,9 @@ data:
   SPIRE_VERSION: "0.30.4"
   # renovate: datasource=github-releases depName=tektoncd/operator extractVersion=^v(?<version>.+)$
   TEKTON_OPERATOR_VERSION: "0.81.3"
-  # renovate: datasource=github-releases depName=tektoncd/cli extractVersion=^v(?<version>.+)$
-  TKN_VERSION: "0.46.2"
   # renovate: datasource=helm depName=tetragon registryUrl=https://helm.cilium.io
   TETRAGON_VERSION: "1.8.0"
   # renovate: datasource=helm depName=trust-manager registryUrl=https://charts.jetstack.io
   TRUST_MANAGER_VERSION: "v0.26.0"
   # renovate: datasource=docker depName=aquasec/trivy
   TRIVY_VERSION: "0.76.2"
-  # renovate: datasource=docker depName=ghcr.io/zizmorcore/zizmor
-  ZIZMOR_VERSION: "1.32.0"

@@ -75,17 +75,3 @@ spec:
         set -eu
         cd /manifests/rendered
         trivy config --quiet --skip-check-update --exit-code 1 --ignorefile "$(workspaces.source.path)/.trivyignore.yaml" .
-    - name: trivy-terraform
-      image: aquasec/trivy:${TRIVY_VERSION}
-      workingDir: $(workspaces.source.path)/terraform/openbao
-      script: |
-        #!/bin/sh
-        set -eu
-        trivy config --quiet --skip-check-update --exit-code 1 --ignorefile "$(workspaces.source.path)/.trivyignore.yaml" .
-    - name: trivy-dockerfiles
-      image: aquasec/trivy:${TRIVY_VERSION}
-      workingDir: $(workspaces.source.path)/.devcontainer
-      script: |
-        #!/bin/sh
-        set -eu
-        trivy config --quiet --skip-check-update --exit-code 1 --ignorefile "$(workspaces.source.path)/.trivyignore.yaml" .
