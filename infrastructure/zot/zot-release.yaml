@@ -1,0 +1,209 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: zot
+  namespace: zot
+spec:
+  interval: 24h
+  url: https://zotregistry.dev/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: zot
+  namespace: zot
+spec:
+  interval: 1h
+  releaseName: zot
+  chart:
+    spec:
+      chart: zot
+      version: "${ZOT_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: zot
+  driftDetection:
+    mode: enabled
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    fullnameOverride: zot
+    service:
+      type: ClusterIP
+    serviceAccount:
+      create: false
+      name: zot
+    strategy:
+      type: Recreate
+    podSecurityContext:
+      fsGroup: 65532
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      runAsUser: 65532
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+    resources:
+      requests:
+        cpu: ${ZOT_CPU_REQUEST}
+        memory: ${ZOT_MEM_REQUEST}
+      limits:
+        memory: ${ZOT_MEM_LIMIT}
+    httpGet:
+      scheme: HTTPS
+    mountConfig: true
+    configFiles:
+      config.json: |
+        {
+          "storage": {
+            "rootDirectory": "/var/lib/registry",
+            "dedupe": false,
+            "storageDriver": {
+              "name": "s3",
+              "bucket": "${ZOT_BUCKET}",
+              "region": "us-east-1",
+              "regionendpoint": "https://seaweedfs-s3.seaweedfs.svc:${SEAWEEDFS_S3_PORT}",
+              "forcepathstyle": true
+            }
+          },
+          "http": {
+            "address": "0.0.0.0",
+            "port": "5000",
+            "compat": ["docker2s2"],
+            "tls": {"cert": "/tls/tls.crt", "key": "/tls/tls.key"},
+            "auth": {"htpasswd": {"path": "/credentials/htpasswd"}},
+            "accessControl": {
+              "metrics": {"anonymousPolicy": ["read"]},
+              "repositories": {
+                "dev/**": {
+                  "anonymousPolicy": ["read"],
+                  "policies": [{"users": ["tekton-builder"], "actions": ["read", "create", "update"]}]
+                },
+                "**": {
+                  "anonymousPolicy": ["read"],
+                  "defaultPolicy": ["read"]
+                }
+              }
+            }
+          },
+          "extensions": {
+            "metrics": {"enable": true},
+            "sync": {
+              "enable": true,
+              "downloadDir": "/sync",
+              "registries": [
+                {"urls": ["https://ghcr.io"], "onDemand": true, "content": [{"prefix": "**", "destination": "/ghcr.io"}]},
+                {"urls": ["https://registry-1.docker.io"], "onDemand": true, "content": [{"prefix": "**", "destination": "/docker.io"}]},
+                {"urls": ["https://quay.io"], "onDemand": true, "content": [{"prefix": "**", "destination": "/quay.io"}]},
+                {"urls": ["https://registry.k8s.io"], "onDemand": true, "content": [{"prefix": "**", "destination": "/registry.k8s.io"}]}
+              ]
+            }
+          }
+        }
+    env:
+      - name: SSL_CERT_DIR
+        value: /etc/ssl/certs:/etc/zot-ca
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: zot-s3
+            key: AWS_ACCESS_KEY_ID
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: zot-s3
+            key: AWS_SECRET_ACCESS_KEY
+    extraVolumes:
+      - name: sync-tmp
+        emptyDir: {}
+      - name: tls
+        secret:
+          secretName: zot-tls
+      - name: ca
+        configMap:
+          name: openbao-root-ca
+      - name: credentials
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: zot
+    extraVolumeMounts:
+      - name: sync-tmp
+        mountPath: /sync
+      - name: tls
+        mountPath: /tls
+        readOnly: true
+      - name: ca
+        mountPath: /etc/zot-ca
+        readOnly: true
+      - name: credentials
+        mountPath: /credentials
+        readOnly: true
+    initContainers:
+      - name: credential-watch
+        image: alpine/k8s:${ALPINE_K8S_VERSION}
+        restartPolicy: Always
+        restartPolicyRules:
+          - action: RestartAllContainers
+            exitCodes:
+              operator: In
+              values: [3]
+        command: [bash, -c]
+        args:
+          - |
+            while true; do
+              current_key=$(< /credentials/AWS_ACCESS_KEY_ID) || exit 1
+              [[ $current_key == "$STARTED_WITH" ]] || exit 3
+              sleep 60
+            done
+        env:
+          - name: STARTED_WITH
+            valueFrom:
+              secretKeyRef:
+                name: zot-s3
+                key: AWS_ACCESS_KEY_ID
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65532
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            cpu: 5m
+            memory: 16Mi
+          limits:
+            memory: 32Mi
+        volumeMounts:
+          - name: credentials
+            mountPath: /credentials
+            readOnly: true
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: zot
+  namespace: zot
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zot
+      app.kubernetes.io/instance: zot
+  endpoints:
+    - port: zot
+      scheme: https
+      tlsConfig:
+        serverName: zot.zot.svc.cluster.local
+        ca:
+          configMap:
+            name: openbao-root-ca
+            key: ca.crt
