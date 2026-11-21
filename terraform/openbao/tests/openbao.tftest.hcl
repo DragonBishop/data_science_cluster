@@ -11,6 +11,7 @@ variables {
   seaweedfs_s3_port           = 9000
   backup_bucket               = "foo-backups"
   snapshot_bucket             = "foo-snapshots"
+  loki_bucket                 = "foo-loki"
 }
 
 run "postgres_tls_is_verified" {
@@ -53,6 +54,7 @@ run "auth_roles_bound_narrowly" {
         vault_kubernetes_auth_backend_role.openbao_snapshot_s3,
         vault_kubernetes_auth_backend_role.openbao_snapshot,
         vault_kubernetes_auth_backend_role.grafana,
+        vault_kubernetes_auth_backend_role.loki_s3,
         vault_kubernetes_auth_backend_role.desktop_issuer["gateway"],
         vault_kubernetes_auth_backend_role.desktop_issuer["kube-system"],
         vault_kubernetes_auth_backend_role.desktop_issuer["tekton-pipelines"],
@@ -94,6 +96,7 @@ run "policies_read_only" {
         vault_policy.openbao_snapshot_s3,
         vault_policy.openbao_snapshot,
         vault_policy.grafana,
+        vault_policy.loki_s3,
       ] : length(regexall("capabilities\\s*=\\s*\\[\"read\"\\]", policy.policy)) == length(regexall("capabilities", policy.policy))
     ])
     error_message = "A policy grants more than read."
@@ -126,6 +129,14 @@ run "csi_tokens_cover_secret_leases" {
       vault_kubernetes_auth_backend_role.openbao_snapshot_s3.token_max_ttl >= vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
     )
     error_message = "The OpenBao snapshot holder's CSI login token expires before its S3 lease, revoking the key before the next daily rotation."
+  }
+
+  assert {
+    condition = (
+      vault_kubernetes_auth_backend_role.loki_s3.token_ttl >= vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds &&
+      vault_kubernetes_auth_backend_role.loki_s3.token_max_ttl >= vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
+    )
+    error_message = "Loki's CSI login token expires before its S3 lease, revoking the key before the next daily rotation."
   }
 
   assert {

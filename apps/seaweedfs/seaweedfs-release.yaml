@@ -344,6 +344,7 @@ spec:
       createBuckets:
         - name: ${CNPG_BACKUP_BUCKET}
         - name: ${OPENBAO_SNAPSHOT_BUCKET}
+        - name: ${LOKI_BUCKET}
       livenessProbe:
         httpGet:
           scheme: HTTPS

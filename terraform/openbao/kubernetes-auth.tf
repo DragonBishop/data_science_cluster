@@ -133,6 +133,24 @@ resource "vault_kubernetes_auth_backend_role" "grafana" {
   token_max_ttl                    = vault_database_secret_backend_role.grafana_app_role.max_ttl
 }
 
+resource "vault_policy" "loki_s3" {
+  name   = "loki-s3-policy"
+  policy = <<EOT
+path "seaweedfs/creds/loki" { capabilities = ["read"] }
+EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "loki_s3" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "loki-s3-role"
+  bound_service_account_names      = ["loki"]
+  bound_service_account_namespaces = ["observability"]
+  audience                         = "openbao"
+  token_policies                   = [vault_policy.loki_s3.name]
+  token_ttl                        = vault_aws_secret_backend.seaweedfs.default_lease_ttl_seconds
+  token_max_ttl                    = vault_aws_secret_backend.seaweedfs.max_lease_ttl_seconds
+}
+
 resource "vault_policy" "desktop_issuer" {
   name   = "desktop-issuer-policy"
   policy = <<EOT

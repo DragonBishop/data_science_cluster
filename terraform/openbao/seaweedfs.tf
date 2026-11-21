@@ -41,3 +41,17 @@ resource "vault_aws_secret_backend_role" "openbao_snapshot" {
     }]
   })
 }
+
+resource "vault_aws_secret_backend_role" "loki" {
+  backend         = vault_aws_secret_backend.seaweedfs.path
+  name            = "loki"
+  credential_type = "iam_user"
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:*"]
+      Resource = ["arn:aws:s3:::${var.loki_bucket}", "arn:aws:s3:::${var.loki_bucket}/*"]
+    }]
+  })
+}
