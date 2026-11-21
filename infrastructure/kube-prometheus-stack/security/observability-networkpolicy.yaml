@@ -52,6 +52,8 @@ spec:
               protocol: TCP
             - port: "9446"
               protocol: TCP
+            - port: "9447"
+              protocol: TCP
             - port: "9988"
               protocol: TCP
             - port: "9965"

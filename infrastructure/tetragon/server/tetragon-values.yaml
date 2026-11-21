@@ -1,0 +1,45 @@
+# Helm values for Tetragon
+tetragon:
+  resources:
+    requests:
+      cpu: ${TETRAGON_CPU_REQUEST}
+      memory: ${TETRAGON_MEM_REQUEST}
+    limits:
+      memory: ${TETRAGON_MEM_LIMIT}
+  prometheus:
+    # Ghostunnel serves it
+    address: 127.0.0.1
+    serviceMonitor:
+      enabled: true
+  # Its TCP listener has no TLS; probes use the gRPC unix socket
+  healthGrpc:
+    enabled: false
+  livenessProbe:
+    timeoutSeconds: 60
+    exec:
+      command: [tetra, --server-address, unix:///var/run/tetragon/tetragon.sock, status]
+  startupProbe:
+    timeoutSeconds: 60
+    exec:
+      command: [tetra, --server-address, unix:///var/run/tetragon/tetragon.sock, status]
+
+export:
+  resources:
+    requests:
+      cpu: ${TETRAGON_EXPORT_CPU_REQUEST}
+      memory: ${TETRAGON_EXPORT_MEM_REQUEST}
+    limits:
+      memory: ${TETRAGON_EXPORT_MEM_LIMIT}
+
+tetragonOperator:
+  resources:
+    requests:
+      cpu: ${TETRAGON_OPERATOR_CPU_REQUEST}
+      memory: ${TETRAGON_OPERATOR_MEM_REQUEST}
+    limits:
+      memory: ${TETRAGON_OPERATOR_MEM_LIMIT}
+  prometheus:
+    # Ghostunnel serves it
+    address: 127.0.0.1
+    serviceMonitor:
+      enabled: true

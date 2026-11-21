@@ -59,6 +59,8 @@ data:
   TEKTON_OPERATOR_VERSION: "0.81.3"
   # renovate: datasource=github-releases depName=tektoncd/cli extractVersion=^v(?<version>.+)$
   TKN_VERSION: "0.46.2"
+  # renovate: datasource=helm depName=tetragon registryUrl=https://helm.cilium.io
+  TETRAGON_VERSION: "1.8.0"
   # renovate: datasource=helm depName=trust-manager registryUrl=https://charts.jetstack.io
   TRUST_MANAGER_VERSION: "v0.26.0"
   # renovate: datasource=docker depName=aquasec/trivy

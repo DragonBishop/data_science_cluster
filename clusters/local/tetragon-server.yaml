@@ -1,0 +1,23 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tetragon-server
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 1m
+  dependsOn:
+    - name: spire
+    - name: kube-prometheus-stack-crds
+    - name: cluster-config
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./infrastructure/tetragon/server
+  prune: true
+  wait: true
+  timeout: 10m
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
