@@ -1,0 +1,81 @@
+---
+- name: Configure the Zot trust after Flux deploys it
+  vars:
+    k3s_zot_hostname: "zot.{{ cluster_config.INTERNAL_DOMAIN }}"
+    k3s_zot_ca_path: /etc/rancher/k3s/zot-ca.crt
+    k3s_zot_certs_dir: /var/lib/rancher/k3s/agent/etc/containerd/certs.d
+    k3s_zot_mirrors:
+      docker.io: https://registry-1.docker.io
+      ghcr.io: https://ghcr.io
+      quay.io: https://quay.io
+      registry.k8s.io: https://registry.k8s.io
+  block:
+    - name: Wait for Flux to deploy Zot
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig={{ kubeconfig_path }}
+          - --namespace=flux-system
+          - wait
+          - kustomization/zot
+          - --for=create
+          - --for=condition=Ready
+          - --timeout=20m
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Read the pki_desktop CA cert for the Zot Gateway
+      kubernetes.core.k8s_info:
+        kind: Secret
+        namespace: gateway
+        name: internal-edge-cert
+      register: k3s_zot_edge_cert
+      when: not ansible_check_mode
+
+    - name: Configure the Zot mirror
+      become: true
+      when: not ansible_check_mode
+      block:
+        - name: Write the pki_desktop CA cert
+          ansible.builtin.copy:
+            content: "{{ k3s_zot_edge_cert.resources[0].data['ca.crt'] | b64decode }}"
+            dest: "{{ k3s_zot_ca_path }}"
+            mode: '0644'
+
+        - name: Resolve Zot on the node without changing the LAN DNS resolver
+          ansible.builtin.lineinfile:
+            path: /etc/hosts
+            regexp: ' # data-science-cluster-zot$'
+            line: "{{ cluster_config.GATEWAY_IP }} {{ k3s_zot_hostname }} # data-science-cluster-zot"
+
+        - name: Create containerd mirror directories for Zot
+          ansible.builtin.file:
+            path: "{{ k3s_zot_certs_dir }}/{{ item }}"
+            state: directory
+            mode: '0755'
+          loop: "{{ k3s_zot_mirrors | list }}"
+
+        - name: Write the containerd mirror configuration
+          ansible.builtin.copy:
+            dest: "{{ k3s_zot_certs_dir }}/{{ item.key }}/hosts.toml"
+            content: |
+              server = "{{ item.value }}"
+
+              [host."https://{{ k3s_zot_hostname }}/v2/{{ item.key }}"]
+                ca = "{{ k3s_zot_ca_path }}"
+                capabilities = ["pull", "resolve"]
+            mode: '0644'
+          loop: "{{ k3s_zot_mirrors | dict2items }}"
+          loop_control:
+            label: "{{ item.key }}"
+
+        - name: Verify the registry through the Gateway
+          ansible.builtin.uri:
+            url: "https://{{ k3s_zot_hostname }}/v2/"
+            ca_path: "{{ k3s_zot_ca_path }}"
+            use_proxy: false
+            timeout: 5
+          register: k3s_zot_gateway_check
+          until: k3s_zot_gateway_check.status == 200
+          retries: 30
+          delay: 2
