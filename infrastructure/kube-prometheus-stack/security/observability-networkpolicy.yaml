@@ -174,10 +174,12 @@ spec:
               protocol: TCP
             - port: "7946"
               protocol: TCP
-    # Alloy pushes and Prometheus scrapes
+    # Alloy pushes, Grafana queries, and Prometheus scrapes
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: alloy
+        - matchLabels:
+            app.kubernetes.io/name: grafana
         - matchLabels:
             app.kubernetes.io/name: prometheus
       toPorts:

@@ -221,6 +221,15 @@ grafana:
         tlsAuthWithCACert: true
       secureJsonData:
         tlsCACert: $__file{/etc/openbao-root-ca/ca.crt}
+    - name: Loki
+      type: loki
+      uid: loki
+      url: https://loki.observability.svc.cluster.local:3100
+      access: proxy
+      jsonData:
+        tlsAuthWithCACert: true
+      secureJsonData:
+        tlsCACert: $__file{/etc/openbao-root-ca/ca.crt}
 
 prometheusOperator:
   resources:
