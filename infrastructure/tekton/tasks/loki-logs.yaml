@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: loki-logs
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: query
+      description: A LogQL query that must match lines Alloy delivered to Loki
+      type: string
+  volumes:
+    - name: openbao-root-ca
+      configMap:
+        name: openbao-root-ca
+  stepTemplate:
+    image: alpine/k8s:${ALPINE_K8S_VERSION}
+    securityContext:
+      runAsUser: 65532
+    env:
+      - name: QUERY_URL
+        value: https://loki.observability.svc.cluster.local:3100/loki/api/v1/query_range
+      - name: QUERY
+        value: $(params.query)
+    volumeMounts:
+      - name: openbao-root-ca
+        mountPath: /ca/root
+  steps:
+    - name: lines-stored
+      # Alloy batches pushes
+      timeout: 2m
+      script: |
+        #!/usr/bin/env bash
+        set -uo pipefail
+        until
+          stream_count=$(curl --silent --show-error --fail --cacert /ca/root/ca.crt --get "$QUERY_URL" \
+            --data-urlencode "query=$QUERY" --data-urlencode since=1h \
+            | jq '.data.result | length') \
+            && (( stream_count > 0 ))
+        do
+          echo "no lines yet for $QUERY"
+          sleep 10
+        done
+        echo "$stream_count streams match $QUERY"

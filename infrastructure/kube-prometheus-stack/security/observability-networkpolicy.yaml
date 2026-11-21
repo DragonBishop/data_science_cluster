@@ -176,7 +176,7 @@ spec:
               protocol: TCP
             - port: "7946"
               protocol: TCP
-    # Alloy pushes, Grafana queries, and Prometheus scrapes
+    # Push, query, and scrape
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: alloy
@@ -184,6 +184,9 @@ spec:
             app.kubernetes.io/name: grafana
         - matchLabels:
             app.kubernetes.io/name: prometheus
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: tekton-pipelines
+            tekton.dev/pipeline: core-test
       toPorts:
         - ports:
             - port: "3100"
