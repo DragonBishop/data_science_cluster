@@ -93,7 +93,7 @@ metadata:
 spec:
   instances: 1
   # renovate: datasource=docker depName=ghcr.io/cloudnative-pg/postgis
-  imageName: ghcr.io/cloudnative-pg/postgis:18.6-3.7.0-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgis:19.0-3.7.0-system-trixie
   storage:
     size: 100Gi
     storageClass: local-path
