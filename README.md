@@ -158,10 +158,10 @@ The Gateway API's kinds:
 
 | Component | Version | Description |
 | --- | --- | --- |
-| Barman Cloud Plugin | `0.8.1` <!-- renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts --> | WAL archiving and base backups for CNPG through the `ObjectStore` resource. |
+| Barman Cloud Plugin | `0.9.0` <!-- renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts --> | WAL archiving and base backups for CNPG through the `ObjectStore` resource. |
 | CloudNativePG (CNPG) | `0.29.1` <!-- renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts --> | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
 | PostgreSQL / PostGIS image | `18.6-3.7.0-system-trixie` <!-- renovate: datasource=docker depName=ghcr.io/cloudnative-pg/postgis --> | PostgreSQL/PostGIS operand image. |
-| SeaweedFS | `4.52.0` <!-- renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm --> | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.seaweedfs.svc:9000`). Its IAM API lets OpenBao create and delete Barman's key pairs. |
+| SeaweedFS | `4.53.0` <!-- renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm --> | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.seaweedfs.svc:9000`). Its IAM API lets OpenBao create and delete Barman's key pairs. |
 | Zot | `0.1.134` <!-- renovate: datasource=helm depName=zot registryUrl=https://zotregistry.dev/helm-charts --> | OCI registry in `zot`. Stores images in the SeaweedFS bucket `zot` and serves them at `zot.${INTERNAL_DOMAIN}` through the shared Gateway. Acts as a pull-through cache for ghcr.io, docker.io, quay.io and registry.k8s.io. k3s's containerd resolves image pulls for those four registries through it. The `tekton-builder` user may push to `dev/**`. S3 credentials and the push htpasswd come from the CSI driver; a `credential-watch` sidecar restarts the pod when the S3 key pair rotates. |
 
 ### Testing

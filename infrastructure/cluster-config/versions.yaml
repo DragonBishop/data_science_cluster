@@ -8,7 +8,7 @@ data:
   # renovate: datasource=helm depName=alloy registryUrl=https://grafana.github.io/helm-charts
   ALLOY_VERSION: "1.16.0"
   # renovate: datasource=helm depName=plugin-barman-cloud registryUrl=https://cloudnative-pg.github.io/charts
-  BARMAN_CLOUD_VERSION: "0.8.1"
+  BARMAN_CLOUD_VERSION: "0.9.0"
   # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io
   CERT_MANAGER_VERSION: "v1.21.3"
   # renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io
@@ -42,7 +42,7 @@ data:
   # renovate: datasource=docker depName=registry.k8s.io/pause
   PAUSE_IMAGE_TAG: "3.10.2"
   # renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm
-  SEAWEEDFS_VERSION: "4.52.0"
+  SEAWEEDFS_VERSION: "4.53.0"
   # renovate: datasource=helm depName=secrets-store-csi-driver registryUrl=https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
   SECRETS_STORE_CSI_DRIVER_VERSION: "1.6.2"
   # renovate: datasource=docker depName=ghcr.io/spiffe/spiffe-helper
