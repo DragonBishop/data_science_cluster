@@ -1,7 +1,5 @@
 # Repository Structure
 
-The directory tree of this repository, then what each directory and file does.
-
 ## Table of Contents
 
 * [Naming Conventions](#naming-conventions)
@@ -10,7 +8,7 @@ The directory tree of this repository, then what each directory and file does.
 
 ## Naming Conventions
 
-* `apps/` holds the Postgres server and its backups: Postgres, SeaweedFS and Barman Cloud. Everything else in the cluster is `infrastructure/`.
+* `apps/` holds the databases and their backups: PostgreSQL, SeaweedFS and the Barman Cloud plugin. Everything else is `infrastructure/`.
 * Each Flux Kustomization is `clusters/local/<name>.yaml` and points at one directory. A namespace with more than one Kustomization keeps one directory, with a subdirectory per Kustomization, such as `apps/databases/cluster/`.
 * A manifest file is named `<component>-<role>.yaml`, with the role from this list:
 
@@ -21,12 +19,13 @@ The directory tree of this repository, then what each directory and file does.
 | `-config` | a component's own configuration resource, such as the TektonConfig or CoreDNS's custom ConfigMap |
 | `-cluster` | a CNPG Cluster |
 | `-backups` | an ObjectStore, its ScheduledBackup and the Job that bootstraps the Cluster from them |
-| `-credentials` | a SecretProviderClass and the Deployment that holds its mount |
-| `-issuers` | ClusterIssuers, their RBAC and the CA Certificates they sign with |
+| `-credentials` | a SecretProviderClass, and the Deployment that holds its mount when the consumer can't mount it |
+| `-issuers` | ClusterIssuers and Issuers, their ServiceAccounts and RBAC, and the CA Certificates they sign with |
 | `-tls` | Certificates and Bundles |
 | `-rbac` | Roles, bindings and ServiceAccounts |
 | `-listener` | a Tekton EventListener and the Flux Provider that posts to it |
-| `-admission` | a ValidatingAdmissionPolicy and its binding |
+| `-admission` | a ValidatingAdmissionPolicy or MutatingAdmissionPolicy and its binding |
+| `-monitors` | handwritten ServiceMonitors, PodMonitors and PrometheusRules |
 | `-route` | HTTPRoutes and TCPRoutes |
 | `-localhost` | a LocalRedirectPolicy |
 | `-networkpolicy` | a namespace's one policy file ([Network Policy](NETWORKPOLICY.md#conventions)) |
@@ -57,10 +56,10 @@ The directory tree of this repository, then what each directory and file does.
 │   │   └── technical-debt-resolution.yml
 │   └── workflows/
 │       ├── e2e.yml                      # bootstrap a cluster on a runner, then Flux on the PR branch
-│       ├── lint.yml                     # ruff check/format + ansible-lint + tofu fmt
+│       ├── lint.yml                     # Ruff, ansible-lint, tofu fmt, ShellCheck, Renovate config, zizmor
 │       ├── release.yml                  # PR-title lint + release-please + git-cliff changelog
 │       ├── semgrep.yml                  # Semgrep SAST and supply-chain scan
-│       └── tests.yml                    # pytest + coverage, Molecule unit scenarios, tofu test
+│       └── tests.yml                    # pytest, Molecule unit scenarios, tofu test
 ├── ansible/
 │   └── ansible_collections/
 │       └── dragonbishop/cluster/        # The bootstrap playbook, its roles and their Molecule scenarios
@@ -107,6 +106,7 @@ The directory tree of this repository, then what each directory and file does.
 │   │   ├── cluster/                     # databases-cluster: the Cluster and what uses it
 │   │   │   ├── databases-cluster.yaml
 │   │   │   ├── databases-localhost.yaml
+│   │   │   ├── databases-monitors.yaml
 │   │   │   ├── databases-route.yaml
 │   │   │   ├── databases.yaml
 │   │   │   └── kustomization.yaml
@@ -130,8 +130,10 @@ The directory tree of this repository, then what each directory and file does.
 │       └── seaweedfs-tls.yaml
 ├── clusters/
 │   └── local/                           # Flux's own root (flux bootstrap --path=clusters/local)
+│       ├── alloy.yaml                   # Kustomization → infrastructure/alloy/
 │       ├── cert-manager.yaml            # Kustomization → infrastructure/cert-manager/
-│       ├── cilium.yaml                  # Kustomization → infrastructure/cilium/
+│       ├── cilium.yaml                  # Kustomization → infrastructure/cilium/ (server, security, lan)
+│       ├── cilium-hubble.yaml           # Kustomization → infrastructure/cilium/hubble/
 │       ├── cluster-config.yaml          # Kustomization → infrastructure/cluster-config/
 │       ├── cnpg-operator.yaml           # Kustomization → infrastructure/cnpg-operator/
 │       ├── databases-cluster.yaml       # Kustomization → apps/databases/cluster/
@@ -143,21 +145,28 @@ The directory tree of this repository, then what each directory and file does.
 │       │   ├── gotk-components.yaml     # **DO NOT EDIT** Written by `flux bootstrap`
 │       │   ├── gotk-sync.yaml           # **DO NOT EDIT** Written by `flux bootstrap`
 │       │   └── kustomization.yaml
-│       ├── gateway-api-crds.yaml        # Kustomization → infrastructure/gateway-api-crds/
-│       ├── gateway.yaml                 # Kustomization → infrastructure/gateway/
-│       ├── hubble.yaml                  # Kustomization → infrastructure/hubble/
+│       ├── gateway-crds.yaml            # Kustomization → infrastructure/gateway/crds/
+│       ├── gateway-server.yaml          # Kustomization → infrastructure/gateway/server/
+│       ├── kube-prometheus-stack-crds.yaml     # Kustomization → infrastructure/kube-prometheus-stack/crds/
+│       ├── kube-prometheus-stack-server.yaml   # Kustomization → infrastructure/kube-prometheus-stack/server/
+│       ├── kube-prometheus-stack-security.yaml # Kustomization → infrastructure/kube-prometheus-stack/security/
+│       ├── kube-prometheus-stack-state.yaml    # Kustomization → infrastructure/kube-prometheus-stack/state/
+│       ├── loki.yaml                    # Kustomization → infrastructure/loki/
 │       ├── namespaces.yaml              # Kustomization → infrastructure/namespaces/
-│       ├── openbao.yaml                 # Kustomization → infrastructure/openbao/
-│       ├── openbao-snapshot.yaml        # Kustomization → infrastructure/openbao-snapshot/
+│       ├── openbao-server.yaml          # Kustomization → infrastructure/openbao/server/
+│       ├── openbao-snapshot.yaml        # Kustomization → infrastructure/openbao/snapshot/
 │       ├── seaweedfs.yaml               # Kustomization → apps/seaweedfs/
 │       ├── secrets-store-csi-driver.yaml # Kustomization → infrastructure/secrets-store-csi-driver/
 │       ├── spire.yaml                   # Kustomization → infrastructure/spire/
-│       ├── tekton-operator.yaml         # Kustomization → infrastructure/tekton-operator/
-│       ├── tekton-pipelines.yaml        # Kustomization → infrastructure/tekton-pipelines/
-│       ├── tekton-tasks.yaml            # Kustomization → infrastructure/tekton-pipelines/tasks/
-│       ├── tekton-triggers.yaml         # Kustomization → infrastructure/tekton-triggers/
-│       ├── tekton.yaml                  # Kustomization → infrastructure/tekton/
-│       └── trust-manager.yaml           # Kustomization → infrastructure/trust-manager/
+│       ├── tekton-config.yaml           # Kustomization → infrastructure/tekton/config/
+│       ├── tekton-operator.yaml         # Kustomization → infrastructure/tekton/operator/
+│       ├── tekton-pipelines.yaml        # Kustomization → infrastructure/tekton/pipelines/
+│       ├── tekton-tasks.yaml            # Kustomization → infrastructure/tekton/tasks/
+│       ├── tekton-triggers.yaml         # Kustomization → infrastructure/tekton/triggers/
+│       ├── tetragon-config.yaml         # Kustomization → infrastructure/tetragon/config/
+│       ├── tetragon-server.yaml         # Kustomization → infrastructure/tetragon/server/
+│       ├── trust-manager.yaml           # Kustomization → infrastructure/trust-manager/
+│       └── zot.yaml                     # Kustomization → infrastructure/zot/
 ├── docs/                                # Project documentation; README.md stays at the root
 │   ├── ACCESSPOLICY.md                  # Permissions, credentials and certificate trust
 │   ├── BACKUPS_RESTORE.md               # Restoring the database from SeaweedFS
@@ -169,19 +178,39 @@ The directory tree of this repository, then what each directory and file does.
 │   ├── TROUBLESHOOTING.md               # Symptom → cause → fix, by subsystem
 │   └── VERIFICATION.md                  # Checks after the bootstrap, once Flux has reconciled
 ├── infrastructure/                      # Cluster-wide platform components
+│   ├── alloy/                           # Pod logs to Loki
+│   │   ├── alloy-release.yaml
+│   │   ├── alloy-storage.yaml
+│   │   ├── alloy-tls.yaml
+│   │   ├── alloy-values.yaml
+│   │   └── kustomization.yaml
 │   ├── cert-manager/
+│   │   ├── cert-manager-networkpolicy.yaml
 │   │   ├── cert-manager-release.yaml
 │   │   ├── cert-manager-values.yaml
 │   │   └── kustomization.yaml
-│   ├── cilium/
-│   │   ├── cilium-release.yaml
-│   │   ├── cilium-values.yaml
-│   │   ├── cilium-lan.yaml
-│   │   ├── cilium-clusterwide-networkpolicy.yaml
-│   │   ├── coredns-config.yaml          # internal zone on k3s's own CoreDNS
-│   │   ├── coredns-lan-service.yaml
-│   │   ├── kube-system-networkpolicy.yaml
-│   │   └── kustomization.yaml
+│   ├── cilium/                          # Cilium, its policies, LAN exposure and Hubble; hubble/ is its own Kustomization
+│   │   ├── kustomization.yaml
+│   │   ├── hubble/
+│   │   │   ├── cilium-monitors.yaml
+│   │   │   ├── cilium-operator-tls.yaml
+│   │   │   ├── hubble-localhost.yaml
+│   │   │   ├── hubble-tls.yaml
+│   │   │   ├── hubble-values.yaml
+│   │   │   └── kustomization.yaml
+│   │   ├── lan/
+│   │   │   ├── cilium-lan.yaml
+│   │   │   ├── coredns-config.yaml      # internal zone on k3s's own CoreDNS
+│   │   │   ├── coredns-lan-service.yaml
+│   │   │   └── kustomization.yaml
+│   │   ├── security/
+│   │   │   ├── cilium-clusterwide-networkpolicy.yaml
+│   │   │   ├── kube-system-networkpolicy.yaml
+│   │   │   └── kustomization.yaml
+│   │   └── server/
+│   │       ├── cilium-release.yaml
+│   │       ├── cilium-values.yaml
+│   │       └── kustomization.yaml
 │   ├── cluster-config/                  # Centralized cluster topology and configuration ConfigMap
 │   │   ├── certificates.yaml
 │   │   ├── cluster-config.yaml          # empty base; each fragment is a patch
@@ -198,49 +227,94 @@ The directory tree of this repository, then what each directory and file does.
 │   ├── cnpg-operator/
 │   │   ├── cnpg-operator-release.yaml
 │   │   └── kustomization.yaml
-│   ├── gateway/
-│   │   ├── gateway-tls.yaml
-│   │   ├── gateway.yaml
-│   │   └── kustomization.yaml
-│   ├── gateway-api-crds/
+│   ├── gateway/                         # Gateway API CRDs and the shared Gateway, one Kustomization per subdirectory
+│   │   ├── crds/
+│   │   │   ├── kustomization.yaml
+│   │   │   └── standard-install.yaml    # Vendored Gateway API CRDs
+│   │   └── server/
+│   │       ├── gateway-tls.yaml
+│   │       ├── gateway.yaml
+│   │       └── kustomization.yaml
+│   ├── kube-prometheus-stack/           # Prometheus, Alertmanager and Grafana, one Kustomization per subdirectory
+│   │   ├── crds/                        # kube-prometheus-stack-crds: the Prometheus Operator CRDs
+│   │   │   ├── kustomization.yaml
+│   │   │   └── prometheus-crds-release.yaml
+│   │   ├── security/                    # kube-prometheus-stack-security: certificates and network policy
+│   │   │   ├── kube-prometheus-stack-tls.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   └── observability-networkpolicy.yaml
+│   │   ├── server/                      # kube-prometheus-stack-server: the chart and its PodMonitors
+│   │   │   ├── kube-prometheus-stack-monitors.yaml
+│   │   │   ├── kube-prometheus-stack-release.yaml
+│   │   │   ├── kube-prometheus-stack-values.yaml
+│   │   │   └── kustomization.yaml
+│   │   └── state/                       # kube-prometheus-stack-state: volumes, credentials and sidecar configs
+│   │       ├── kube-prometheus-stack-config.yaml
+│   │       ├── kube-prometheus-stack-credentials.yaml
+│   │       ├── kube-prometheus-stack-storage.yaml
+│   │       └── kustomization.yaml
+│   ├── loki/                            # Single-process Loki on the core S3 bucket
 │   │   ├── kustomization.yaml
-│   │   └── standard-install.yaml        # Vendored Gateway API CRDs
-│   ├── hubble/
-│   │   ├── hubble-localhost.yaml
-│   │   ├── hubble-values.yaml
-│   │   └── kustomization.yaml
+│   │   ├── security/
+│   │   │   ├── kustomization.yaml
+│   │   │   └── loki-tls.yaml
+│   │   ├── server/
+│   │   │   ├── kustomization.yaml
+│   │   │   ├── loki-release.yaml
+│   │   │   └── loki-values.yaml
+│   │   └── state/
+│   │       ├── kustomization.yaml
+│   │       ├── loki-credentials.yaml
+│   │       └── loki-storage.yaml
 │   ├── namespaces/
 │   │   ├── kustomization.yaml
 │   │   └── namespaces.yaml
 │   ├── openbao/
-│   │   ├── kustomization.yaml
-│   │   ├── openbao-issuers.yaml
-│   │   ├── openbao-localhost.yaml
-│   │   ├── openbao-networkpolicy.yaml
-│   │   ├── openbao-release.yaml
-│   │   ├── openbao-tls.yaml
-│   │   └── openbao-values.yaml
-│   ├── openbao-snapshot/                # S3 key holder for the OpenBao chart's snapshot agent
-│   │   ├── kustomization.yaml
-│   │   └── openbao-snapshot-credentials.yaml
+│   │   ├── server/
+│   │   │   ├── kustomization.yaml
+│   │   │   ├── openbao-issuers.yaml
+│   │   │   ├── openbao-localhost.yaml
+│   │   │   ├── openbao-networkpolicy.yaml
+│   │   │   ├── openbao-release.yaml
+│   │   │   ├── openbao-tls.yaml
+│   │   │   └── openbao-values.yaml
+│   │   └── snapshot/                    # S3 key holder for the OpenBao chart's snapshot agent
+│   │       ├── kustomization.yaml
+│   │       └── openbao-snapshot-credentials.yaml
 │   ├── secrets-store-csi-driver/        # Mounts OpenBao logins into pods and mirrors them into Secrets
 │   │   ├── kustomization.yaml
+│   │   ├── secrets-store-csi-driver-monitors.yaml
 │   │   └── secrets-store-csi-driver-release.yaml
-│   ├── spire/                           # SPIRE releases and identities
-│   │   ├── flux-controllers-spiffeid.yaml
+│   ├── spire/                           # SPIRE releases, identities and network policy
 │   │   ├── kustomization.yaml
-│   │   ├── spire-release.yaml
-│   │   └── spire-values.yaml
-│   ├── tekton/                          # TektonConfig and resolver network policy
-│   │   ├── kustomization.yaml
-│   │   ├── tekton-config.yaml
-│   │   └── tekton-networkpolicy.yaml
-│   ├── tekton-pipelines/                # Pipelines and Tasks, and the runs they start
-│   │   ├── kustomization.yaml
-│   │   ├── tekton-pipelines-admission.yaml
-│   │   ├── tekton-pipelines-networkpolicy.yaml
+│   │   ├── identities/
+│   │   │   ├── flux-controllers-spiffeid.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   ├── metrics-targets-spiffeid.yaml
+│   │   │   └── prometheus-spiffeid.yaml
+│   │   ├── security/
+│   │   │   ├── kustomization.yaml
+│   │   │   └── spire-networkpolicy.yaml
+│   │   └── server/
+│   │       ├── kustomization.yaml
+│   │       ├── spire-release.yaml
+│   │       └── spire-values.yaml
+│   ├── tekton/                          # Tekton, one Kustomization per subdirectory
+│   │   ├── config/
+│   │   │   ├── kustomization.yaml
+│   │   │   ├── tekton-config.yaml
+│   │   │   └── tekton-networkpolicy.yaml
+│   │   ├── dashboard/                   # upstream read-only Tekton Dashboard release
+│   │   │   ├── kustomization.yaml
+│   │   │   ├── tekton-dashboard-localhost.yaml
+│   │   │   └── tekton-dashboard-tls.yaml
+│   │   ├── operator/
+│   │   │   ├── kustomization.yaml
+│   │   │   └── tekton-operator-release.yaml
 │   │   ├── pipelines/                   # one folder per Pipeline, with its ServiceAccount and RBAC
 │   │   │   ├── kustomization.yaml
+│   │   │   ├── tekton-pipelines-admission.yaml
+│   │   │   ├── tekton-pipelines-networkpolicy.yaml
 │   │   │   ├── code-quality/
 │   │   │   │   ├── code-quality-pipeline.yaml
 │   │   │   │   ├── code-quality-rbac.yaml
@@ -250,36 +324,51 @@ The directory tree of this repository, then what each directory and file does.
 │   │   │       ├── core-test-rbac.yaml
 │   │   │       ├── core-test-run.yaml   # hand run, not applied by Flux
 │   │   │       └── kustomization.yaml
-│   │   └── tasks/                       # reusable Task definitions
-│   │       ├── ca-bundles.yaml
-│   │       ├── client-login.yaml
-│   │       ├── delete-probes.yaml
-│   │       ├── fetch-source.yaml
-│   │       ├── flux-ready.yaml
-│   │       ├── manifests.yaml
+│   │   ├── tasks/                       # reusable Task definitions
+│   │   │   ├── ca-bundles.yaml
+│   │   │   ├── client-login.yaml
+│   │   │   ├── delete-probes.yaml
+│   │   │   ├── fetch-source.yaml
+│   │   │   ├── flux-ready.yaml
+│   │   │   ├── gateway-tls.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   ├── loki-logs.yaml
+│   │   │   ├── manifests.yaml
+│   │   │   ├── mtls-required.yaml
+│   │   │   ├── postgres-database-applied.yaml
+│   │   │   ├── prometheus-job-check.yaml
+│   │   │   ├── prometheus-targets.yaml
+│   │   │   ├── unauthorized-pod-denied.yaml
+│   │   │   ├── workloads-ready.yaml
+│   │   │   └── zot.yaml
+│   │   └── triggers/                    # the EventListener that starts runs from Flux events
+│   │       ├── alert-pull-request.yaml
 │   │       ├── kustomization.yaml
-│   │       ├── mtls-required.yaml
-│   │       ├── postgres-database-applied.yaml
-│   │       ├── renovate-config.yaml
-│   │       ├── shellcheck.yaml
-│   │       ├── unauthorized-pod-denied.yaml
-│   │       ├── workloads-ready.yaml
-│   │       └── zizmor.yaml
-│   ├── tekton-operator/
+│   │       ├── tekton-triggers-admission.yaml
+│   │       ├── tekton-triggers-listener.yaml
+│   │       ├── tekton-triggers-networkpolicy.yaml
+│   │       ├── tekton-triggers-rbac.yaml
+│   │       ├── tekton-triggers-tls.yaml
+│   │       └── trigger-pull-request.yaml
+│   ├── tetragon/                        # Runtime observation, one Kustomization per subdirectory
+│   │   ├── config/
+│   │   │   ├── kustomization.yaml
+│   │   │   └── tetragon-config.yaml
+│   │   └── server/
+│   │       ├── kustomization.yaml
+│   │       ├── tetragon-monitors.yaml
+│   │       ├── tetragon-release.yaml
+│   │       └── tetragon-values.yaml
+│   ├── trust-manager/
 │   │   ├── kustomization.yaml
-│   │   └── tekton-operator-release.yaml
-│   ├── tekton-triggers/                 # the EventListener that starts runs from Flux events
-│   │   ├── alert-pull-request.yaml
-│   │   ├── kustomization.yaml
-│   │   ├── tekton-triggers-listener.yaml
-│   │   ├── tekton-triggers-networkpolicy.yaml
-│   │   ├── tekton-triggers-rbac.yaml
-│   │   ├── tekton-triggers-tls.yaml
-│   │   └── trigger-pull-request.yaml
-│   └── trust-manager/
+│   │   ├── trust-manager-release.yaml
+│   │   └── trust-manager-values.yaml
+│   └── zot/                             # Zot OCI registry
 │       ├── kustomization.yaml
-│       ├── trust-manager-release.yaml
-│       └── trust-manager-values.yaml
+│       ├── zot-credentials.yaml
+│       ├── zot-networkpolicy.yaml
+│       ├── zot-release.yaml
+│       └── zot-tls.yaml
 ├── src/
 │   ├── bash/
 │   │   ├── preflight.sh                 # Read-only host readiness checks
@@ -306,9 +395,8 @@ The directory tree of this repository, then what each directory and file does.
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py
-│   ├── test_cluster_config_drift.py
 │   ├── test_network_policy.py
-│   └── test_release_versions.py
+│   └── test_openbao_credential_output.py
 ├── .copier-answers.yml                  # Records copier template + answers, for future `copier update`
 ├── .gitattributes
 ├── .gitignore
@@ -323,32 +411,43 @@ The directory tree of this repository, then what each directory and file does.
 ├── pyproject.toml                       # uv-managed project dependency + dev tooling
 ├── README.md                            # Architecture and component reference
 ├── release-please-config.json           # Release type, and the extra files each release bumps
-├── renovate.json                        # Renovate schedule, grouping and pin rules
+├── renovate.json                        # Renovate schedule, grouping, and the two managers that read `# renovate:` comments
 └── uv.lock
 ```
 
 ## File Descriptions
 
+### Dev Containers
+
 * **`.devcontainer/`**: VS Code Dev Containers. Each keeps one named workspace volume that holds a clone of the repo. Tools, the `.venv` and other environments live in the image or are rebuilt with each new container.
   * **`cluster/`**: The in-cluster ETL and pipeline runtime environment.
     * **`devcontainer.json`**: Devcontainer configuration for the in-cluster runtime image with DataOps, Jupyter, and Python tooling. Its empty workspace volume is seeded with the image's clone.
-    * **`Dockerfile`**: Builds the runtime image from origin at `REPO_REF`: a clone of the repo, its runtime `.venv` at `/home/vscode/.venv` with the `notebook` group for a Jupyter kernel, Python 3.14, `uv`, and the VS Code CLI tunnel daemon (`code tunnel`).
+    * **`Dockerfile`**: Builds the runtime image from origin at `REPO_REF` with Python 3.14, `uv`, the runtime `.venv` and the VS Code CLI tunnel daemon (`code tunnel`).
   * **`host/`**: The cluster management container, which runs with host networking (`--network=host`).
-    * **`devcontainer.json`**: Mounts the host's `~/.kube/config` read-only, the cluster's credential and its one host file. `postCreateCommand` clones the repo from origin into the empty workspace volume, then rebuilds the `.venv` (`/home/vscode/.venv`, with the `notebook` group for a Jupyter kernel) on the container's filesystem and installs the collection's Galaxy dependencies into `ansible/`. Its settings point the Ansible extension at the `.venv` and the root `ansible.cfg`, and map role, molecule-task and `group_vars` files to the Ansible language. Other YAML stays with the YAML extension.
-    * **`Dockerfile`**: Builds the management environment with every CLI in the README's Host-Side Provisioning table, plus the `cilium` CLI and the Python `.python-version` pins. kubectl and the cnpg plugin take their versions from cluster-config on origin at `REPO_REF` (`KUBECTL_VERSION`, and `CNPG_VERSION`'s chart appVersion). The Flux CLI takes the `# Flux Version:` header of `clusters/local/flux-system/gotk-components.yaml` at `REPO_REF`, and OpenTofu comes from OpenTofu's apt repository.
+    * **`devcontainer.json`**: Mounts the host's `~/.kube/config` read-only. `postCreateCommand` clones the repo, rebuilds the `.venv` and installs Galaxy dependencies into `ansible/`. Maps Ansible file types to the Ansible extension.
+    * **`Dockerfile`**: Builds the management environment with every host CLI. Reads kubectl, cnpg plugin and Flux CLI versions from cluster-config and `gotk-components.yaml` at `REPO_REF`. OpenTofu comes from OpenTofu's apt repository.
+
+### CI
+
 * **`.github/`**
   * **`ISSUE_TEMPLATE/`**: Issue templates for bug reports, documentation updates, feature proposals, and technical-debt resolution.
-  * **`workflows/e2e.yml`**: On pull requests that touch `ansible/`, `apps/`, `clusters/`, `components/`, `infrastructure/`, `modules/`, `scripts/`, `src/bash/`, `terraform/`, `ansible.cfg`, `pyproject.toml`, `uv.lock` or the workflow itself, runs the `full-playbook` Molecule scenario directly on an Ubuntu 26.04 GitHub runner and in a Fedora 44 Lima VM on another (bootstrap, idempotence, a sealed-OpenBao restart), with Flux pointed at the PR branch. The workflow installs the pinned `tkn` release and verifies its checksum. After Molecule finishes, it runs `core-test` and, on branches other than `main`, `code-quality` at the Flux source revision. It streams the PipelineRun logs and fails the job if a run fails. Uses the Flux GitHub App through the `FLUX_GITHUB_APP_*` repository secrets.
-  * **`workflows/lint.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `ruff check`/`ruff format --check`, `ansible-lint --offline` on the `dragonbishop.cluster` collection from the repository root, and `tofu fmt -check` on `terraform/`.
+  * **`workflows/e2e.yml`**: On manual runs and pull requests that touch the cluster, this workflow, devcontainer files or `.trivyignore.yaml`, runs the `full-playbook` Molecule scenario on Ubuntu 26.04 and in a Fedora 44 Lima VM. Flux follows the tested branch. After Molecule finishes, the workflow uses the pinned `tkn` release to run `core-test` and `code-quality` at the Flux source revision. It streams the PipelineRun logs and fails the job if a run fails. Uses the Flux GitHub App through the `FLUX_GITHUB_APP_*` repository secrets.
+  * **`workflows/lint.yml`**: On pull requests, runs Ruff, ansible-lint, `tofu fmt -check` on `terraform/`, ShellCheck on `src/bash/*.sh`, and `renovate-config-validator --strict`. Zizmor audits `.github/workflows/` offline. The local pre-commit hooks also check Markdown, YAML and whitespace.
   * **`workflows/release.yml`**: On pull requests, lints the PR title against Conventional Commits (`amannn/action-semantic-pull-request`). On push to `main`, `release-please` opens or updates a release PR, and `git-cliff` commits `docs/CHANGELOG.md`, plus the collection's own `CHANGELOG.md` (the commits that touched `ansible/`, back to the roles' playbook days), onto that PR's branch.
   * **`workflows/semgrep.yml`**: On pull requests and pushes to `main`, runs `semgrep ci` in the pinned `semgrep/semgrep` image as the `semgrep/ci` job, reporting to semgrep.dev through `SEMGREP_APP_TOKEN`.
-  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest` (with the `flux` CLI) and every Molecule unit scenario against root's podman (`molecule test --all --exclude full-playbook`), and `tofu validate` and `tofu test` in `terraform/openbao`.
+  * **`workflows/tests.yml`**: On pull requests, via `astral-sh/setup-uv`, runs `pytest` and every Molecule unit scenario against root's podman (`molecule test --all --exclude full-playbook`), and `tofu validate` and `tofu test` in `terraform/openbao`.
+
+### Ansible
+
 * **`ansible/ansible_collections/dragonbishop/cluster/`**: The `dragonbishop.cluster` collection, laid out for Ansible Galaxy: the bootstrap playbook, its roles and their Molecule scenarios. The root `ansible.cfg` adds `ansible/` to the collections path.
-  * **`galaxy.yml`**: Describes the collection. Its `dependencies` list the Galaxy collections it needs beyond the `ansible` package (`cloud.terraform`). `ansible-galaxy collection install --upgrade -p ansible` on this directory installs them into `ansible/`. `README.md` is the collection's own guide, `LICENSE` links to the root license, `.ansible-lint` holds it to the `production` profile, `CHANGELOG.md` is generated by git-cliff at each release under the cluster's version, and `ansible-galaxy collection build` packages it.
-  * **`playbooks/data_cluster.yml`**: The bootstrap playbook, run as `ansible-playbook dragonbishop.cluster.data_cluster` on the implicit localhost. It executes the roles in order: `k3s` → `cilium` → `cert_manager` → `trust_manager` → `openbao` → `opentofu` → `spire` → `flux`. Each role installs a release before Flux exists, and Flux adopts it on its first reconcile. A workstation run, including a run limited by `--tags`, then imports the `flux` role's `tasks/core_test.yml`: it waits until Flux has applied the `core-test` Tasks and Pipeline, has source-controller fetch the branch Flux follows, starts a `core-test` PipelineRun at that revision and fails the playbook when the run fails. On a pull request's branch the run is `core-test-<sha>`, the name Trigger `pull-request` uses, and Ansible waits for that run when the Trigger started it first. GitHub e2e sets `FLUX_CI_MANAGED_TESTS=true` to defer these tests to the workflow and suspend Flux's pull request Alert for the CI cluster.
+  * **`galaxy.yml`**: Collection metadata. Declares `cloud.terraform` as the Galaxy dependency and links `README.md`, `.ansible-lint`, `LICENSE` and `CHANGELOG.md` as collection-level files.
+  * **`playbooks/data_cluster.yml`**: The bootstrap playbook, run as `ansible-playbook dragonbishop.cluster.data_cluster` on the implicit localhost. Runs roles in order: `k3s` → `cilium` → `cert_manager` → `trust_manager` → `openbao` → `opentofu` → `spire` → `flux`. Each role installs a release before Flux exists; Flux adopts it on first reconcile. Every run ends with a `core-test` PipelineRun and fails when the run fails. On a pull request branch, Ansible waits for the Trigger's `core-test-<sha>` run when it started first.
   * **`playbooks/group_vars/all/`**: Variables Ansible loads beside the playbook. One file per `infrastructure/cluster-config/` fragment (`certificates.yml`, `cpu_memory.yml`, `networking.yml`, `replicas.yml`, `retention.yml`, `schedules.yml`, `storage.yml`, `versions.yml`) lists the keys Ansible uses from it, lowercased. `ansible.yml` holds Ansible-only values and merges the fragments.
-  * **`roles/`**: The eight roles. Each role's `tasks/main.yml` imports named task files. Each role that installs a chart renders its values with `flux envsubst --strict` in `tasks/render.yml`.
-  * **`extensions/molecule/`**: The Molecule scenarios. `config.yml` holds what every scenario inherits: the collections path, the shared inventory and the unit test sequence. `default/` creates and destroys the one podman container the `unit-*` scenarios share. `inventory/hosts.yml` describes that container, and `inventory/group_vars` links to `playbooks/group_vars`. `tasks/install_render_tools.yml` installs Helm and the Flux CLI there for the scenarios that template a role's chart. `molecule test --all --exclude full-playbook` from the collection's directory runs the unit scenarios. `full-playbook/` runs the whole playbook for `e2e.yml`. Its `verify.yml` checks that every Ansible variable matches the live cluster-config, that Ansible installs Cilium with the values Flux reconciles to, that OpenBao's root signs SPIRE's certificate, and that cert-manager can request its own account's token and is denied another account's token and the Flux administrator's. It then checks that Postgres archives WAL to SeaweedFS and that the shared Gateway serves PostgreSQL with a valid certificate chain.
+  * **`roles/`**: The eight roles. Each role's `tasks/main.yml` imports named task files. Each role that installs a chart renders its values with `flux envsubst --strict` in `tasks/render.yml`. The `k3s` role's `tasks/registries.yml` (tagged `flux`) runs after Flux deploys Zot and configures k3s's containerd to mirror docker.io, ghcr.io, quay.io and registry.k8s.io through `zot.${INTERNAL_DOMAIN}`.
+  * **`extensions/molecule/`**: The Molecule scenarios. `config.yml` holds shared settings. `default/` creates and destroys the shared podman container. `molecule test --all --exclude full-playbook` runs the unit scenarios. `full-playbook/` runs the whole playbook for `e2e.yml`; its `verify.yml` checks Ansible variables against cluster-config, the PKI chain, cert-manager token grants, WAL archiving and Gateway routing.
+
+### Apps
+
 * **`apps/databases/`**: PostgreSQL and its backups, in four Flux Kustomizations, one per subdirectory, listed in the order Flux applies them.
   * **`plugin/`**: The Flux `Kustomization` `databases-plugin` (`clusters/local/databases-plugin.yaml`). It installs the `ObjectStore` CRD before `databases-objectstore` applies an ObjectStore.
     * **`cnpg-system-release.yaml`**: The `HelmRelease` for the Barman Cloud CNPG plugin in `cnpg-system`.
@@ -366,13 +465,19 @@ The directory tree of this repository, then what each directory and file does.
     * **`databases-cluster.yaml`**: The PostgreSQL CNPG `Cluster`, its recovery source `postgres-backup-store`, and its `pg_hba` rule that rejects every connection without TLS.
     * **`databases.yaml`**: The CNPG `Database` resource for `data_science`, with its schemas and PostGIS extensions.
     * **`databases-localhost.yaml`**: A `CiliumLocalRedirectPolicy` that redirects `127.0.0.1:5432` on the node to the CNPG primary pod through eBPF, selected by CNPG's `instanceRole` label.
-    * **`databases-route.yaml`**: A `TCPRoute` that attaches the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/`).
+    * **`databases-monitors.yaml`**: PodMonitor `postgres-cluster`, as CNPG recommends now that `enablePodMonitor` is deprecated. It scrapes the instances' metrics over TLS, verified against `postgres-server-cert` with server name `postgres-cluster-rw`. PrometheusRule `postgres-cluster` alerts when the newest base backup is older than `POSTGRES_BACKUP_MAX_AGE_SECONDS` or a backup failed after the last good one, from the Barman Cloud plugin's metrics.
+    * **`databases-route.yaml`**: A `TCPRoute` that attaches the CNPG primary to the shared Gateway's raw-TCP listener (`infrastructure/gateway/server/`).
 * **`apps/seaweedfs/`**: The SeaweedFS S3 backup store, in its own Flux `Kustomization` (`clusters/local/seaweedfs.yaml`). `databases-objectstore` starts after it creates the `cnpg-backups` bucket.
-  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS, master, filer and volume data together under `SEAWEEDFS_HOST_PATH` via `hostPath`, S3 gateway on port 9000 with TLS issued by `openbao-pki-issuer`, `cnpg-backups` bucket created by the chart's post-install hook, and the chart's own network policies, which also admit Postgres backups and OpenBao to S3. The gateway reads its one static identity, `openbao`, from Secret `seaweedfs-credentials`, which the `opentofu` role writes, and runs with `-iam.readOnly=false` so OpenBao can create and delete Barman's IAM users.
+  * **`seaweedfs-release.yaml`**: `HelmRepository`/`HelmRelease` for SeaweedFS. Data on `SEAWEEDFS_HOST_PATH`, S3 on port 9000 with TLS. Post-install hook creates the `cnpg-backups` bucket. Gateway identity from Secret `seaweedfs-credentials`. ServiceMonitors pointed at Ghostunnel sidecars.
   * **`seaweedfs-tls.yaml`**: The cert-manager `Certificate` that requests the SeaweedFS S3 server certificate from `openbao-pki-issuer`.
+
+### Flux Kustomizations
+
 * **`clusters/local/`**: Flux's own root, pointed at by `flux bootstrap --path=clusters/local`. Each Kustomization below points at one directory under `infrastructure/` or `apps/`.
+  * **`alloy.yaml`**: Kustomization → `infrastructure/alloy/`
   * **`cert-manager.yaml`**: Kustomization → `infrastructure/cert-manager/`
-  * **`cilium.yaml`**: Kustomization → `infrastructure/cilium/`
+  * **`cilium.yaml`**: Kustomization → `infrastructure/cilium/`, whose `kustomization.yaml` takes `server/`, `security/` and `lan/`
+  * **`cilium-hubble.yaml`**: Kustomization → `infrastructure/cilium/hubble/`
   * **`cluster-config.yaml`**: Kustomization → `infrastructure/cluster-config/`
   * **`cnpg-operator.yaml`**: Kustomization → `infrastructure/cnpg-operator/`
   * **`databases-cluster.yaml`**: Kustomization → `apps/databases/cluster/`
@@ -380,21 +485,32 @@ The directory tree of this repository, then what each directory and file does.
   * **`databases-plugin.yaml`**: Kustomization → `apps/databases/plugin/`
   * **`databases-security.yaml`**: Kustomization → `apps/databases/security/`
   * **`flux-system/`**: (`flux-networkpolicy.yaml`, `gotk-components.yaml`, `gotk-sync.yaml`, `kustomization.yaml`): Flux's own controllers, its `GitRepository` source and the `flux` network policy, applied together by the root `flux-system` Kustomization. `flux bootstrap` writes the `gotk-*` files (do not edit them directly).
-  * **`gateway-api-crds.yaml`**: Kustomization → `infrastructure/gateway-api-crds/`
-  * **`gateway.yaml`**: Kustomization → `infrastructure/gateway/`
-  * **`hubble.yaml`**: Kustomization → `infrastructure/hubble/`
+  * **`gateway-crds.yaml`**: Kustomization → `infrastructure/gateway/crds/`
+  * **`gateway-server.yaml`**: Kustomization → `infrastructure/gateway/server/`
+  * **`kube-prometheus-stack-crds.yaml`**: Kustomization → `infrastructure/kube-prometheus-stack/crds/`
+  * **`kube-prometheus-stack-server.yaml`**: Kustomization → `infrastructure/kube-prometheus-stack/server/`
+  * **`kube-prometheus-stack-security.yaml`**: Kustomization → `infrastructure/kube-prometheus-stack/security/`
+  * **`kube-prometheus-stack-state.yaml`**: Kustomization → `infrastructure/kube-prometheus-stack/state/`
+  * **`loki.yaml`**: Kustomization → `infrastructure/loki/`
   * **`namespaces.yaml`**: Kustomization → `infrastructure/namespaces/`
-  * **`openbao.yaml`**: Kustomization → `infrastructure/openbao/`
-  * **`openbao-snapshot.yaml`**: Kustomization → `infrastructure/openbao-snapshot/`
+  * **`openbao-server.yaml`**: Kustomization → `infrastructure/openbao/server/`
+  * **`openbao-snapshot.yaml`**: Kustomization → `infrastructure/openbao/snapshot/`
   * **`seaweedfs.yaml`**: Kustomization → `apps/seaweedfs/`
   * **`secrets-store-csi-driver.yaml`**: Kustomization → `infrastructure/secrets-store-csi-driver/`
   * **`spire.yaml`**: Kustomization → `infrastructure/spire/`
-  * **`tekton-operator.yaml`**: Kustomization → `infrastructure/tekton-operator/`
-  * **`tekton-pipelines.yaml`**: Kustomization → `infrastructure/tekton-pipelines/`
-  * **`tekton-tasks.yaml`**: Kustomization → `infrastructure/tekton-pipelines/tasks/`
-  * **`tekton-triggers.yaml`**: Kustomization → `infrastructure/tekton-triggers/`
-  * **`tekton.yaml`**: Kustomization → `infrastructure/tekton/`
+  * **`tekton-config.yaml`**: Kustomization → `infrastructure/tekton/config/`
+  * **`tekton-dashboard.yaml`**: Kustomization → `infrastructure/tekton/dashboard/`
+  * **`tekton-operator.yaml`**: Kustomization → `infrastructure/tekton/operator/`
+  * **`tekton-pipelines.yaml`**: Kustomization → `infrastructure/tekton/pipelines/`
+  * **`tekton-tasks.yaml`**: Kustomization → `infrastructure/tekton/tasks/`
+  * **`tekton-triggers.yaml`**: Kustomization → `infrastructure/tekton/triggers/`
+  * **`tetragon-config.yaml`**: Kustomization → `infrastructure/tetragon/config/`
+  * **`tetragon-server.yaml`**: Kustomization → `infrastructure/tetragon/server/`
   * **`trust-manager.yaml`**: Kustomization → `infrastructure/trust-manager/`
+  * **`zot.yaml`**: Kustomization → `infrastructure/zot/`
+
+### Docs
+
 * **`docs/`**: Project documentation, linked from the README's "Documentation" section.
   * **`BACKUPS_RESTORE.md`**: How backups reach SeaweedFS, and how to restore the database from them into a new cluster.
   * **`CHANGELOG.md`**: Release notes that `release.yml` regenerates with `git-cliff` on each release pull request.
@@ -404,68 +520,188 @@ The directory tree of this repository, then what each directory and file does.
   * **`REPOSITORY_STRUCTURE.md`**: This document.
   * **`TROUBLESHOOTING.md`**: Symptom, cause and fix, by subsystem.
   * **`VERIFICATION.md`**: The checks to run once Flux has reconciled the bootstrap: the database, Gateway routing, Hubble, cluster health and backups.
-* **`infrastructure/`**: Cluster-wide platform components, listed alphabetically.
-  * **`cert-manager/`**: `cert-manager-release.yaml`, `cert-manager-values.yaml` (the Helm values the `cert_manager` role and the HelmRelease share, through ConfigMap `cert-manager-values`), `kustomization.yaml`
-  * **`cilium/`**: `cilium-lan.yaml` (LAN LoadBalancer IP pool and L2 announcements), `cilium-release.yaml`, `cilium-values.yaml`, `cilium-clusterwide-networkpolicy.yaml` (the cluster's one policy file), `coredns-config.yaml` and `coredns-lan-service.yaml` (internal zone on CoreDNS), `kube-system-networkpolicy.yaml` (`kube-system`'s policy file), `kustomization.yaml`
-  * **`cluster-config/`**: `cluster-config.yaml` (empty base), `kustomization.yaml`, and one fragment per kind of value: `certificates.yaml`, `cpu-memory.yaml`, `databases.yaml`, `networking.yaml`, `replicas.yaml`, `retention.yaml`, `schedules.yaml`, `storage.yaml`, `timeouts.yaml`, `versions.yaml` (centralized configuration ConfigMap)
-  * **`cnpg-operator/`**: `cnpg-operator-release.yaml`, `kustomization.yaml`. The chart's `rbac.aggregateClusterRoles` adds read access to CNPG objects to the built-in `view` ClusterRole.
-  * **`gateway/`**: `gateway-tls.yaml`, `gateway.yaml`, `kustomization.yaml`
-  * **`gateway-api-crds/`**: `kustomization.yaml`, `standard-install.yaml` (vendored Gateway API CRDs)
-  * **`hubble/`**: `hubble-localhost.yaml`, `hubble-values.yaml`, `kustomization.yaml`
-  * **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
-  * **`openbao/`**: `kustomization.yaml`, `openbao-issuers.yaml` (the OpenBao ClusterIssuers, the namespaced Role/RoleBinding allowing cert-manager to request only its own account's token, and the local CA), `openbao-localhost.yaml`, `openbao-networkpolicy.yaml`, `openbao-release.yaml`, `openbao-tls.yaml`, `openbao-values.yaml`. `openbao-values.yaml` also has OpenBao download the secrets-aws plugin at startup and runs the OpenBao CSI Provider DaemonSet without its agent. It stores OpenBao's data in Integrated Storage (Raft), unseals it with the `static` seal from Secret `openbao-seal-key`, replaces the pod with `RollingUpdate`, and turns on the chart's snapshot agent on `OPENBAO_SNAPSHOT_SCHEDULE`.
-  * **`openbao-snapshot/`**: `kustomization.yaml` and `openbao-snapshot-credentials.yaml`, in `openbao`: `SecretProviderClass` `openbao-snapshot-s3` and the `openbao-snapshot-credentials` ServiceAccount and holder Deployment. The holder logs in as `openbao-snapshot-s3-role`, and the CSI driver mirrors its key pair from `seaweedfs/creds/openbao-snapshot` into Secret `openbao-snapshot-s3`, which the snapshot agent uploads with.
-  * **`secrets-store-csi-driver/`**: `kustomization.yaml`, `secrets-store-csi-driver-release.yaml`. The Secrets Store CSI Driver in `kube-system`. It mirrors each mounted login into the Secret its `SecretProviderClass` names, and reads it again every `CREDENTIAL_ROTATION_INTERVAL`.
-  * **`spire/`**: SPIRE in `spire`. `spire-release.yaml` holds the HelmRepository and the `spire-crds` and `spire` HelmReleases, which read `spire-values.yaml` through ConfigMap `spire-values`, the values the `spire` role also installs from. `flux-controllers-spiffeid.yaml` is the ClusterSPIFFEID that gives the Flux controllers their identities.
-  * **`tekton/`**: The `TektonConfig` installs Pipelines and Triggers into `tekton`. Tasks, Pipelines and their runs go in `tekton-pipelines`.
-    * **`tekton-config.yaml`**: The `TektonConfig` configures Pipelines, Triggers and the run pruner.
+
+### Infrastructure
+
+* **`infrastructure/`**: Cluster-wide platform components.
+
+#### Cluster Configuration
+
+* **`cluster-config/`**: `cluster-config.yaml` (empty base), `kustomization.yaml`, and one fragment per kind of value: `certificates.yaml`, `cpu-memory.yaml`, `databases.yaml`, `networking.yaml`, `replicas.yaml`, `retention.yaml`, `schedules.yaml`, `storage.yaml`, `timeouts.yaml`, `versions.yaml` (centralized configuration ConfigMap)
+* **`namespaces/`**: `kustomization.yaml`, `namespaces.yaml`
+* **`cnpg-operator/`**: `cnpg-operator-release.yaml`, `kustomization.yaml`. The chart's `rbac.aggregateClusterRoles` adds read access to CNPG objects to the built-in `view` ClusterRole. The chart's PodMonitor is on, and a post-renderer points it at the operator's Ghostunnel sidecar.
+
+#### Networking
+
+* **`cilium/`**: Cilium in `kube-system`, in two Flux Kustomizations. `cilium` applies `kustomization.yaml`, which takes `server/`, `security/` and `lan/`. `cilium-hubble` applies `hubble/` on its own, because it depends on `gateway-server` and `kube-prometheus-stack-crds`, which come after Cilium.
+  * **`server/`**: The Cilium release.
+    * **`cilium-release.yaml`**: HelmRepository and HelmRelease `cilium`. A post-renderer adds `localhost-tls` to `hubble-ui` (Ghostunnel forwarding to nginx). Reads `cilium-values.yaml` through ConfigMap `cilium-values` and Hubble's values through the optional `hubble-values`.
+    * **`cilium-values.yaml`**: The chart's values, which the `cilium` Ansible role also installs from.
+  * **`security/`**: The cluster's and `kube-system`'s network policy.
+    * **`cilium-clusterwide-networkpolicy.yaml`**: The cluster's one policy file, `cluster-default`.
+    * **`kube-system-networkpolicy.yaml`**: `kube-system`'s policy file.
+  * **`lan/`**: What the LAN reaches.
+    * **`cilium-lan.yaml`**: The LAN LoadBalancer IP pool and L2 announcements.
+    * **`coredns-config.yaml`**: The internal zone on k3s's own CoreDNS.
+    * **`coredns-lan-service.yaml`**: LoadBalancer Service `coredns-external`, which serves CoreDNS to the LAN.
+  * **`hubble/`**: The Flux `Kustomization` `cilium-hubble` (`clusters/local/cilium-hubble.yaml`), which adds what needs cert-manager and the Prometheus CRDs.
+    * **`cilium-operator-tls.yaml`**: Certificate `cilium-operator-metrics-tls` in `kube-system` from `openbao-pki-issuer`, which the Cilium operator serves its metrics with.
+    * **`cilium-monitors.yaml`**: PodMonitor `cilium-agent`, which scrapes the agent's Ghostunnel sidecar. The chart's agent monitor needs `prometheus.enabled`, whose `:9962` address clashes with the loopback address in `extraConfig`.
+    * **`hubble-localhost.yaml`**: CiliumLocalRedirectPolicy `hubble-ui-localhost`, which sends the workstation's `127.0.0.1:12000` to Hubble UI's `localhost-tls` container on 8443. The port stays literal because Flux substitutes numbers as integers.
+    * **`hubble-tls.yaml`**: Certificate `hubble-ui-localhost-tls` for `localhost` from the `kube-system` namespace's `openbao-desktop-issuer`, which Hubble UI's `localhost-tls` container serves.
+    * **`hubble-values.yaml`**: Hubble Relay, Hubble UI and metrics values, as ConfigMap `hubble-values`. Hubble and operator ServiceMonitors live in `observability` and verify scrapes against `openbao-root-ca`.
+* **`gateway/`**: The Gateway API, in two Flux Kustomizations. The CRDs come before Cilium, and the Gateway needs OpenBao's certificate, which comes after Cilium.
+  * **`crds/`**: The Flux `Kustomization` `gateway-crds` (`clusters/local/gateway-crds.yaml`).
+    * **`standard-install.yaml`**: The vendored Gateway API CRDs, which the `cilium` Ansible role also applies.
+  * **`server/`**: The Flux `Kustomization` `gateway-server` (`clusters/local/gateway-server.yaml`).
+    * **`gateway-tls.yaml`**: Certificate `internal-edge-cert` for `*.${INTERNAL_DOMAIN}` from the `gateway` namespace's `openbao-desktop-issuer`, which the Gateway serves. It chains to the desktop CA, so a workstation that trusts the desktop CA trusts every Gateway hostname.
+    * **`gateway.yaml`**: Gateway `internal-gateway`, the shared Gateway in `gateway`.
+
+#### PKI and Secrets
+
+* **`cert-manager/`**: `cert-manager-release.yaml`, `cert-manager-values.yaml` (the Helm values the `cert_manager` role and the HelmRelease share, through ConfigMap `cert-manager-values`), `kustomization.yaml`
+  * **`cert-manager-networkpolicy.yaml`**: `cert-manager`'s policy file. It admits Prometheus to cert-manager's metrics on 9402, and Prometheus to trust-manager's Ghostunnel sidecar on 9445. It denies every source, the host included, on trust-manager's plaintext metrics port 9402.
+* **`trust-manager/`**: trust-manager in `cert-manager`. Copies CA certificates from Secrets in `cert-manager` into ConfigMaps and Secrets in every namespace labelled `data-cluster/ca-bundles`. Values shared with the Ansible role through ConfigMap `trust-manager-values`.
+* **`openbao/`**: In-cluster OpenBao, in two Flux Kustomizations, one per subfolder. `openbao-snapshot` depends on `seaweedfs` and `secrets-store-csi-driver`, which depend on `openbao-server`, so the two can't be one Kustomization.
+  * **`server/`**: The Flux `Kustomization` `openbao-server` (`clusters/local/openbao-server.yaml`). The `openbao` Ansible role applies the same files before Flux exists.
+    * **`openbao-issuers.yaml`**: The OpenBao ClusterIssuers, the namespaced Role/RoleBinding allowing cert-manager to request only its own account's token, and the local CA `openbao-local-ca`, name-constrained to `openbao-server-cert`'s names and `127.0.0.1`. It also holds the desktop CA's Issuer `openbao-desktop-issuer` in `gateway`, `kube-system` and `tekton-pipelines`, each with ServiceAccount `openbao-desktop-issuer` and a Role/RoleBinding letting cert-manager request that account's token. Each Issuer logs in as its own OpenBao role `desktop-issuer-<namespace>-role`.
+    * **`openbao-localhost.yaml`**: CiliumLocalRedirectPolicy `openbao-localhost`, which serves OpenBao to the host on `127.0.0.1`.
+    * **`openbao-networkpolicy.yaml`**: `openbao`'s policy file.
+    * **`openbao-release.yaml`**: HelmRepository and HelmRelease `openbao`, which reads `openbao-values.yaml` through ConfigMap `openbao-values`. Its Flux-only values turn the chart's ServiceMonitor on, and a post-renderer points it at container port `metrics` (8204), which the `openbao-internal` Service doesn't list.
+    * **`openbao-tls.yaml`**: OpenBao's server certificate, the `openbao-ca-bundle` Bundle, Bundle `openbao-issuer-ca` (OpenBao's CA as a Secret in `gateway`, `kube-system` and `tekton-pipelines`, for their desktop Issuers), and the `openbao-root-ca` Bundle.
+    * **`openbao-values.yaml`**: The chart's values. API on 8200, metrics-only listener on 8204. Downloads the secrets-aws plugin at startup. Integrated Storage (Raft), `static` seal from Secret `openbao-seal-key`, snapshot agent on `OPENBAO_SNAPSHOT_SCHEDULE`.
+  * **`snapshot/`**: The Flux `Kustomization` `openbao-snapshot` (`clusters/local/openbao-snapshot.yaml`).
+    * **`openbao-snapshot-credentials.yaml`**: In `openbao`: `SecretProviderClass` `openbao-snapshot-s3` and the `openbao-snapshot-credentials` ServiceAccount and holder Deployment. The holder logs in as `openbao-snapshot-s3-role`, and the CSI driver mirrors its key pair from `seaweedfs/creds/openbao-snapshot` into Secret `openbao-snapshot-s3`, which the snapshot agent uploads with.
+* **`secrets-store-csi-driver/`**: `kustomization.yaml`, `secrets-store-csi-driver-release.yaml`, `secrets-store-csi-driver-monitors.yaml` (PodMonitor `secrets-store-csi-driver`, which scrapes the driver's Ghostunnel sidecar, since the chart ships no monitor, and PrometheusRule `secrets-store-csi-driver`, which alerts when a mounted credential failed to refresh in the last hour). The Secrets Store CSI Driver in `kube-system`. It mirrors each mounted login into the Secret its `SecretProviderClass` names, and reads it again every `CREDENTIAL_ROTATION_INTERVAL`.
+
+#### Identity
+
+* **`spire/`**: SPIRE in `spire`. The Flux `Kustomization` `spire` (`clusters/local/spire.yaml`) applies `kustomization.yaml`, which takes the three subdirectories.
+  * **`server/`**: The SPIRE releases.
+    * **`spire-release.yaml`**: The HelmRepository and the `spire-crds` and `spire` HelmReleases, which read `spire-values.yaml` through ConfigMap `spire-values`.
+    * **`spire-values.yaml`**: The chart's values, which the `spire` Ansible role also installs from. The server and agent serve metrics over TLS with their SVIDs and admit only Prometheus's SPIFFE ID. The release's Flux-only values turn the chart's PodMonitors on, and a post-renderer sets `https` with `insecureSkipVerify` (SPIRE's SVIDs carry no DNS name for Prometheus to check) and drops the controller-manager's plaintext endpoint.
+  * **`identities/`**: The ClusterSPIFFEIDs.
+    * **`flux-controllers-spiffeid.yaml`**: ClusterSPIFFEID `flux-controllers`, which gives the Flux controllers their identities. The `spire` Ansible role also applies it.
+    * **`metrics-targets-spiffeid.yaml`**: ClusterSPIFFEID `metrics-targets`, which gives every pod labelled `data-cluster/metrics-tls: "true"` an SVID with DNS name `<namespace>.metrics.spiffe`, the name Prometheus verifies.
+    * **`prometheus-spiffeid.yaml`**: ClusterSPIFFEID `prometheus`, the identity Prometheus presents to metrics targets.
+  * **`security/`**: The namespace's network policy.
+    * **`spire-networkpolicy.yaml`**: `spire`'s policy file. It admits Prometheus to the server's metrics on 9988 and denies every source, the host included, on the controller-manager's plaintext metrics port 8082.
+
+#### Observability
+
+* **`kube-prometheus-stack/`**: Prometheus, Alertmanager, Grafana, kube-state-metrics and node-exporter in `observability` (node-exporter in `node-exporter`), in four Flux Kustomizations, one per subdirectory, listed in the order Flux applies them.
+  * **`crds/`**: The Flux `Kustomization` `kube-prometheus-stack-crds` (`clusters/local/kube-prometheus-stack-crds.yaml`). `cert-manager`, `trust-manager`, `cilium-hubble` and `openbao-server` depend on it before they turn their chart monitors on.
+    * **`prometheus-crds-release.yaml`**: HelmRepository `prometheus-community` and HelmRelease `prometheus-crds`, the kube-prometheus-stack chart with every component off, which installs and upgrades only the Prometheus Operator CRDs.
+  * **`security/`**: The Flux `Kustomization` `kube-prometheus-stack-security` (`clusters/local/kube-prometheus-stack-security.yaml`). It holds the stack's certificates and the namespace's network policy.
+    * **`kube-prometheus-stack-tls.yaml`**: Certificates `prometheus-web-tls`, `alertmanager-web-tls` and `grafana-tls` from `openbao-pki-issuer`, which Prometheus, Alertmanager and Grafana serve HTTPS with, and BackendTLSPolicy `grafana`, which has the shared Gateway verify Grafana against `openbao-root-ca`.
+    * **`observability-networkpolicy.yaml`**: `observability`'s policy file. It admits Prometheus to itself, Alertmanager, the operator and Grafana; Grafana and `core-test` to Prometheus; Grafana to Alertmanager; the Gateway to Grafana; and Prometheus to kube-state-metrics' mTLS listener on 8080. It lets Prometheus reach the host-network scrape targets.
+  * **`state/`**: The Flux `Kustomization` `kube-prometheus-stack-state` (`clusters/local/kube-prometheus-stack-state.yaml`). It holds what the stack's pods need before they start.
+    * **`kube-prometheus-stack-storage.yaml`**: PersistentVolumes `prometheus` and `alertmanager` on `PROMETHEUS_HOST_PATH` and `ALERTMANAGER_HOST_PATH`, kept on deletion (`Retain`). The operator's claims bind to them through label `data-cluster/volume`.
+    * **`kube-prometheus-stack-credentials.yaml`**: `SecretProviderClass` `grafana`, which the Grafana pod mounts itself, logging in as `grafana-role`. It delivers Grafana's PostgreSQL login from `database/creds/grafana-app-role` and its admin login from `secret/grafana/admin`, and mirrors them into Secrets `grafana-postgres` (read by `credential-watch`) and `grafana-admin`.
+    * **`kube-prometheus-stack-config.yaml`**: ConfigMap `prometheus-sidecars`. It holds the spiffe-helper config that Prometheus and kube-state-metrics share, where spiffe-helper writes each pod's SVID files, and kube-state-metrics' web config, which serves mTLS and admits only Prometheus's SPIFFE ID.
+  * **`server/`**: The Flux `Kustomization` `kube-prometheus-stack-server` (`clusters/local/kube-prometheus-stack-server.yaml`), applied after `kube-prometheus-stack-state`. It holds the chart and the monitors for its exporters.
+    * **`kube-prometheus-stack-release.yaml`**: HelmRelease `kube-prometheus-stack`, which reads `kube-prometheus-stack-values.yaml` through ConfigMap `kube-prometheus-stack-values`. Its post-renderer binds node-exporter to `127.0.0.1` and gives kube-state-metrics TCP probes, because its mTLS listener refuses the kubelet's HTTPS probes.
+    * **`kube-prometheus-stack-values.yaml`**: The chart's values. Prometheus and Alertmanager serve TLS on static volumes. Default scrape class `metrics-tls` supplies SVID files to monitors without their own client certificate. Prometheus takes Tekton metrics via OTLP. Grafana uses PostgreSQL and restarts via `credential-watch` on credential rotation. kube-state-metrics serves mTLS from spiffe-helper SVIDs; node-exporter gets a Ghostunnel sidecar.
+    * **`kube-prometheus-stack-monitors.yaml`**: PodMonitor `flux-system`, after the upstream flux2-monitoring-example, which scrapes the four Flux controllers' Ghostunnel sidecars. Flux ships no chart monitor, and its root Kustomization applies before the Prometheus CRDs.
+* **`loki/`**: Loki as one process, storing logs in the core SeaweedFS bucket `LOKI_BUCKET`. The Flux `Kustomization` `loki` (`clusters/local/loki.yaml`) applies `kustomization.yaml`, which takes the three subdirectories.
+  * **`state/`**: Loki's local volume and S3 login.
+    * **`loki-credentials.yaml`**: `SecretProviderClass` `loki`, which the Loki pod mounts itself, logging in as `loki-s3-role`. It delivers Loki's S3 key pair from `seaweedfs/creds/loki` and mirrors it into Secret `loki-s3`.
+    * **`loki-storage.yaml`**: PersistentVolume `loki` on `LOKI_HOST_PATH`, kept on deletion (`Retain`), selected by label `data-cluster/volume: loki`. It holds Loki's WAL and compactor state.
+  * **`security/`**: Loki's certificate.
+    * **`loki-tls.yaml`**: Certificate `loki-tls` from `openbao-pki-issuer`, which Loki serves HTTPS with.
+  * **`server/`**: The Loki release. Its `kustomization.yaml` generates ConfigMap `loki-values` from `loki-values.yaml`.
+    * **`loki-release.yaml`**: HelmRepository `grafana` and HelmRelease `loki` at `LOKI_VERSION`.
+    * **`loki-values.yaml`**: The chart's values. Single-binary Loki with TSDB, S3 login from `loki-s3`, verified against `openbao-root-ca`. Restarts via `credential-watch` on rotation. Its PVC binds PersistentVolume `loki` by label.
+* **`alloy/`**: Alloy as a DaemonSet. The Flux `Kustomization` `alloy` (`clusters/local/alloy.yaml`) applies it after `loki`, whose HelmRepository `grafana` it uses.
+  * **`alloy-release.yaml`**: HelmRelease `alloy` at `ALLOY_VERSION`.
+  * **`alloy-storage.yaml`**: PersistentVolume `alloy` on `ALLOY_HOST_PATH`, kept on deletion (`Retain`), and PersistentVolumeClaim `alloy` in `observability`, which binds to it through label `data-cluster/volume: alloy`. It holds Alloy's log positions.
+  * **`alloy-tls.yaml`**: Certificate `alloy-tls` from `openbao-pki-issuer`, which Alloy's HTTP server serves.
+  * **`alloy-values.yaml`**: The chart's values and Alloy's configuration. Alloy collects pod logs and Kubernetes events (kept only an hour by Kubernetes), labels them and pushes them to Loki over verified HTTPS.
+  * **`kustomization.yaml`**: Lists the files and generates ConfigMap `alloy-values` from `alloy-values.yaml`.
+* **`tetragon/`**: Tetragon in `kube-system`, in two Flux Kustomizations, one per subdirectory. The operator registers the TracingPolicy CRD at runtime, so the policy applies after the release.
+  * **`server/`**: The Flux `Kustomization` `tetragon-server` (`clusters/local/tetragon-server.yaml`).
+    * **`tetragon-monitors.yaml`**: PrometheusRule `tetragon`, with two alerts:
+      * `TetragonPolicyNotLoaded` fires when a TracingPolicy isn't enabled on a node.
+      * `SensitiveFileAccess` fires when a process in a pod reads or writes a file that TracingPolicy `sensitive-files` watches. The alert names the namespace, pod and binary. Host processes are left out.
+    * **`tetragon-release.yaml`**: HelmRelease `tetragon`. Post-renderer adds Ghostunnel sidecars to the agent and operator and points ServiceMonitors at them.
+    * **`tetragon-values.yaml`**: The chart's values. Metrics bind to `127.0.0.1`, the health gRPC listener is off and the probes use `tetra status` over the agent's unix socket. Events go to stdout, which Alloy ships to Loki.
+  * **`config/`**: The Flux `Kustomization` `tetragon-config` (`clusters/local/tetragon-config.yaml`).
+    * **`tetragon-config.yaml`**: TracingPolicy `sensitive-files`, which observes reads and writes of `/etc/shadow`, `/etc/gshadow`, `/etc/sudoers` and `/root/.ssh/` and blocks nothing.
+
+#### CI
+
+* **`tekton/`**: Tekton, in six Flux Kustomizations, one per subdirectory. The `TektonConfig` installs Pipelines and Triggers into `tekton`. Tasks, Pipelines and their runs go in `tekton-pipelines`.
+  * **`dashboard/`**: The Flux `Kustomization` `tekton-dashboard` (`clusters/local/tekton-dashboard.yaml`), applied after `tekton-config` and `openbao-server`. The Dashboard runs in `tekton-pipelines`.
+    * **`kustomization.yaml`**: The upstream read-only Tekton Dashboard release. Renovate bumps its URL version. One patch points it at the `tekton` namespace; another adds `localhost-tls` (Ghostunnel forwarding to the Dashboard).
+    * **`tekton-dashboard-localhost.yaml`**: CiliumLocalRedirectPolicy `tekton-dashboard-localhost`, which sends the workstation's `127.0.0.1:12001` to the Dashboard's `localhost-tls` container on 8443.
+    * **`tekton-dashboard-tls.yaml`**: Certificate `tekton-dashboard-localhost-tls` for `localhost` from the `tekton-pipelines` namespace's `openbao-desktop-issuer`.
+  * **`operator/`**: The Flux `Kustomization` `tekton-operator` (`clusters/local/tekton-operator.yaml`). It is its own Kustomization so the `TektonConfig` CRD exists before `tekton-config` applies one.
+    * **`tekton-operator-release.yaml`**: The Tekton Operator in the `tekton-operator` namespace. Its post-renderer sets `tekton-operator-observability` to push OTLP to Prometheus's receiver and mounts `openbao-root-ca`, which the operator and its webhook verify Prometheus against.
+  * **`config/`**: The Flux `Kustomization` `tekton-config` (`clusters/local/tekton-config.yaml`).
+    * **`tekton-config.yaml`**: The `TektonConfig` configures Pipelines, Triggers and the run pruner. Pipelines' four deployments, the operator's proxy webhook, Triggers' three deployments and the EventListener push metrics over OTLP to Prometheus's receiver, verifying it against `openbao-root-ca`.
     * **`tekton-networkpolicy.yaml`**: `tekton`'s policy file, which lets the remote resolvers reach their source hosts and EventListener `flux-events` reach the Triggers core interceptors.
-  * **`tekton-pipelines/`**: The Flux `Kustomization` `tekton-pipelines` (`clusters/local/tekton-pipelines.yaml`). It holds the namespace's admission and network policy files and one folder per Pipeline, each with its ServiceAccount and RBAC.
+  * **`pipelines/`**: The Flux `Kustomization` `tekton-pipelines` (`clusters/local/tekton-pipelines.yaml`). It holds the namespace's admission and network policy files and one folder per Pipeline, each with its ServiceAccount and RBAC.
     * **`tekton-pipelines-admission.yaml`**: ValidatingAdmissionPolicy `run-serviceaccounts` and its binding to `tekton-pipelines`. A PipelineRun or TaskRun that names ServiceAccount `core-test` or `code-quality` is admitted only from `system:admin`, EventListener `flux-events`'s ServiceAccount or the Tekton Pipelines controller.
-    * **`tekton-pipelines-networkpolicy.yaml`**: `tekton-pipelines`' policy file, which lets TaskRun pods reach their source hosts.
-    * **`pipelines/code-quality/`**: The `code-quality` Pipeline and its RBAC.
-      * **`code-quality-pipeline.yaml`**: The `code-quality` Pipeline. It clones the pull request's commit with `fetch-source`, then runs `shellcheck`, `renovate-config`, `zizmor` and `manifests` on it. Prek runs the local pre-commit hooks.
-      * **`code-quality-rbac.yaml`**: ServiceAccount `code-quality`, bound to ClusterRole `code-quality-view` (`get` on GitRepositories, `get` and `list` on CustomResourceDefinitions) for `fetch-source` and `manifests`, and ServiceAccount `code-quality-branch`, which mounts no token, for the Tasks that read only the pull request's files.
-    * **`pipelines/core-test/`**: The `core-test` Pipeline, its RBAC and its hand-run PipelineRun.
+    * **`tekton-pipelines-networkpolicy.yaml`**: `tekton-pipelines`' policy file, which lets TaskRun pods reach their source hosts (the Tekton Dashboard release host included, for `manifests`' kustomize build).
+    * **`code-quality/`**: The `code-quality` Pipeline and its RBAC.
+      * **`code-quality-pipeline.yaml`**: Clones the tested commit with `fetch-source`, then runs `manifests`.
+      * **`code-quality-rbac.yaml`**: ServiceAccount `code-quality` can read GitRepositories and CRDs for `fetch-source` and `manifests`.
+    * **`core-test/`**: The `core-test` Pipeline, its RBAC and its hand-run PipelineRun.
       * **`core-test-pipeline.yaml`**: The `core-test` Pipeline, which checks the live core at the Flux revision in its `revision` param, or the GitRepository's stored revision when the param is empty.
-      * **`core-test-rbac.yaml`**: The `core-test` ServiceAccount, ClusterRoleBinding `core-test-view` to the built-in `view` ClusterRole for its reads, Role and RoleBinding `core-test-role` in `tekton-pipelines`, which let it create and delete its probe pods and issue a token for itself, and Role and RoleBinding `core-test-role` in `databases`, which let it issue a token for `databases-openbao-auth`.
-      * **`core-test-run.yaml`**: Starts a run by hand with `kubectl create -f`, at GitRepository `flux-system`'s stored revision.
-    * **`tasks/`**: The Tasks that Pipelines share, applied by the Flux `Kustomization` `tekton-tasks` (`clusters/local/tekton-tasks.yaml`).
-      * **`ca-bundles.yaml`**: Checks every labelled namespace's CA ConfigMaps and the OpenBao, SeaweedFS and Postgres certificates against them, one check per step.
-      * **`client-login.yaml`**: Logs in the way the data-science client does. It issues a token for ServiceAccount `databases-openbao-auth`, logs in to OpenBao's Kubernetes auth as `databases-role`, reads one PostgreSQL login from `database/creds/postgres-app-role` and connects with it over `verify-full`. It checks that OpenBao refuses the same login from ServiceAccount `core-test` and that PostgreSQL refuses a connection without TLS, even for `postgres`.
-      * **`delete-probes.yaml`**: Deletes every `core-test/probe` pod in `tekton-pipelines`.
-      * **`fetch-source.yaml`**: Reads a GitRepository's URL and the given Flux revision (or the GitRepository's stored one when none is given) and clones that commit into the `source` workspace with the `git-clone` StepAction, which the git resolver fetches from `tektoncd-catalog/git-clone`. It returns the revision.
-      * **`flux-ready.yaml`**: Waits until every Kustomization in `flux-system` has applied a given Flux revision, or GitRepository `flux-system`'s stored revision when none is given, and is Ready.
-      * **`manifests.yaml`**: Builds every Flux Kustomization with kustomize and substitutes `cluster-config` with `flux envsubst --strict`, as Flux does. It validates the result with kubeconform against the Kubernetes schemas and the live cluster's CustomResourceDefinition schemas, then runs `trivy config` on the result, on `terraform/openbao` and on `.devcontainer/`, with the exceptions in `.trivyignore.yaml`.
-      * **`mtls-required.yaml`**: Checks that the server at a given URL refuses a client without a certificate.
-      * **`postgres-database-applied.yaml`**: Waits until CNPG reports that a given Database is applied, with its database, schemas and extensions created.
-      * **`renovate-config.yaml`**: Validates `renovate.json` with Renovate's `renovate-config-validator --strict` in the `source` workspace.
-      * **`shellcheck.yaml`**: Runs ShellCheck, following sourced files, on `src/bash/*.sh` in the `source` workspace.
-      * **`unauthorized-pod-denied.yaml`**: Starts a probe pod, labelled `core-test/probe`, that the destination's network policy does not allow. The pod's curl tries to connect to a given host and port, and the Task checks that curl timed out (exit code 28), because Cilium dropped the connection.
-      * **`workloads-ready.yaml`**: Checks with `kubectl rollout status` that every object of a given workload kind, in every namespace, has rolled out and is ready, naming each one.
-      * **`zizmor.yaml`**: Audits `.github/workflows/` with zizmor in offline mode in the `source` workspace.
-  * **`tekton-operator/`**: `kustomization.yaml`, `tekton-operator-release.yaml`. The Tekton Operator in the `tekton-operator` namespace. It is its own Kustomization so the `TektonConfig` CRD exists before `tekton` applies one.
-  * **`tekton-triggers/`**: The Flux `Kustomization` `tekton-triggers` (`clusters/local/tekton-triggers.yaml`). It holds the EventListener in `tekton-triggers` that starts runs from Flux events.
+      * **`core-test-rbac.yaml`**: ServiceAccount `core-test`, ClusterRoleBinding `core-test-view`, Role and RoleBinding `core-test-role` in `tekton-pipelines` (probe pods + self-token) and in `databases` (token for `databases-openbao-auth`).
+      * **`core-test-run.yaml`**: Starts a run by hand with `kubectl create -f`, at GitRepository `flux-system`'s stored revision. `just core-test` creates it and follows the run.
+  * **`tasks/`**: The Tasks that Pipelines share, applied by the Flux `Kustomization` `tekton-tasks` (`clusters/local/tekton-tasks.yaml`).
+    * **`ca-bundles.yaml`**: Checks every labelled namespace's CA ConfigMaps and the OpenBao, SeaweedFS and Postgres certificates against them, one check per step.
+    * **`client-login.yaml`**: Logs in the way the data-science client does. It issues a token for ServiceAccount `databases-openbao-auth`, logs in to OpenBao's Kubernetes auth as `databases-role`, reads one PostgreSQL login from `database/creds/ds-app-role` and connects with it over `verify-full`. It checks that OpenBao refuses the same login from ServiceAccount `core-test` and that PostgreSQL refuses a connection without TLS, even for `postgres`.
+    * **`delete-probes.yaml`**: Deletes every `core-test/probe` pod in `tekton-pipelines`.
+    * **`fetch-source.yaml`**: Reads a GitRepository's URL and the given Flux revision (or the GitRepository's stored one when none is given) and clones that commit into the `source` workspace with the `git-clone` StepAction, which the git resolver fetches from `tektoncd-catalog/git-clone`. It returns the revision.
+    * **`flux-ready.yaml`**: Waits until every Kustomization in `flux-system` has applied a given Flux revision, or GitRepository `flux-system`'s stored revision when none is given, and is Ready.
+    * **`gateway-tls.yaml`**: Requests an HTTPRoute hostname through Gateway `internal-gateway`, verifying the edge certificate against `openbao-root-ca`, which the desktop intermediate chains to.
+    * **`loki-logs.yaml`**: Checks that Loki returns log lines from a given `tekton-pipelines` pod within 2 minutes, querying over HTTPS verified against `openbao-root-ca`.
+    * **`manifests.yaml`**: Builds every Flux Kustomization with kustomize and substitutes `cluster-config` with `flux envsubst --strict`. It validates the result with kubeconform using Kubernetes schemas and the live cluster's CRD schemas. Trivy scans the rendered manifests, `terraform/openbao/` and `.devcontainer/` using `.trivyignore.yaml`.
+    * **`mtls-required.yaml`**: Checks that the server at a given URL refuses a client without a certificate.
+    * **`postgres-database-applied.yaml`**: Waits until CNPG reports that a given Database is applied, with its database, schemas and extensions created.
+    * **`prometheus-job-check.yaml`**: Checks that Prometheus has a recent series for a given `job` label, scraped by a monitor or pushed over OTLP, within 3 minutes, querying over HTTPS verified against `openbao-root-ca`. `core-test` runs it once per expected job, so a missing monitor or a silent push fails.
+    * **`prometheus-targets.yaml`**: Checks that Prometheus has scrape targets and that each reports `up` within 3 minutes, naming any that does not with its last error.
+    * **`unauthorized-pod-denied.yaml`**: Starts a probe pod, labelled `core-test/probe`, that the destination's network policy does not allow. The pod's curl tries to connect to a given host and port, and the Task checks that curl timed out (exit code 28), because Cilium dropped the connection.
+    * **`workloads-ready.yaml`**: Checks with `kubectl rollout status` that every object of a given workload kind, in every namespace, has rolled out and is ready, naming each one.
+    * **`zot.yaml`**: Checks that Zot's `/v2/` endpoint returns HTTP 200, that `/metrics` returns HTTP 200, that an unauthenticated push to `/v2/dev/test/manifests/latest` returns HTTP 401, and that the busybox manifest is reachable via the docker.io pull-through cache.
+  * **`triggers/`**: The Flux `Kustomization` `tekton-triggers` (`clusters/local/tekton-triggers.yaml`). It holds the EventListener in `tekton-triggers` that starts runs from Flux events.
     * **`alert-pull-request.yaml`**: Alert `pull-request` in `flux-system`, which sends Provider `el-flux-events` each Kustomization apply event that changed objects.
+    * **`tekton-triggers-admission.yaml`**: MutatingAdmissionPolicy `el-flux-events-otlp-ca`, which injects `OTEL_EXPORTER_OTLP_CERTIFICATE` into `el-flux-events` so it verifies Prometheus against `openbao-root-ca`. An EventListener's env accepts only Secret references, hence the admission policy.
     * **`tekton-triggers-listener.yaml`**: EventListener `flux-events`, which serves HTTPS with `el-flux-events-cert` on Service `el-flux-events` port 8443 and runs Trigger `pull-request`, and Provider `el-flux-events` in `flux-system`, which POSTs Alert `pull-request`'s events to it and verifies its certificate with the `openbao-root-ca` Secret.
     * **`tekton-triggers-rbac.yaml`**: ServiceAccount `el-flux-events`, ClusterRoleBinding `el-flux-events-view` to the built-in `view` ClusterRole for its reads of Triggers objects, and Role and RoleBinding `el-flux-events-role` in `tekton-pipelines`, which let it create PipelineRuns.
-    * **`trigger-pull-request.yaml`**: Trigger `pull-request`. For a Kustomization event at a revision on a branch other than `main`, which Flux follows only while a pull request is tested, it starts PipelineRuns `core-test-<sha>` and `code-quality-<sha>` at that revision. Later events for the same commit find those names taken and start nothing.
+    * **`trigger-pull-request.yaml`**: Trigger `pull-request`. For a Kustomization event at a revision on a branch other than `main`, which Flux follows only while a pull request is tested, it starts a `core-test-<sha>` PipelineRun at that revision. Later events for the same commit find that name taken and start nothing.
     * **`tekton-triggers-networkpolicy.yaml`**: `tekton-triggers`' policy file, which admits notification-controller to the EventListener's pod port.
     * **`tekton-triggers-tls.yaml`**: Certificate `el-flux-events-cert` from `openbao-pki-issuer`, the server certificate for the EventListener's Service `el-flux-events.tekton-triggers.svc.cluster.local`.
-  * **`trust-manager/`**: `kustomization.yaml`, `trust-manager-release.yaml`, `trust-manager-values.yaml` (the Helm values the `trust_manager` role and the HelmRelease share, through ConfigMap `trust-manager-values`). trust-manager in `cert-manager`, which copies CA certificates from Secrets there into ConfigMaps and Secrets in every namespace labelled `data-cluster/ca-bundles`.
+
+#### Registry
+
+* **`zot/`**: Zot OCI registry in namespace `zot`. Stores images in the SeaweedFS bucket `zot` and serves them at `zot.${INTERNAL_DOMAIN}` through the shared Gateway. Acts as a pull-through cache for ghcr.io, docker.io, quay.io and registry.k8s.io.
+  * **`zot-credentials.yaml`**: ServiceAccount `zot`, SecretProviderClass `zot` (mounts S3 key pair from `seaweedfs/creds/zot` and push htpasswd from `secret/data/zot-push`), and Secret `zot-s3` (mirrors the key pair for Zot's S3 config). The Kubernetes auth role `zot-role` and the OpenTofu credentials live in `terraform/openbao/`.
+  * **`zot-networkpolicy.yaml`**: Ingress from the Gateway's `ingress` Cilium entity on 5000 and from Prometheus on 5000; egress to ghcr.io, docker.io, quay.io, registry.k8s.io and their CDN backends on 443.
+  * **`zot-release.yaml`**: HelmRepository `zot`, HelmRelease `zot` at `ZOT_VERSION`, ServiceMonitor `zot`. Config reads S3 credentials and htpasswd from the CSI-mounted paths. A `credential-watch` sidecar restarts the pod when the S3 key pair rotates.
+  * **`zot-tls.yaml`**: Certificate `zot-tls` from `openbao-pki-issuer`, BackendTLSPolicy `zot` (names the certificate for Gateway TLS), HTTPRoute `zot` to `zot.${INTERNAL_DOMAIN}`.
+
+### Source Scripts
+
 * **`src/`**
   * **`src/bash/`**:
     * **`preflight.sh`**: Runs read-only host readiness checks of tooling, `gh` auth, firewall state and LAN IP collisions. It prints the shortest dnf or apt commands that install or update each missing or mismatched tool, and runs `setup-firewall.sh --check` for the firewall.
     * **`setup-firewall.sh`**: Applies the host firewall rules for Kubernetes and Cilium, with `firewalld` on Fedora/RHEL or `ufw` on Ubuntu/Debian. `--check` reads the same rules without changing them and names any that are missing.
     * **`start-cluster.sh`**: Starts the k3s systemd unit and waits for the API and the node. It checks that the in-cluster OpenBao unsealed itself, reactivates hibernated workloads, and runs `preflight.sh`'s version checks for kubectl and the cnpg plugin.
     * **`stop-cluster.sh`**: Shuts the cluster down gracefully. It hibernates the CNPG cluster declaratively, waits for its pods to terminate, and stops the k3s systemd unit.
-    * **`uninstall-cluster.sh`**: Tears down k3s and clears Cilium's persistent host files, `.local/openbao` and the `terraform/openbao` state. It asks for a reboot before reinstalling.
+    * **`uninstall-cluster.sh`**: Tears down k3s and clears Cilium's persistent host files, the cluster's CA certificates in the system trust store, `.local/openbao` and the `terraform/openbao` state. It asks for a reboot before reinstalling.
   * **`src/data_science_cluster/__init__.py`**: The project package and its `__version__`, which release-please bumps.
-* **`terraform/`**: The OpenTofu module that configures OpenBao's KV secrets, Kubernetes auth backend, 2-tier PKI engine, and database and SeaweedFS secrets engines. Its state is local and gitignored. OpenTofu's own `encryption` block also encrypts it at rest. `just bootstrap` applies it.
-  * **`openbao/`**: The module that configures the in-cluster OpenBao through the `hashicorp/vault` provider. It declares the KV mount `secret/`, Kubernetes auth backend and roles (`databases-role`, `cert-manager-pki-role`, `spire-server-role`, `barman-s3-role`, `openbao-snapshot-s3-role`, `openbao-snapshot-role`), 2-tier PKI engine (`pki_root`, `pki_int` with RFC 5280 Name Constraints, `internal-server` role), database secrets engine connection and dynamic roles (`postgres-cluster`, `postgres-app-role`), and the secrets-aws mount `seaweedfs/` with its `barman` and `openbao-snapshot` roles (`seaweedfs.tf`).
+
+### OpenTofu
+
+* **`terraform/`**: The OpenTofu module that configures OpenBao's KV secrets, Kubernetes auth backend, 2-tier PKI engine, and database and SeaweedFS secrets engines. Its state is local, gitignored, and encrypted at rest. `just bootstrap` applies it.
+  * **`openbao/`**: Configures in-cluster OpenBao. Declares the KV mount `secret/`, Kubernetes auth backend roles, 2-tier PKI (`pki_root` → `pki_int` for services, `pki_desktop` for the workstation), database secrets engine (`ds-app-role`, `grafana-app-role`) and SeaweedFS S3 credentials (`barman`, `loki`, `zot`, `openbao-snapshot`).
     * **`tests/openbao.tftest.hcl`**: Mocked-provider plan tests of the roles, policies and TTLs, run by `tofu test` in the `opentofu-unit` job.
+
+### Tests
+
 * **`tests/`**
-  * **`conftest.py`**: Stops the session before collection if `kubectl`, `flux`, `ansible` or `ansible-playbook` is missing.
-  * **`test_cluster_config_drift.py`**: Flux and Ansible resolve every cluster-config variable they use, to the same values.
-  * **`test_network_policy.py`**: Checks rendered manifests for the host-only baseline, Gateway namespace approval and the database's published-port permission.
-  * **`test_release_versions.py`**: `galaxy.yml` carries the cluster's release version.
+  * **`conftest.py`**: Stops the session before collection if `kubectl`, `ansible` or `ansible-playbook` is missing.
+  * **`test_network_policy.py`**: Checks rendered manifests for the host-only baseline, Gateway namespace approval and the database's published-port permission. Each guards a failure no live check sees: the global Gateway grant returning (commit `049583d`), and LAN access to PostgreSQL breaking silently.
