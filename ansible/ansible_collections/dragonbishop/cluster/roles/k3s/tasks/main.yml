@@ -2,6 +2,9 @@
 - name: Configure k3s
   ansible.builtin.import_tasks: config.yml
 
+- name: Raise the inotify limits
+  ansible.builtin.import_tasks: inotify.yml
+
 - name: Load containerd's AppArmor profile
   ansible.builtin.import_tasks: apparmor.yml
 

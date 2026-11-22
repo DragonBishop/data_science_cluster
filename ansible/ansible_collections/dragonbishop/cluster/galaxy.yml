@@ -24,5 +24,6 @@ documentation: >-
 homepage: https://github.com/DragonBishop/data_science_cluster
 issues: https://github.com/DragonBishop/data_science_cluster/issues
 dependencies:
+  ansible.posix: '>=2.2.2'
   kubernetes.core: '>=6.5.0'
   cloud.terraform: '>=4.0.0'
