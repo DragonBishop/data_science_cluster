@@ -147,6 +147,22 @@ Used by `just fuzzypods`.
   rm get_helm.sh
   ```
 
+#### jq
+
+Install jq on the workstation if you use `just status` to read Alertmanager and Prometheus summaries.
+
+* **Ubuntu / Debian**:
+
+  ```bash
+  sudo apt update && sudo apt install -y jq
+  ```
+
+* **Fedora / RHEL / Red Hat**:
+
+  ```bash
+  sudo dnf install -y jq
+  ```
+
 #### Just
 
 * **Ubuntu / Debian**:
@@ -297,6 +313,7 @@ Flux syncs the cluster from a GitHub repository you own. You install each GitHub
 Create your own copy of this repository on GitHub in one of two ways:
 
 * **Fork** it from its GitHub page. A fork is public and can pull later changes from this repository. GitHub turns workflows off in a new fork. Turn them on under your fork's **Actions** tab.
+
 * **Push a clone** to a new, empty repository you create. The new repository can be private.
 
   ```bash
@@ -420,7 +437,7 @@ sudo reboot
 
 `just uninstall` keeps persistent host data by default. In a terminal it asks about each store separately. Enter `y` to delete that store, or press Enter to keep it. The prompts read paths from `infrastructure/cluster-config/storage.yaml` and work while the cluster is offline.
 
-The stores are SeaweedFS, Prometheus, Alertmanager, Loki's local WAL and compactor state, and Alloy's log collection positions. SeaweedFS stores its buckets together. Clearing it deletes every bucket, including the PostgreSQL backups, OpenBao snapshots and Loki's stored logs. To clear all Loki data, also select its local state.
+The stores are SeaweedFS, Prometheus, Alertmanager, Loki's local WAL and compactor state, and Alloy's log collection positions. SeaweedFS stores its buckets together. Clearing it deletes every bucket, including the PostgreSQL backups, OpenBao snapshots, Loki's stored logs and the OCI registry images. To clear all Loki data, also select its local state.
 
 ### Data Migration (if restoring an existing database)
 
@@ -467,7 +484,13 @@ Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on
 
 ### Step 3: Secure OpenBao Credentials and Recovery Keys
 
-The bootstrap script prompts for an OpenTofu state-encryption passphrase and the Postgres superuser password. At the end of provisioning, it prints the generated seal key and any freshly initialized recovery keys and root token, including when a provisioning task fails.
+The bootstrap script prompts for an OpenTofu state-encryption passphrase, the Postgres superuser password, and whether to install the cluster's desktop and OpenBao CAs into the machine's trust store. The prompt (`opentofu_desktop_trust`) runs every bootstrap. Pressing Enter means yes.
+
+Answering yes copies both CAs from memory — the OpenTofu output `desktop_ca` and ConfigMap `openbao-ca-bundle` — into the system anchor directory as root, under the fixed names `data-science-cluster-desktop-ca.crt` and `data-science-cluster-openbao-ca.crt`, then refreshes the trust store. A re-bootstrap overwrites a stale anchor. Answering no removes both anchors, and `just uninstall` removes them too.
+
+Pass `-e opentofu_desktop_trust=yes` or `=no` to answer ahead of time; the full-playbook Molecule scenario passes yes. See [Access Policy](ACCESSPOLICY.md#workstation-trust) for CA ownership and trust profiles.
+
+At the end of provisioning, the script prints the generated seal key and any freshly initialized recovery keys and root token, including when a provisioning task fails.
 
 > [!IMPORTANT]
 > Store the seal key, generated recovery keys and root token in a secure password manager immediately. `generate-root` needs the recovery keys if the root token is lost.
@@ -480,62 +503,39 @@ For an existing installation, save the current seal key from Secret `openbao-sea
 
 ## Flux Dependency Graph
 
+Arrows point from prerequisite to dependent Kustomization. `cluster-config`, `namespaces`, `kube-prometheus-stack-crds` and `secrets-store-csi-driver` each appear in many `dependsOn` chains; the graph shows their primary connections only. Full details are under Dependency Details.
+
 ```mermaid
 flowchart TD
-    %% Base Foundations
-    crds["gateway-api-crds"] --> cilium["cilium"]
-    ns["namespaces"] --> cilium
-    cc["cluster-config"] --> cilium
-
-    %% Core Services & PKI
-    cilium --> certmgr["cert-manager"]
-    certmgr --> trustmgr["trust-manager"]
-    trustmgr --> openbao["openbao"]
-    cilium --> spire["spire"]
-
-    %% Platform Services
-    openbao --> cnpg["cnpg-operator"]
-    cnpg --> plugin["databases-plugin"]
-
-    openbao --> gw["gateway"]
-    gw --> hubble["hubble"]
-
-    %% Applications
-    openbao --> seaweedfs["seaweedfs"]
-    cc --> csidriver["secrets-store-csi-driver"]
-    openbao --> security["databases-security"]
-    plugin --> objectstore["databases-objectstore"]
-    security --> objectstore
-    seaweedfs --> objectstore
-    csidriver --> objectstore
-    seaweedfs --> baosnapshot["openbao-snapshot"]
-    csidriver --> baosnapshot
-    objectstore --> dbcluster["databases-cluster"]
-    gw --> dbcluster
-
-    %% CI
-    certmgr --> tektonop["tekton-operator"]
-    tektonop --> tekton["tekton"]
-    tekton --> tektonpipelines["tekton-pipelines"]
-    tekton --> tektontasks["tekton-tasks"]
+    csi["secrets-store-csi-driver"] --> db["databases-cluster"]
+    cc["cluster-config"] --> cil["cilium"]
+    ns["namespaces"] --> cil
+    gcrds["gateway-crds"] --> cil
+    cil --> sp["spire"]
+    sp --> tet["tetragon"]
+    sp --> prom["kube-prometheus-stack"]
+    cil --> cm["cert-manager"]
+    pcrds["kube-prometheus-stack-crds"] --> cm
+    cm --> tm["trust-manager"] --> ob["openbao"]
+    ob --> sw["seaweedfs"]
+    sw --> loki["loki"] --> alloy["alloy"]
+    sw --> db
+    sw --> zot["zot"]
+    ob --> gw["gateway"]
+    gw --> hub["cilium-hubble"]
+    gw --> db
+    gw --> zot
+    db --> prom
+    gw ~~~ tek["tekton"]
+    ob --> tek
 ```
 
-* `cilium` requires `gateway-api-crds`, `namespaces` and `cluster-config`.
-* `spire` depends on `cilium`, `namespaces` and `cluster-config`.
-* `cert-manager` depends on `cilium`.
-* `trust-manager` depends on `cert-manager`, which holds the `jetstack` HelmRepository and issues the trust-manager webhook's certificate.
-* `openbao` depends on `cert-manager` (for `openbao-server-cert` TLS bootstrap) and `trust-manager` (for the Bundle CRD its CA Bundles use).
-* `gateway` depends on `openbao` (for PKI).
-* `cnpg-operator` depends on `openbao`, and `databases-plugin` depends on `cnpg-operator`.
-* `hubble` depends on `gateway`.
-* `secrets-store-csi-driver` depends on `cluster-config`.
-* `seaweedfs` depends on `namespaces` and `openbao` and turns Ready after its install hook creates the `cnpg-backups` and `openbao-snapshots` buckets.
-* `openbao-snapshot` depends on `openbao`, `seaweedfs` and `secrets-store-csi-driver`. Its holder pod mounts the S3 key the chart's snapshot agent uploads with, and the key's IAM user exists once SeaweedFS runs. It lives outside `openbao`, because `seaweedfs` depends on `openbao`.
-* `databases-security` depends on `openbao`, which creates the `openbao-selfsigned-bootstrap` issuer that self-signs Postgres's CA.
-* `databases-objectstore` depends on `openbao`, `databases-plugin`, `databases-security`, `seaweedfs` and `secrets-store-csi-driver`. Its objects need the `ObjectStore` CRD, the Job's RBAC and network policy, the `cnpg-backups` bucket and Barman's CSI-mounted key pair.
-* `databases-cluster` depends on `databases-objectstore`, which turns Ready when its `postgres-bootstrap` Job has created the Cluster. It also depends on `gateway`, which its TCPRoute attaches to.
-* `tekton-operator` depends on `cert-manager`.
-* `tekton` depends on `tekton-operator` and `cluster-config`.
-* `tekton-pipelines` and `tekton-tasks` depend on `tekton`, which installs the Pipeline and Task CRDs.
+### Dependency Details
+
+* `seaweedfs` turns Ready after its install hook creates the `cnpg-backups` and `openbao-snapshots` buckets.
+* `openbao-snapshot` lives outside `openbao-server` because `seaweedfs` depends on `openbao-server`. Its holder pod mounts the S3 key once SeaweedFS runs.
+* `databases-cluster` depends on `databases-objectstore`, which turns Ready when its `postgres-bootstrap` Job has created the Cluster.
+* `kube-prometheus-stack-server` depends on `spire` for Prometheus's SPIFFE identity, in addition to the upstream chain shown in the graph.
+* `zot`: the Ansible `registries` task (tagged `flux`) runs after Flux deploys `zot` and configures k3s's containerd to mirror docker.io, ghcr.io, quay.io and registry.k8s.io through `zot.${INTERNAL_DOMAIN}`.
 
 Once Flux reports every Kustomization Ready, continue with [Verification](VERIFICATION.md).

@@ -4,7 +4,7 @@
 
 **Start closed, allow shared infrastructure in the baseline, and let each component declare its additional connections.**
 
-**One policy for the cluster, one per namespace.** `cluster-default` is the one policy for the whole cluster. Every other rule belongs to one namespace, and lives in the policy file of the component that deploys into that namespace, beside its resources. Each component writes policy into its own namespace. A caller from another namespace, or from a module, gets its rule in the receiver's file, where it stays while the module is off.
+**One policy for the cluster, one per namespace.** `cluster-default` is the one policy for the whole cluster. Every other rule belongs to one namespace, and lives in the policy file of the component that deploys into that namespace, beside its resources. Each component writes policy into its own namespace. A caller from another namespace gets its rule in the receiver's file.
 
 The cluster baseline, `cluster-default` in [`infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml):
 
@@ -35,7 +35,7 @@ On Fedora/RHEL, the host firewall follows these rules:
 1. The LAN interface uses a filtering zone. Read `LAN_INTERFACE` from cluster-config and look up the zone that owns it.
 2. Declare each host service explicitly. Keep named workstation services and individual port allowances. Remove FedoraWorkstation's blanket TCP/UDP `1025-65535` allowances. Add a narrow exception before using a workstation application that previously relied on that range.
 3. Keep DNS (53/TCP and UDP), Gateway HTTPS (443/TCP), and Gateway PostgreSQL (5432/TCP) available in the LAN zone. CoreDNS is the explicit exception to publishing services through Gateway.
-4. Pods in the trusted Cilium zone may reach the host. `k8s-containers-to-host` accepts `trusted -> HOST`. The pod's Cilium egress policy still names the host ports it needs, including API 6443, kubelet 10250, and Hubble 4244.
+4. Pods in the trusted Cilium zone may reach the host. `k8s-containers-to-host` accepts `trusted -> HOST`. The pod's Cilium egress policy still names the host ports it needs, including API 6443, kubelet 10250, Hubble 4244, and the metrics ports Prometheus scrapes on the node (9445, 9446, 9963 and 9965).
 5. Keep Cilium interfaces and pod CIDR trusted, existing forwarding policies intact, and masquerading owned by Cilium.
 
 [`setup-firewall.sh`](../src/bash/setup-firewall.sh) applies these rules. `setup-firewall.sh --check`, which [`preflight.sh`](../src/bash/preflight.sh) runs, checks the LAN zone, port ranges and policy directions. Both leave k3s's listen addresses as they are. These perimeter rules apply to firewalld on Fedora. On Ubuntu/Debian, the script keeps its existing UFW setup for Cilium.
@@ -66,6 +66,8 @@ Each numbered comment in the [baseline manifest](../infrastructure/cilium/securi
 
 **6. The LAN and the node reach the Gateway.** The second entry selects the Gateway's Envoy (`reserved:ingress`) and admits `LAN_CIDR` and the node's loopback. The Gateway's listeners and routes decide where that traffic goes next.
 
+Rule 6 covers traffic arriving from outside the pod network. Pod connections to the Gateway take a different path: for HTTPS, Cilium redirects the pod's egress into Envoy, which forwards to the backend with the `ingress` identity; for raw TCP, Cilium's load balancer routes directly to the backend, which sees the caller's own identity.
+
 ```mermaid
 flowchart LR
   LAN[LAN client] -->|listener ports| GW[Gateway]
@@ -83,7 +85,7 @@ Each example below is a policy already in the cluster.
 
 ### A pod calls an internet site
 
-TaskRun pods in `tekton-pipelines` clone from the Git forge and install from PyPI. The rule lives on the sender:
+TaskRun pods in `tekton-pipelines` clone from GitHub, fetch Kubernetes schemas and download the Tekton Dashboard release. The rule lives on the sender:
 
 ```mermaid
 flowchart LR
@@ -91,7 +93,7 @@ flowchart LR
     run[TaskRun pod]
   end
   run -->|"53, through the DNS proxy"| dns[CoreDNS]
-  run -->|443| sites[Git forge, PyPI]
+  run -->|443| sites[GitHub, Kubernetes schemas, Tekton Dashboard release]
 ```
 
 [`infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml)
@@ -101,8 +103,9 @@ flowchart LR
     - toFQDNs:
         - matchName: "github.com"
         - matchPattern: "*.github.com"
-        - matchName: "pypi.org"
-        - matchName: "files.pythonhosted.org"
+        - matchName: "raw.githubusercontent.com"
+        - matchName: "infra.tekton.dev"
+        - matchName: "objectstorage.us-ashburn-1.oraclecloud.com"
       toPorts:
         - ports:
             - port: "443"
@@ -225,7 +228,7 @@ spec:
               protocol: TCP
 ```
 
-The route names the **Service port** (80). The receiver rule names the **pod port** (8080). Keep the route and backend in the same namespace. The component's Flux Kustomization must substitute cluster-config for `${INTERNAL_DOMAIN}`, as the existing components do. After reconciliation, run `just gateway-check example.<INTERNAL_DOMAIN>` with the configured domain.
+The route names the **Service port** (80). The receiver rule names the **pod port** (8080). Keep the route and backend in the same namespace. The component's Flux Kustomization must substitute cluster-config for `${INTERNAL_DOMAIN}`, as the existing components do. Add the hostname to `gateway-tls`'s list in `core-test-pipeline.yaml`, so every `core-test` run checks it.
 
 ### Adding a raw TCP service
 
@@ -239,8 +242,10 @@ Reuse `databases-route.yaml` as the TCPRoute pattern. A different raw TCP servic
 * A policy is named after the workload it selects, and holds that workload's incoming and outgoing rules.
 * Each rule carries a one-line comment saying what the traffic is.
 * Callers are named by namespace and `app.kubernetes.io/name`, or by the labels their chart sets.
-* A port this repo sets comes from cluster-config as `${VAR}`. A port the upstream software fixes is a literal.
+* A Cilium policy port is a literal string, such as `"9445"`. Flux substitutes a quoted `"${VAR}"` number as an integer, and Cilium requires a string. A chart's Kubernetes NetworkPolicy takes the port from cluster-config as `${VAR}`, as SeaweedFS's does.
 * A chart's own policy is fine when the chart builds it from its own port values. SeaweedFS does this.
+* A listener that carries data, such as metrics or an API, serves TLS, and a metrics scrape is also authenticated. A listener a binary forces onto every interface in plaintext gets an `ingressDeny` from entity `all` on its port, as trust-manager's 9402 and the SPIRE controller-manager's 8082 do.
+* A health endpoint that returns only a status for the kubelet's probes may stay plain HTTP. The kubelet probes from the host without a client certificate, so a policy rule can't close the port without breaking the probe.
 
 ## Finding a Missing Rule
 
@@ -261,13 +266,27 @@ Flux needs network access before it can deliver any policy, and so do the worklo
 | `cluster-default` | [`infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml`](../infrastructure/cilium/security/cilium-clusterwide-networkpolicy.yaml) | Baseline rules 1 to 6 |
 | `coredns` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | LAN and every pod on 53. CoreDNS to upstream resolvers on 53 |
 | `metrics-server` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | metrics-server to the kubelet on 10250 |
-| `hubble-relay` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | Hubble Relay to the agent's Hubble server on 4244 |
-| `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090. Flux to its source hosts on 443 |
-| `openbao` | [`infrastructure/openbao/server/openbao-networkpolicy.yaml`](../infrastructure/openbao/server/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the SPIRE server and `core-test` to OpenBao on 8200. OpenBao to the secrets-aws plugin's registry on 443 |
+| `hubble-relay` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | Hubble UI's backend to Relay on 4245. Hubble Relay to the agent's Hubble server on 4244 |
+| `secrets-store-csi-driver` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | Prometheus to the driver's Ghostunnel sidecar on 9445 |
+| `tetragon-operator` | [`infrastructure/cilium/security/kube-system-networkpolicy.yaml`](../infrastructure/cilium/security/kube-system-networkpolicy.yaml) | Prometheus to the Tetragon operator's Ghostunnel sidecar on 9445 |
+| `spire-server` | [`infrastructure/spire/security/spire-networkpolicy.yaml`](../infrastructure/spire/security/spire-networkpolicy.yaml) | Prometheus to the SPIRE server's SVID-authenticated metrics on 9988. Denies everyone, the host included, on the controller-manager's plaintext metrics port 8082 |
+| `cert-manager` | [`infrastructure/cert-manager/cert-manager-networkpolicy.yaml`](../infrastructure/cert-manager/cert-manager-networkpolicy.yaml) | Prometheus to cert-manager's controller, webhook and cainjector metrics on 9402 |
+| `trust-manager` | [`infrastructure/cert-manager/cert-manager-networkpolicy.yaml`](../infrastructure/cert-manager/cert-manager-networkpolicy.yaml) | Prometheus to trust-manager's Ghostunnel sidecar on 9445. Denies everyone, the host included, on trust-manager's plaintext metrics port 9402, which its Ghostunnel sidecar reads over loopback |
+| `flux` | [`clusters/local/flux-system/flux-networkpolicy.yaml`](../clusters/local/flux-system/flux-networkpolicy.yaml) | Flux controllers to each other on 9090. Prometheus to each controller's Ghostunnel sidecar on 9445. Flux to its source hosts on 443, the Tekton Dashboard release host and its object-storage redirect included |
+| `openbao` | [`infrastructure/openbao/server/openbao-networkpolicy.yaml`](../infrastructure/openbao/server/openbao-networkpolicy.yaml) | cert-manager, the OpenBao CSI Provider, the snapshot agent, the SPIRE server and `core-test` to OpenBao on 8200. Prometheus to the metrics-only listener on 8204. The workstation reaches it as the host through redirect `openbao-localhost` (baseline rule 2). OpenBao to the secrets-aws plugin's registry on 443 |
 | `plugin-barman-cloud` | [`apps/databases/plugin/cnpg-system-networkpolicy.yaml`](../apps/databases/plugin/cnpg-system-networkpolicy.yaml) | The CNPG operator to the plugin on 9090 |
-| `postgres-cluster` | [`apps/databases/security/databases-networkpolicy.yaml`](../apps/databases/security/databases-networkpolicy.yaml) | Gateway, instances, OpenBao and `core-test` on 5432. The CNPG operator and the other instances on 8000 |
-| SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other. Postgres, OpenBao and `core-test` to S3 on `SEAWEEDFS_S3_PORT`. `core-test` to the master, filer and volume gRPC ports 19333, 18888 and 18080 |
+| `cnpg-operator` | [`apps/databases/plugin/cnpg-system-networkpolicy.yaml`](../apps/databases/plugin/cnpg-system-networkpolicy.yaml) | Prometheus to the CNPG operator's Ghostunnel sidecar on 9445 |
+| `postgres-cluster` | [`apps/databases/security/databases-networkpolicy.yaml`](../apps/databases/security/databases-networkpolicy.yaml) | Gateway, instances, OpenBao, Grafana and `core-test` on 5432. The CNPG operator and the other instances on 8000. Prometheus to the instance metrics on 9187 |
+| SeaweedFS chart policies | [`apps/seaweedfs/seaweedfs-release.yaml`](../apps/seaweedfs/seaweedfs-release.yaml) (`networkPolicy`) | SeaweedFS components to each other. Postgres, OpenBao, Loki and `core-test` to S3 on `SEAWEEDFS_S3_PORT`. `core-test` to the master, filer and volume gRPC ports 19333, 18888 and 18080. Prometheus to each component's Ghostunnel sidecar on `METRICS_TLS_PORT` |
+| `zot` | [`infrastructure/zot/zot-networkpolicy.yaml`](../infrastructure/zot/zot-networkpolicy.yaml) | Gateway `ingress` entity and Prometheus to Zot on 5000. Zot to ghcr.io, docker.io, quay.io, registry.k8s.io and their CDN backends on 443 |
+| `prometheus` | [`infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml`](../infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml) | Prometheus to itself on 9090 and 8080, and Grafana, `core-test` and pods in `tekton` and `tekton-operator` and EventListener `flux-events` (OTLP push) to Prometheus on 9090. Prometheus to the host on 9445 (Cilium agent), 9446 (node-exporter), 9447 (Tetragon), 9963 (Cilium operator), 9965 (Hubble), 9988 (SPIRE agent) and 10250 (kubelet) |
+| `alertmanager` | [`infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml`](../infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml) | Prometheus to Alertmanager on 9093 and 8080. Grafana to Alertmanager on 9093 |
+| `prometheus-operator` | [`infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml`](../infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml) | Prometheus to the operator's metrics on 10250. Its webhook calls come from the host (baseline rule 2) |
+| `kube-state-metrics` | [`infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml`](../infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml) | Prometheus to kube-state-metrics' own mTLS listener on 8080 |
+| `grafana` | [`infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml`](../infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml) | The Gateway (`ingress`) and Prometheus to Grafana on 3000 |
+| `loki` | [`infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml`](../infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml) | Loki to itself on 9095 (compactor gRPC) and 7946 (memberlist). Alloy, Grafana, Prometheus and `core-test` to Loki on 3100 |
+| `alloy` | [`infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml`](../infrastructure/kube-prometheus-stack/security/observability-networkpolicy.yaml) | Prometheus to Alloy on 12345 |
 | `remote-resolvers` | [`infrastructure/tekton/config/tekton-networkpolicy.yaml`](../infrastructure/tekton/config/tekton-networkpolicy.yaml) | The resolvers to their source hosts on 443 |
 | `core-interceptors` | [`infrastructure/tekton/config/tekton-networkpolicy.yaml`](../infrastructure/tekton/config/tekton-networkpolicy.yaml) | EventListener `flux-events` to the Triggers core interceptors on 8443 |
 | `flux-events` | [`infrastructure/tekton/triggers/tekton-triggers-networkpolicy.yaml`](../infrastructure/tekton/triggers/tekton-triggers-networkpolicy.yaml) | notification-controller to EventListener `flux-events` on 8080, the pod port behind Service port 8443 |
-| `taskrun` | [`infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443 |
+| `taskrun` | [`infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml`](../infrastructure/tekton/pipelines/tekton-pipelines-networkpolicy.yaml) | TaskRuns to their source hosts on 443, the Tekton Dashboard release host included for `manifests`' kustomize build |

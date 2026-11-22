@@ -7,6 +7,8 @@ The cluster supports two backup paths:
 
 OpenBao has its own Raft snapshot on `OPENBAO_SNAPSHOT_SCHEDULE`, kept for rolling back a bad upgrade (see [OpenBao Raft Snapshots](#openbao-raft-snapshots)).
 
+Grafana's dashboards and settings live in database `grafana` in the same CNPG Cluster, so physical recovery restores them with the data-science database. Prometheus and Alertmanager default to `/var/lib/data-cluster/prometheus` and `/var/lib/data-cluster/alertmanager`. Their data persists on the host filesystem across pod replacements. The cluster's backup jobs exclude these directories.
+
 Workstation-specific command notebooks, dump files and saved recovery manifests belong outside this repository.
 
 ## Logical Exports
@@ -31,7 +33,7 @@ kubectl exec -i -n databases "$primary" -c postgres -- \
 
 This listing checks that the archive header and table of contents are readable. A test restore followed by data checks establishes recoverability.
 
-A logical dump covers the named database. Cluster roles are provisioned separately through CNPG and OpenBao. When restoring into a newly provisioned database, use `--no-owner --no-privileges --role=app_readwrite` and explicitly select application schemas or a reviewed archive list. CNPG manages the PostGIS extensions and their schemas. Dumped event triggers require superuser privileges and should be reviewed separately from application data. `--single-transaction --exit-on-error` makes a selected logical restore roll back if a statement fails.
+A logical dump covers the named database. Cluster roles are provisioned separately through CNPG and OpenBao. When restoring into a newly provisioned database, use `--no-owner --no-privileges --role=app_readwrite` (`--role=grafana_readwrite` for database `grafana`) and explicitly select application schemas or a reviewed archive list. CNPG manages the PostGIS extensions and their schemas. Dumped event triggers require superuser privileges and should be reviewed separately from application data. `--single-transaction --exit-on-error` makes a selected logical restore roll back if a statement fails.
 
 ## Physical Backups to SeaweedFS
 
