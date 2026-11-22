@@ -78,7 +78,7 @@ Trust a certificate that identifies the service or workload you expected, is val
 | --- | --- |
 | OpenTofu, cert-manager and SPIRE connecting to OpenBao | `openbao-local-ca-secret`, distributed as `openbao-ca-bundle` |
 | SeaweedFS S3 and Hubble clients | OpenBao's service-PKI root, distributed as `openbao-root-ca` or carried in their TLS Secret |
-| Browsers and VS Code on the workstation (Gateway hostnames, Hubble UI, Tekton Dashboard), and `core-test`'s `gateway-tls` | The desktop CA, an intermediate: the workstation's trust anchor when the bootstrap's prompt is answered yes. In the cluster, `openbao-root-ca`, which it chains to |
+| Browsers and VS Code on the workstation (Gateway hostnames, Hubble UI, Tekton Dashboard), and `core-test`'s `gateway-tls` | The desktop CA, an intermediate: the workstation's trust anchor once `just workstation-trust` installs it. In the cluster, `openbao-root-ca`, which it chains to |
 | Browsers and VS Code on the workstation reaching OpenBao's UI | `openbao-local-ca`, installed beside the desktop CA by the same prompt |
 | OpenBao and application clients verifying PostgreSQL, Prometheus scraping PostgreSQL's metrics, and PostgreSQL replication | Dedicated `postgres-ca` |
 | PostgreSQL replication client certificates | `postgres-client-ca`, containing the PostgreSQL CA |
@@ -100,7 +100,7 @@ The two CAs a workstation may trust are public certificates. Their keys stay in 
 * **The desktop CA** is OpenBao mount `pki_desktop`, an intermediate signed by the cluster's PKI root. It carries name constraints for `INTERNAL_DOMAIN` and `localhost`. The `openbao-desktop-issuer` Issuers in `gateway`, `kube-system` and `tekton-pipelines` request certificates from it.
 * **`openbao-local-ca`** is the cert-manager CA behind OpenBao's own listener, with name constraints limited to the names in `openbao-server-cert` and `127.0.0.1/32`. A name added to `openbao-server-cert` must also be added to the constraint.
 
-`just bootstrap` asks every run whether to install both into the machine's trust store (`opentofu_desktop_trust`). Pressing Enter means yes. Answering yes copies them from memory (the OpenTofu output `desktop_ca` and ConfigMap `openbao-ca-bundle`) into the system anchor directory as root, under the fixed names `data-science-cluster-desktop-ca.crt` and `data-science-cluster-openbao-ca.crt`, and refreshes the trust store. A re-bootstrap overwrites a stale anchor, answering no removes them, and `just uninstall` removes them too. The prompt can be answered ahead of time with `-e opentofu_desktop_trust=yes` or `=no`; the full-playbook Molecule scenario answers yes.
+`just workstation-trust` runs playbook `dragonbishop.cluster.workstation_trust`, separate from the bootstrap and optional. It reads both CAs from the live cluster (`pki_desktop/ca/pem` from OpenBao and ConfigMap `openbao-ca-bundle`) and asks whether to trust them (`workstation_trust_install`, default yes). Yes installs them as `data-science-cluster-desktop-ca.crt` and `data-science-cluster-openbao-ca.crt` in the system anchor directory, adds them to the user's NSS database for VS Code, and writes a Flatpak Firefox policy that loads the system anchors and keeps `INTERNAL_DOMAIN` out of DNS over HTTPS. No removes all three. Every run also points each HTTPRoute hostname at `GATEWAY_IP` in one `/etc/hosts` block. `just uninstall` removes everything the playbook wrote. The full-playbook Molecule scenario runs it with `workstation_trust_install=yes`.
 
 ## Signing Profiles
 
@@ -149,7 +149,7 @@ Use the shared Gateway wildcard (from the desktop CA) for HTTPS routes and SPIRE
 
 ## Operations and Sources
 
-OpenBao's leaf profile and issuer authentication live in [`terraform/openbao/pki.tf`](../terraform/openbao/pki.tf) and [`kubernetes-auth.tf`](../terraform/openbao/kubernetes-auth.tf). The shared ClusterIssuer, the desktop Issuers and their RBAC grants live in [`openbao-issuers.yaml`](../infrastructure/openbao/server/openbao-issuers.yaml). The trust prompt's tasks live in the `opentofu` role's `tasks/desktop_trust.yml`. Hubble's chart issuer is configured in [`hubble-values.yaml`](../infrastructure/cilium/hubble/hubble-values.yaml).
+OpenBao's leaf profile and issuer authentication live in [`terraform/openbao/pki.tf`](../terraform/openbao/pki.tf) and [`kubernetes-auth.tf`](../terraform/openbao/kubernetes-auth.tf). The shared ClusterIssuer, the desktop Issuers and their RBAC grants live in [`openbao-issuers.yaml`](../infrastructure/openbao/server/openbao-issuers.yaml). The workstation's tasks live in the `workstation_trust` role. Hubble's chart issuer is configured in [`hubble-values.yaml`](../infrastructure/cilium/hubble/hubble-values.yaml).
 
 Apply profile changes through the OpenTofu provisioning path. cert-manager and SPIRE renew certificates automatically. After a profile change, confirm that required names still issue and consumers can connect.
 

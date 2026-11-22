@@ -484,11 +484,7 @@ Installs the collections that the `dragonbishop.cluster` `galaxy.yml` depends on
 
 ### Step 3: Secure OpenBao Credentials and Recovery Keys
 
-The bootstrap script prompts for an OpenTofu state-encryption passphrase, the Postgres superuser password, and whether to install the cluster's desktop and OpenBao CAs into the machine's trust store. The prompt (`opentofu_desktop_trust`) runs every bootstrap. Pressing Enter means yes.
-
-Answering yes copies both CAs from memory — the OpenTofu output `desktop_ca` and ConfigMap `openbao-ca-bundle` — into the system anchor directory as root, under the fixed names `data-science-cluster-desktop-ca.crt` and `data-science-cluster-openbao-ca.crt`, then refreshes the trust store. A re-bootstrap overwrites a stale anchor. Answering no removes both anchors, and `just uninstall` removes them too.
-
-Pass `-e opentofu_desktop_trust=yes` or `=no` to answer ahead of time; the full-playbook Molecule scenario passes yes. See [Access Policy](ACCESSPOLICY.md#workstation-trust) for CA ownership and trust profiles.
+The bootstrap script prompts for an OpenTofu state-encryption passphrase and the Postgres superuser password.
 
 At the end of provisioning, the script prints the generated seal key and any freshly initialized recovery keys and root token, including when a provisioning task fails.
 
@@ -500,6 +496,14 @@ OpenBao unseals itself from the static seal key in Secret `openbao-seal-key`. `j
 An Ansible `always` block reports the available generated credentials even when provisioning fails, and the play still exits with a failure status. Bootstrap keeps every credential off the local disk.
 
 For an existing installation, save the current seal key from Secret `openbao-seal-key` in your external store, along with the recovery keys and root token. Raft snapshots need their original seal key for recovery.
+
+### Step 4: Set Up the Workstation (optional)
+
+```bash
+just workstation-trust
+```
+
+The playbook trusts the cluster's desktop and OpenBao CAs in the system trust store, VS Code and Flatpak Firefox, and resolves the Gateway's hostnames, such as `grafana.<INTERNAL_DOMAIN>`, on this machine. Answer `no` at its prompt to remove the trust instead. See [Access Policy](ACCESSPOLICY.md#workstation-trust) for what it installs.
 
 ## Flux Dependency Graph
 

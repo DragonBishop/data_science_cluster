@@ -80,17 +80,21 @@
 │           ├── meta/runtime.yml
 │           ├── playbooks/
 │           │   ├── data_cluster.yml
-│           │   └── group_vars/
-│           │       └── all/
-│           │           ├── ansible.yml
-│           │           ├── certificates.yml    # one file per cluster-config category,
-│           │           ├── cpu_memory.yml      # routing the keys Ansible uses
-│           │           ├── networking.yml
-│           │           ├── replicas.yml
-│           │           ├── retention.yml
-│           │           ├── schedules.yml
-│           │           ├── storage.yml
-│           │           └── versions.yml
+│           │   ├── workstation_trust.yml
+│           │   ├── group_vars/
+│           │   │   └── all/
+│           │   │       ├── ansible.yml
+│           │   │       ├── certificates.yml    # one file per cluster-config category,
+│           │   │       ├── cpu_memory.yml      # routing the keys Ansible uses
+│           │   │       ├── networking.yml
+│           │   │       ├── replicas.yml
+│           │   │       ├── retention.yml
+│           │   │       ├── schedules.yml
+│           │   │       ├── storage.yml
+│           │   │       └── versions.yml
+│           │   └── tasks/
+│           │       ├── grafana_credentials.yml
+│           │       └── openbao_credentials.yml
 │           ├── README.md
 │           └── roles/
 │               ├── cert_manager/
@@ -100,7 +104,8 @@
 │               ├── openbao/
 │               ├── opentofu/
 │               ├── spire/
-│               └── trust_manager/
+│               ├── trust_manager/
+│               └── workstation_trust/
 ├── apps/
 │   ├── databases/                       # PostgreSQL and its backups, one Kustomization per subdirectory
 │   │   ├── cluster/                     # databases-cluster: the Cluster and what uses it
@@ -439,11 +444,23 @@
 
 ### Ansible
 
-* **`ansible/ansible_collections/dragonbishop/cluster/`**: The `dragonbishop.cluster` collection, laid out for Ansible Galaxy: the bootstrap playbook, its roles and their Molecule scenarios. The root `ansible.cfg` adds `ansible/` to the collections path.
-  * **`galaxy.yml`**: Collection metadata. Declares `cloud.terraform` as the Galaxy dependency and links `README.md`, `.ansible-lint`, `LICENSE` and `CHANGELOG.md` as collection-level files.
-  * **`playbooks/data_cluster.yml`**: The bootstrap playbook, run as `ansible-playbook dragonbishop.cluster.data_cluster` on the implicit localhost. Runs roles in order: `k3s` → `cilium` → `cert_manager` → `trust_manager` → `openbao` → `opentofu` → `spire` → `flux`. Each role installs a release before Flux exists; Flux adopts it on first reconcile. Every run ends with a `core-test` PipelineRun and fails when the run fails. On a pull request branch, Ansible waits for the Trigger's `core-test-<sha>` run when it started first.
+* **`ansible/ansible_collections/dragonbishop/cluster/`**: The `dragonbishop.cluster` collection, laid out for Ansible Galaxy: the bootstrap and workstation playbooks, their roles and the Molecule scenarios. The root `ansible.cfg` adds `ansible/` to the collections path.
+  * **`galaxy.yml`**: Collection metadata. Declares `ansible.posix`, `kubernetes.core` and `cloud.terraform` as Galaxy dependencies and links `README.md`, `.ansible-lint`, `LICENSE` and `CHANGELOG.md` as collection-level files.
+  * **`playbooks/data_cluster.yml`**: The bootstrap playbook, run as `ansible-playbook dragonbishop.cluster.data_cluster` on the implicit localhost. Runs roles in order: `k3s` → `cilium` → `cert_manager` → `trust_manager` → `openbao` → `opentofu` → `spire` → `flux`. Each role installs a release before Flux exists; Flux adopts it on first reconcile. Every run ends with a `core-test` PipelineRun and fails when the run fails. The credentials print last, even after a failure. On a pull request branch, Ansible waits for the Trigger's `core-test-<sha>` run when it started first.
+  * **`playbooks/workstation_trust.yml`**: The optional workstation playbook (`just workstation-trust`). It runs the `workstation_trust` role.
+  * **`playbooks/tasks/`**: Task files the bootstrap playbook imports.
+    * **`openbao_credentials.yml`**: Prints a generated seal key, root token and recovery keys.
+    * **`grafana_credentials.yml`**: Prints Grafana's address and admin login from Secret `observability/grafana-admin`.
   * **`playbooks/group_vars/all/`**: Variables Ansible loads beside the playbook. One file per `infrastructure/cluster-config/` fragment (`certificates.yml`, `cpu_memory.yml`, `networking.yml`, `replicas.yml`, `retention.yml`, `schedules.yml`, `storage.yml`, `versions.yml`) lists the keys Ansible uses from it, lowercased. `ansible.yml` holds Ansible-only values and merges the fragments.
-  * **`roles/`**: The eight roles. Each role's `tasks/main.yml` imports named task files. Each role that installs a chart renders its values with `flux envsubst --strict` in `tasks/render.yml`. The `k3s` role's `tasks/registries.yml` (tagged `flux`) runs after Flux deploys Zot and configures k3s's containerd to mirror docker.io, ghcr.io, quay.io and registry.k8s.io through `zot.${INTERNAL_DOMAIN}`.
+  * **`roles/`**: The nine roles. Each role's `tasks/main.yml` imports named task files. Each role that installs a chart renders its values with `flux envsubst --strict` in `tasks/render.yml`.
+    * **`k3s/tasks/registries.yml`** (tagged `flux`): Runs after Flux deploys Zot. Configures k3s's containerd to mirror docker.io, ghcr.io, quay.io and registry.k8s.io through `zot.${INTERNAL_DOMAIN}`.
+    * **`k3s/tasks/inotify.yml`**: Raises the host's inotify limits, which k3s and its pods share.
+    * **`workstation_trust/`**: Run only by `workstation_trust.yml`.
+      * **`tasks/cas.yml`**: Reads the desktop CA from OpenBao and `openbao-local-ca` from ConfigMap `openbao-ca-bundle`.
+      * **`tasks/system_trust.yml`**: Installs or removes both CAs as system anchors.
+      * **`tasks/vscode_trust.yml`**: Installs or removes both CAs in the NSS database VS Code reads.
+      * **`tasks/firefox.yml`**: Writes or removes the Flatpak Firefox policy.
+      * **`tasks/gateway_hosts.yml`**: Waits for every Flux Kustomization, then points each HTTPRoute hostname at `GATEWAY_IP` in one `/etc/hosts` block.
   * **`extensions/molecule/`**: The Molecule scenarios. `config.yml` holds shared settings. `default/` creates and destroys the shared podman container. `molecule test --all --exclude full-playbook` runs the unit scenarios. `full-playbook/` runs the whole playbook for `e2e.yml`; its `verify.yml` checks Ansible variables against cluster-config, the PKI chain, cert-manager token grants, WAL archiving and Gateway routing.
 
 ### Apps

@@ -118,7 +118,7 @@ Verify all application schemas are present.
 >   https://<name>.cluster.internal/
 > ```
 
-Run it for any hostname with an HTTPRoute on the Gateway, such as Grafana's `grafana.<INTERNAL_DOMAIN>`. Verify that the page responds and the certificate chains to the desktop CA, an intermediate under `openbao-root-ca`. With the bootstrap's trust prompt answered yes, a browser opens it without a warning.
+Run it for any hostname with an HTTPRoute on the Gateway, such as Grafana's `grafana.<INTERNAL_DOMAIN>`. Verify that the page responds and the certificate chains to the desktop CA, an intermediate under `openbao-root-ca`. After `just workstation-trust`, a browser opens it without a warning.
 
 For Gateway publication, inspect the approved namespaces and database route:
 
@@ -150,7 +150,7 @@ Verify network visibility with the Hubble CLI:
 
 ## Workstation UIs
 
-With the bootstrap's trust prompt answered yes, each of these opens without a certificate warning in a browser and in VS Code's Simple Browser:
+After `just workstation-trust`, each of these opens without a certificate warning in a browser and in VS Code's Simple Browser:
 
 | UI | Command | Expected result |
 | --- | --- | --- |
