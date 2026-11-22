@@ -141,6 +141,25 @@ hibernate_databases() {
     return "$exit_code"
 }
 
+# Pods that outlive a reboot restart with empty CSI mounts
+drain_nodes() {
+    local node_names node
+    if ! node_names=$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); then
+        halt "Could not list the nodes to drain. Pods that survive the reboot start without their credentials."
+        return 0
+    fi
+
+    for node in $node_names; do
+        echo "🚧 Draining $node..."
+        if ! kubectl drain "$node" --ignore-daemonsets --delete-emptydir-data --force --timeout=180s; then
+            halt "$node did not drain within 180s. Pods that survive the reboot start without their credentials.
+   Check: kubectl get pods -A --field-selector spec.nodeName=$node"
+            return 0
+        fi
+    done
+    echo ""
+}
+
 stop_k3s() {
     echo "🔻 Stopping systemd k3s.service..."
     echo "   Use start-cluster.sh to restart cluster."
@@ -163,6 +182,7 @@ main() {
     exit_if_k3s_not_running
 
     hibernate_databases
+    drain_nodes
     stop_k3s
 }
 

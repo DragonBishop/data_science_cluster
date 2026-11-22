@@ -68,6 +68,20 @@ wait_for_node_ready() {
     echo ""
 }
 
+# Undoes stop-cluster.sh's drain; pods stay Pending until then
+uncordon_nodes() {
+    local node_names node
+    node_names=$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}')
+    for node in $node_names; do
+        if ! kubectl uncordon "$node"; then
+            echo "❌ ERROR: Could not uncordon $node. Its pods stay Pending."
+            echo "   Run manually: kubectl uncordon $node"
+            exit 1
+        fi
+    done
+    echo ""
+}
+
 # Waits until bao answers inside openbao-0; the pod phase is stale right after boot
 wait_for_openbao_process() {
     echo "⏳ Waiting for OpenBao to respond in openbao-0..."
@@ -190,6 +204,7 @@ main() {
     start_k3s_service
     wait_for_api
     wait_for_node_ready
+    uncordon_nodes
 
     check_openbao || had_warnings=true
     echo ""
