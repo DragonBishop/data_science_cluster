@@ -162,7 +162,7 @@ The Gateway API's kinds:
 | CloudNativePG (CNPG) | `0.29.2` <!-- renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts --> | Operator managing the PostgreSQL/PostGIS lifecycle: provisioning, reconciliation, hibernation, backup orchestration. |
 | PostgreSQL / PostGIS image | `19.0-3.7.0-system-trixie` <!-- renovate: datasource=docker depName=ghcr.io/cloudnative-pg/postgis --> | PostgreSQL/PostGIS operand image. |
 | SeaweedFS | `4.54.0` <!-- renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm --> | In-cluster S3-compatible object store with TLS issued by `openbao-pki-issuer`. CNPG streams WAL and writes scheduled base backups to it over HTTPS (`https://seaweedfs-s3.seaweedfs.svc:9000`). Its IAM API lets OpenBao create and delete Barman's key pairs. |
-| Zot | `0.1.135` <!-- renovate: datasource=helm depName=zot registryUrl=https://zotregistry.dev/helm-charts --> | OCI registry in `zot`. Stores images in the SeaweedFS bucket `zot` and serves them at `zot.${INTERNAL_DOMAIN}` through the shared Gateway. Acts as a pull-through cache for ghcr.io, docker.io, quay.io and registry.k8s.io. k3s's containerd resolves image pulls for those four registries through it. The `tekton-builder` user may push to `dev/**`. S3 credentials and the push htpasswd come from the CSI driver; a `credential-watch` sidecar restarts the pod when the S3 key pair rotates. |
+| Zot | `0.1.135` <!-- renovate: datasource=helm depName=zot registryUrl=https://zotregistry.dev/helm-charts --> | OCI registry in `zot`. Stores images in the SeaweedFS bucket `zot` and serves them at `zot.${INTERNAL_DOMAIN}` through the shared Gateway. Acts as a pull-through cache for ghcr.io, docker.io, quay.io and registry.k8s.io. k3s's containerd resolves image pulls for those four registries through it. The `tekton-builder` user may push to `dev/**`. Its web UI browses repositories and tags at the same address (`just ui zot`). S3 credentials and the push htpasswd come from the CSI driver; a `credential-watch` sidecar restarts the pod when the S3 key pair rotates. |
 
 ### Testing
 
@@ -203,6 +203,7 @@ Hubble UI and the Tekton Dashboard serve plain HTTP without authentication, so e
 | Hubble UI | `v0.13.6` (via Cilium) | `https://localhost:12000` (`just ui hubble`) | Service map and flow browser, through its `localhost-tls` container. |
 | OpenBao UI | Same as OpenBao | `https://localhost:8210/ui` (`just ui openbao`) | OpenBao's own UI through its existing loopback redirect, serving its own certificate from the name-constrained `openbao-local-ca`. OpenBao has its own login. |
 | Tekton Dashboard | `v0.74.0` | `https://localhost:12001` (`just ui tekton`) | Read-only view of Pipelines, runs and their logs, through its `localhost-tls` container. |
+| Zot UI | Same as Zot | `https://zot.cluster.internal` (`just ui zot`) | Zot's own UI for browsing repositories, tags and manifests, through the shared Gateway with its certificate from the desktop CA. Reading needs no login. |
 
 ---
 

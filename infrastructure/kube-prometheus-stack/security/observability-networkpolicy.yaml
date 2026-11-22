@@ -155,6 +155,15 @@ spec:
         - ports:
             - port: "3000"
               protocol: TCP
+  egress:
+    # Grafana plugin catalog and downloads
+    - toFQDNs:
+        - matchName: grafana.com
+        - matchName: storage.googleapis.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy

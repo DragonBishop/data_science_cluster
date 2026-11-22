@@ -158,6 +158,7 @@ After `just workstation-trust`, each of these opens without a certificate warnin
 | Tekton Dashboard | `just ui tekton` | PipelineRuns in `tekton-pipelines`, read-only |
 | OpenBao UI | `just ui openbao` | OpenBao's sign-in page |
 | Grafana | `https://grafana.<INTERNAL_DOMAIN>` | Grafana's sign-in page |
+| Zot UI | `just ui zot` | The repository list, browsable without a login |
 
 The installed anchors carry only their permitted names:
 

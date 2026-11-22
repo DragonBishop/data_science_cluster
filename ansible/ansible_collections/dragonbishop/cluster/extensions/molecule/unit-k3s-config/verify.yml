@@ -10,6 +10,13 @@
     - name: Parse the k3s config
       ansible.builtin.set_fact:
         k3s_config: "{{ k3s_config_file.content | b64decode | from_yaml }}"
+    - name: Read the kubelet config
+      ansible.builtin.slurp:
+        src: /etc/rancher/k3s/kubelet.conf
+      register: kubelet_config_file
+    - name: Parse the kubelet config
+      ansible.builtin.set_fact:
+        kubelet_config: "{{ kubelet_config_file.content | b64decode | from_yaml }}"
     - name: Check the kubeconfig directory
       ansible.builtin.stat:
         path: "{{ kubeconfig_path | dirname }}"
@@ -49,6 +56,17 @@
         that:
           - k3s_config['secrets-encryption']
         fail_msg: Encryption at rest is not enabled.
+    - name: It should stop pods gracefully when the host shuts down
+      ansible.builtin.assert:
+        that:
+          - "'config=/etc/rancher/k3s/kubelet.conf' in k3s_config['kubelet-arg']"
+          - kubelet_config.shutdownGracePeriod == '30s'
+        fail_msg: The kubelet does not stop pods before the host shuts down.
+    - name: It should garbage-collect terminated pods
+      ansible.builtin.assert:
+        that:
+          - "'terminated-pod-gc-threshold=50' in k3s_config['kube-controller-manager-arg']"
+        fail_msg: Terminated pods pile up until the default threshold of 12500.
     - name: It should write the kubeconfig to the designated path.
       ansible.builtin.assert:
         that:

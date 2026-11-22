@@ -30,6 +30,9 @@ loki:
         ca_file: /etc/openbao-root-ca/ca.crt
   limits_config:
     retention_period: ${LOKI_RETENTION}
+  # Serves Logs Drilldown's Patterns tab
+  pattern_ingester:
+    enabled: true
   compactor:
     retention_enabled: true
     delete_request_store: s3

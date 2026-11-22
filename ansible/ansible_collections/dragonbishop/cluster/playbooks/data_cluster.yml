@@ -86,9 +86,9 @@
             name: dragonbishop.cluster.flux
             tasks_from: core_test
             apply:
-              tags: always
+              tags: [flux]
           when: not flux_ci_managed_tests
-          tags: always
+          tags: [flux]
       # Prints last, even when provisioning fails
       always:
         - name: Report OpenBao credentials

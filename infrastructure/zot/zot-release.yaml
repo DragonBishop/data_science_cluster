@@ -95,6 +95,8 @@ spec:
           },
           "extensions": {
             "metrics": {"enable": true},
+            "search": {"enable": true},
+            "ui": {"enable": true},
             "sync": {
               "enable": true,
               "downloadDir": "/sync",
