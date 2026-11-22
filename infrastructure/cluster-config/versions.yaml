@@ -16,7 +16,7 @@ data:
   # renovate: datasource=helm depName=cloudnative-pg registryUrl=https://cloudnative-pg.github.io/charts
   CNPG_VERSION: "0.29.2"
   # renovate: datasource=docker depName=ghcr.io/fluxcd/flux-cli
-  FLUX_CLI_VERSION: "v2.10.0"
+  FLUX_CLI_VERSION: "v2.10.1"
   # renovate: datasource=docker depName=ghostunnel/ghostunnel
   GHOSTUNNEL_VERSION: "v1.11.5"
   # renovate: datasource=github-releases depName=k3s-io/k3s
