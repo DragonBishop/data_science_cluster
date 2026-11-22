@@ -1,3 +1,18 @@
+## [3.1.0](https://github.com/DragonBishop/data_science_cluster/compare/v3.0.0...v3.1.0) - 2026-11-22
+
+### 🚀 Features
+
+- *(ansible)* Add the workstation_trust playbook ([784b6e4](https://github.com/DragonBishop/data_science_cluster/commit/784b6e4563e22d1350e5673977535094b536789c))
+
+### 🐛 Bug Fixes
+
+- *(ansible)* Print credentials at the end of every run ([ee5eeb4](https://github.com/DragonBishop/data_science_cluster/commit/ee5eeb47910a01f10ba7f7a034ba64b13f2d0f2a))
+- *(k3s)* Raise the host's inotify limits ([5d48a80](https://github.com/DragonBishop/data_science_cluster/commit/5d48a8063b4283ef89f0963df706f61a0f19cab8))
+
+### 📚 Documentation
+
+- Describe the workstation_trust playbook, inotify limits and just ui grafana ([2364a1a](https://github.com/DragonBishop/data_science_cluster/commit/2364a1aaca402b1db0ba88bf2291ead95555026c))
+
 ## [3.0.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.6.0...v3.0.0) - 2026-11-22
 
 ### 🚀 Features
