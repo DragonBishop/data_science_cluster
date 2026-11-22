@@ -65,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           # renovate: datasource=github-releases depName=tektoncd/cli
-          TKN_VERSION: v0.46.2
+          TKN_VERSION: v0.47.0
         run: |
           tkn_archive="tkn_${TKN_VERSION#v}_Linux_x86_64.tar.gz"
           tkn_dir="$(mktemp -d "$RUNNER_TEMP/tkn.XXXXXX")"
