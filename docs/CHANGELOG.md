@@ -1,3 +1,99 @@
+## [3.0.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.6.0...v3.0.0) - 2026-11-22
+
+### 🚀 Features
+
+- *(tekton)* Add the fetch-source and flux-ready Tasks ([5060506](https://github.com/DragonBishop/data_science_cluster/commit/506050601bd412efeb584491e4884a2d0ec37c4d))
+- *(tekton)* Add the OpenBao and PostgreSQL SVID login Tasks ([f0b9ada](https://github.com/DragonBishop/data_science_cluster/commit/f0b9ada6e951d978047c76a1042258f1805021bd))
+- *(tekton)* Run the new Tasks in core-test ([d564224](https://github.com/DragonBishop/data_science_cluster/commit/d564224a4fdeb63003ecf0ef736565c7d9993bfa))
+- *(tekton)* Add the postgres-database-applied and workloads-ready Tasks ([4930872](https://github.com/DragonBishop/data_science_cluster/commit/4930872fc0686165e1c4a0e25ed7adbb2ceea342))
+- *(tekton)* Check that OpenBao and PostgreSQL refuse logins without a client certificate ([932c431](https://github.com/DragonBishop/data_science_cluster/commit/932c4314c934ce8475e3fe829bd331eaf275e65e))
+- *(tekton)* Check client-certificate refusals and network-policy denials in core-test ([33c6652](https://github.com/DragonBishop/data_science_cluster/commit/33c6652f8fe4984f20d193f23bd07904f5c59f89))
+- *(tekton)* Log in as the data-science client, add code-quality, guard run ServiceAccounts ([5ff6b99](https://github.com/DragonBishop/data_science_cluster/commit/5ff6b9912fecd1e946f5800a017b96f43eb1a0f3))
+- *(tekton)* Run core-test and code-quality while Flux follows a pull request ([6dcb355](https://github.com/DragonBishop/data_science_cluster/commit/6dcb355a8820c7fa18f0f3bc5a69ee1d56eb9774))
+- *(ansible)* End every playbook run with core-test ([f59f28c](https://github.com/DragonBishop/data_science_cluster/commit/f59f28c8f537900864e76009be853e25676f2707))
+- *(pki)* Add a constrained desktop CA and namespaced issuers ([72675dd](https://github.com/DragonBishop/data_science_cluster/commit/72675dd3fe38fcc9d5db040505fe57be46510caa))
+- *(gateway)* Issue edge certificates from the desktop CA ([50fb8b9](https://github.com/DragonBishop/data_science_cluster/commit/50fb8b97ce941507174fd61fa73901f3844136c9))
+- *(bootstrap)* Prompt to trust the desktop and OpenBao CAs ([594f8cd](https://github.com/DragonBishop/data_science_cluster/commit/594f8cd762926424c83ef04402085c56795c02c5))
+- *(hubble)* [**breaking**] Serve the UI over HTTPS on localhost:12000 ([9f5006e](https://github.com/DragonBishop/data_science_cluster/commit/9f5006e72f65ef117a7f1fcdee186ce3bbb1ff87))
+- *(tekton)* Serve the Dashboard over HTTPS on localhost:12001 ([4012638](https://github.com/DragonBishop/data_science_cluster/commit/401263896efcd703ef456c94f54d5c40cafc7dd6))
+- *(just)* Add ui and core-test recipes ([e9733a7](https://github.com/DragonBishop/data_science_cluster/commit/e9733a7d0c2393b716c9b60d960d209ace7eaa84))
+- *(metrics)* Add Prometheus, Alertmanager, and Grafana ([54b4420](https://github.com/DragonBishop/data_science_cluster/commit/54b44209b1168bbec58263a00c9419f3ecab7efd))
+- *(metrics)* Serve Cilium and Hubble metrics over TLS ([4f00afa](https://github.com/DragonBishop/data_science_cluster/commit/4f00afab3e643eb1908eb13963181bb9c6a30a99))
+- *(metrics)* Serve OpenBao metrics on a dedicated TLS listener ([cc6726e](https://github.com/DragonBishop/data_science_cluster/commit/cc6726ede571e801a9849a69385157a94926fda3))
+- *(metrics)* Serve SPIRE metrics over TLS ([77c99e4](https://github.com/DragonBishop/data_science_cluster/commit/77c99e4bacd9c8648e22985dcbc736ccd8768635))
+- *(metrics)* Serve PostgreSQL and CloudNativePG metrics over TLS ([8adae5b](https://github.com/DragonBishop/data_science_cluster/commit/8adae5bcb8ba4919e638120a5fb81afa78af0d51))
+- *(metrics)* Secure Flux, trust-manager, SeaweedFS, and CSI metrics ([50dda5e](https://github.com/DragonBishop/data_science_cluster/commit/50dda5ef0b0ea239db0d2d825f1ac8ec55f47182))
+- *(metrics)* Serve cert-manager metrics over TLS ([ba50ae7](https://github.com/DragonBishop/data_science_cluster/commit/ba50ae745f88d92139b7b6995de1556387a4a3e5))
+- *(metrics)* Export Tekton telemetry to Prometheus over TLS ([af215b0](https://github.com/DragonBishop/data_science_cluster/commit/af215b02b12297eee6db22670a1cbc6bd1870775))
+- *(metrics)* Alert on stale backups and credential rotation failures ([5881f03](https://github.com/DragonBishop/data_science_cluster/commit/5881f039ab5b7ff160013647ce66c7aa5d3fadaa))
+- *(ops)* Show firing alerts and failed scrapes in just status ([3754e28](https://github.com/DragonBishop/data_science_cluster/commit/3754e288674a686be6bb8cfe905e02ded2780b9a))
+- *(storage)* Provision Loki’s SeaweedFS bucket and credentials ([a584a5c](https://github.com/DragonBishop/data_science_cluster/commit/a584a5c1006cfc7bd2f775dc46c9bca9032c6594))
+- *(observability)* Deploy Loki ([21b4097](https://github.com/DragonBishop/data_science_cluster/commit/21b4097880f16b1a0f887a299e425b650fbc86d8))
+- *(observability)* Collect Kubernetes logs with Alloy ([a7f4a82](https://github.com/DragonBishop/data_science_cluster/commit/a7f4a82c8b27d8154eb2c205e7245cfc5ae16d12))
+- *(observability)* Add Loki as a Grafana datasource ([0ba6723](https://github.com/DragonBishop/data_science_cluster/commit/0ba67231821654c075c54c2be07d69940b0b58b9))
+- *(observability)* Add Tetragon runtime monitoring ([3bfe08a](https://github.com/DragonBishop/data_science_cluster/commit/3bfe08af049ccbcbaf9f9b369fadc3109cde7a37))
+- *(uninstall)* Allow selective removal of persistent data ([c042e25](https://github.com/DragonBishop/data_science_cluster/commit/c042e255ca9bab09505a87cc329b125af8e73e64))
+- *(ops)* Add OpenBao shell login and simplify cluster recipes ([a39692b](https://github.com/DragonBishop/data_science_cluster/commit/a39692bc8e79b1b42ffc319a9ccb1a550f7f22af))
+- *(openbao)* Provision Zot S3 access and push credentials ([54461a9](https://github.com/DragonBishop/data_science_cluster/commit/54461a9cd08209cec1c3ecc347cafbe5cdedb0c8))
+- *(zot)* Add cluster-config vars and zot namespace ([f37dec9](https://github.com/DragonBishop/data_science_cluster/commit/f37dec9671797cb20b1e62d5c5118aae4e84081d))
+- *(zot)* Add Zot ServiceAccount, CSI credentials, network policy and storage prereqs ([470f427](https://github.com/DragonBishop/data_science_cluster/commit/470f4275ca1e123d5d791f1ee4c711aab7fc0450))
+- *(zot)* Add HelmRelease, TLS certificate and Gateway route ([7eac1d1](https://github.com/DragonBishop/data_science_cluster/commit/7eac1d1ae5b5bf9ab69e11df1d3a1b25f3ee4219))
+- *(zot)* Add Flux Kustomization and uninstall cleanup ([9cca586](https://github.com/DragonBishop/data_science_cluster/commit/9cca5864678c0849f78ff7c648808470268c727b))
+- *(k3s)* Configure Zot as the cluster mirror registry ([0ee5f93](https://github.com/DragonBishop/data_science_cluster/commit/0ee5f935ec6fb78d8fe973926273b8311769e645))
+
+### 🐛 Bug Fixes
+
+- *(tekton)* Make the spire, login and fetch-source Tasks fail correctly ([8ae7f5e](https://github.com/DragonBishop/data_science_cluster/commit/8ae7f5e5f81b6a9de2a3fd58bff493b984731bc5))
+- Raise the SPIRE agent memory limit and Hubble flow buffer, and admit instance status checks ([0fcafd1](https://github.com/DragonBishop/data_science_cluster/commit/0fcafd149918f27daf32fb6252f98ad1b34aba22))
+- *(flux)* Correct drift in every HelmRelease ([a23d4e1](https://github.com/DragonBishop/data_science_cluster/commit/a23d4e12a336f0cde876e62178184462250fc423))
+- *(databases)* Reject PostgreSQL connections without TLS ([78abd07](https://github.com/DragonBishop/data_science_cluster/commit/78abd078c1223e61cc08cfcc2ad584bb3a33ad71))
+- Harden bootstrap workloads and complete TektonConfig ([2e50d09](https://github.com/DragonBishop/data_science_cluster/commit/2e50d0997ba6a63a9d8b6abf42415523951c2913))
+- *(start-cluster)* Point a missing Cilium at just bootstrap --tags cilium ([04f7bf0](https://github.com/DragonBishop/data_science_cluster/commit/04f7bf06096c49c62b60557e0dfe41e6bd64b9cb))
+- *(preflight)* Match INSTALLATION.md and check the Flux CLI against gotk-components ([038e3d6](https://github.com/DragonBishop/data_science_cluster/commit/038e3d6db787267c23620105672edecf937133f9))
+- *(openbao)* Constrain the local CA to OpenBao server names ([2e662ca](https://github.com/DragonBishop/data_science_cluster/commit/2e662ca24c2b706ff7a7556628b42d3706908334))
+- *(pki)* Allow Hubble UI client certificates ([8ecb186](https://github.com/DragonBishop/data_science_cluster/commit/8ecb18608263460ba490fb5feec2685887ced722))
+- *(ci)* Run Tekton integration tests after cluster bootstrap ([442af4f](https://github.com/DragonBishop/data_science_cluster/commit/442af4f7618ee8d8401c6086ba21f52d5c3a8ef0))
+
+### 📚 Documentation
+
+- *(openbao)* Remove the retired GPG recovery-key backup ([b63758d](https://github.com/DragonBishop/data_science_cluster/commit/b63758d14159fe3e07910a4b3f34ac6dff42b302))
+- Describe core-test's checks, Pipeline access and PostgreSQL's TLS requirement ([63d90ff](https://github.com/DragonBishop/data_science_cluster/commit/63d90ff74f03af9f5a52fd1c7b86db3e2cef672f))
+- Describe pull-request runs, code-quality, client-login and the Ansible core-test step ([9accfdd](https://github.com/DragonBishop/data_science_cluster/commit/9accfdd38da6edab12e4a5152fb8d942e59093e1))
+- *(readme)* Rewrite architecture overview for current stack ([b4dd975](https://github.com/DragonBishop/data_science_cluster/commit/b4dd9758fcf496a6cf3133af00296c611e4ff71e))
+- *(installation)* Update for Zot, Alloy, Tetragon and desktop trust prompt ([cc5408e](https://github.com/DragonBishop/data_science_cluster/commit/cc5408e414c19cf0fb57c9662d8901f424bc4011))
+- Update operations, troubleshooting, verification and network policy ([a053bf0](https://github.com/DragonBishop/data_science_cluster/commit/a053bf04edff8e4d0d39939971a0478ca215d62b))
+- *(accesspolicy)* Conciseness pass and backups accuracy fix ([24e4ff5](https://github.com/DragonBishop/data_science_cluster/commit/24e4ff56070f79b0e303bf8983c5397b100f61fb))
+- *(repository-structure)* Add subsections and trim file descriptions ([d39f5b9](https://github.com/DragonBishop/data_science_cluster/commit/d39f5b9806966016ebca5068628ddebba1cf920d))
+
+### ♻️ Refactor
+
+- *(tekton)* Read cluster state through the view ClusterRole ([832c14c](https://github.com/DragonBishop/data_science_cluster/commit/832c14c4f0928216308afe7d88f5290a819c0b6c))
+- Remove core-test's SPIFFE login identity ([6f582f8](https://github.com/DragonBishop/data_science_cluster/commit/6f582f87d698522c951b23f07c41a744d5ebdd55))
+- [**breaking**] Split Cilium, the Gateway, OpenBao, SPIRE and Tekton into per-role folders and Kustomizations ([c71ceaf](https://github.com/DragonBishop/data_science_cluster/commit/c71ceafa1d1b35b9620225ac0574225329703eb3))
+- *(flux)* Remove healthChecks from Kustomizations that wait ([270f94d](https://github.com/DragonBishop/data_science_cluster/commit/270f94df963d57dd7deb623a6e33bc69f631a41a))
+- *(openbao)* [**breaking**] Rename the database role postgres-app-role to ds-app-role ([b160ebb](https://github.com/DragonBishop/data_science_cluster/commit/b160ebb52c437568afbdb51e2671c6eef4a3c483))
+
+### 🧪 Testing
+
+- Cache rendered manifests and parametrize the policy facts ([81a9c9d](https://github.com/DragonBishop/data_science_cluster/commit/81a9c9d26b0b80cfd3c0384d57a13f5f7b4d62db))
+- *(metrics)* Verify Prometheus scrapes and Tekton telemetry ([3351347](https://github.com/DragonBishop/data_science_cluster/commit/33513473284a9bb8e343040fd8b295d3050499d2))
+- *(gateway)* [**breaking**] Verify Grafana HTTPS routing in core-test ([60ffab7](https://github.com/DragonBishop/data_science_cluster/commit/60ffab777995f258f063c03964a3beb439abd6a9))
+- *(observability)* Verify log delivery through Loki ([fee6a21](https://github.com/DragonBishop/data_science_cluster/commit/fee6a217ee04d96226778111e8b257c7a0d586d8))
+- Drop redundant manifest and release checks ([890fa70](https://github.com/DragonBishop/data_science_cluster/commit/890fa707ffa571471df02deec97007df168f8815))
+- *(core-test)* Add Zot integration task ([5763099](https://github.com/DragonBishop/data_science_cluster/commit/576309929581e287905d9ec81def80bc069562d8))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(postgres)* Remove the Tekton Results database and role tombstones ([e273645](https://github.com/DragonBishop/data_science_cluster/commit/e27364578db638631057b3bb4788817a50617400))
+- Drop persisted checkout credentials and scope the release token ([d1b0924](https://github.com/DragonBishop/data_science_cluster/commit/d1b09248041811a75f8beae2a0a867da11a9e08a))
+- Remove the coverage tooling and the unused SPIRE agent pin ([53d6ee0](https://github.com/DragonBishop/data_science_cluster/commit/53d6ee0ddf709bdb94347d3ecfc86329979f967f))
+- Move standalone checks from Tekton to GitHub Actions ([9e12f8e](https://github.com/DragonBishop/data_science_cluster/commit/9e12f8e4cce79d55b09142b48495a39d119e08d1))
+- Run Tekton checks after cluster bootstrap ([a326dcc](https://github.com/DragonBishop/data_science_cluster/commit/a326dcc660a0fd9148d9c72e22be11c37cfd8109))
+- *(renovate)* Track workflow and cluster pins ([54f3010](https://github.com/DragonBishop/data_science_cluster/commit/54f3010a5626f6306b87dce52db4b4c4dc4429d4))
+- Clarify OpenBao and cluster config comments ([098d652](https://github.com/DragonBishop/data_science_cluster/commit/098d6525a70cfcb4b21dec3f2e4a379a964beb7b))
+- *(postgres)* Remove the legacy core_test role cleanup ([63bd1b4](https://github.com/DragonBishop/data_science_cluster/commit/63bd1b4b1f1d1932c99cd6e29027d2b86f06c4cf))
+- Update copier template version to v2.3.1 ([f2dc8c1](https://github.com/DragonBishop/data_science_cluster/commit/f2dc8c121ff88f93f024d96fdcf6bc6a53daaa96))
+
 ## [2.6.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.5.0...v2.6.0) - 2026-11-14
 
 ### 🚀 Features
