@@ -52,7 +52,7 @@ Start and stop the cluster each work session, check its health, and inspect or r
 | `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch. Runs `k3s-uninstall.sh` and clears `.local/openbao`, orphaned `terraform/openbao` state, Cilium's persistent host files, the Gateway hostnames in `/etc/hosts`, the inotify limits and the cluster's CAs in the system trust store, VS Code and Firefox. Reboot before the next `just bootstrap` |
 | `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting. Fuzzy-selects a pod from all namespaces and describes it |
 | `just hubble` (runs `hubble status`) / `just hubble observe --follow` | Run the Hubble CLI inside the Cilium agent | Hubble status, or real-time network and security flow inspection |
-| `just ui <hubble\|tekton\|openbao\|grafana>` | Open a cluster UI in the browser | Hubble UI (`https://localhost:12000`), the Tekton Dashboard (`https://localhost:12001`), OpenBao's UI (`https://localhost:8210/ui/`) or Grafana (`https://grafana.<INTERNAL_DOMAIN>`). In VS Code, run "Simple Browser: Show" with the printed URL |
+| `just ui <hubble\|tekton\|openbao\|grafana\|zot>` | Open a cluster UI in the browser | Hubble UI (`https://localhost:12000`), the Tekton Dashboard (`https://localhost:12001`), OpenBao's UI (`https://localhost:8210/ui/`), Grafana (`https://grafana.<INTERNAL_DOMAIN>`) or Zot's UI (`https://zot.<INTERNAL_DOMAIN>`). In VS Code, run "Simple Browser: Show" with the printed URL |
 | `just bao-shell` or `just bao-shell --login` | Open an interactive OpenBao shell | Run `bao` inside `openbao-0`. Use `--login` to authenticate before opening the shell |
 
 ### Request a temporary OpenBao login

@@ -79,17 +79,18 @@ fuzzypods:
 hubble *ARGS='status':
   kubectl exec -n kube-system ds/cilium -c cilium-agent -- hubble "$@"
 
-# Open hubble, tekton, openbao or grafana and print its URL
+# Open hubble, tekton, openbao, grafana or zot and print its URL
 ui NAME:
   #!/usr/bin/env bash
   set -euo pipefail
-  # Ports match the localhost redirect policies; Grafana goes through the Gateway
+  # Ports match the localhost redirect policies; Grafana and Zot go through the Gateway
   case "{{NAME}}" in
     hubble) url="https://localhost:12000/" ;;
     tekton) url="https://localhost:12001/" ;;
     openbao) url="https://localhost:8210/ui/" ;;
     grafana) url="https://grafana.$(kubectl get configmap cluster-config -n flux-system -o jsonpath='{.data.INTERNAL_DOMAIN}')/" ;;
-    *) echo "Unknown UI {{NAME}}: use hubble, tekton, openbao or grafana." >&2; exit 2 ;;
+    zot) url="https://zot.$(kubectl get configmap cluster-config -n flux-system -o jsonpath='{.data.INTERNAL_DOMAIN}')/" ;;
+    *) echo "Unknown UI {{NAME}}: use hubble, tekton, openbao, grafana or zot." >&2; exit 2 ;;
   esac
   echo "$url"
   if command -v xdg-open >/dev/null; then
