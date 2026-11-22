@@ -89,6 +89,10 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
     2. **The CloudNativePG (CNPG) operator is down:** The shutdown command was sent while the operator was stopped. The stop script usually catches this first and halts with a specific warning.
     3. **The cluster is unhealthy:** A cluster hibernates from a healthy state. A pod in CrashLoop or mid-boot blocks it. Check with `kubectl cnpg status postgres-cluster -n databases`.
 
+* **Every pod stays Pending after k3s starts**
+  * **What's happening:** `stop-cluster.sh` drained the node, and k3s was started with `systemctl start k3s` instead of `start-cluster.sh`, which uncordons it. `kubectl get nodes` shows `Ready,SchedulingDisabled`.
+  * **How to fix it:** Run `kubectl uncordon monoco`, or run `start-cluster.sh`.
+
 * **Port 6443 is still bound/in-use after running `stop-cluster.sh`**
   * **What's happening:** The API server stopped, but containerd shims are still running.
   * **How to fix it:** Run `sudo k3s-killall.sh` by hand. It cleans up leftover processes and unmounts directories.

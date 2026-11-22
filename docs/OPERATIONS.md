@@ -45,10 +45,10 @@ Start and stop the cluster each work session, check its health, and inspect or r
 
 | Command | Operation | When |
 | --- | --- | --- |
-| `just start` | Start the cluster | Each work session. Starts k3s, checks that OpenBao unsealed itself, wakes `postgres-cluster` from hibernation, resumes its scheduled backups, and checks the kubectl and cnpg plugin versions |
+| `just start` | Start the cluster | Each work session. Starts k3s, uncordons the node so the pods `just stop` drained are replaced, checks that OpenBao unsealed itself, wakes `postgres-cluster` from hibernation, resumes its scheduled backups, and checks the kubectl and cnpg plugin versions |
 | `just status` | Summarize cluster health | Any time. Lists Flux Kustomizations that are not Ready, firing alerts from Alertmanager, Prometheus scrape targets that are down, and `kubectl cnpg status` for the database. Reads Alertmanager and Prometheus through the Kubernetes API server's service proxy and uses `jq` for those summaries |
 | `just core-test` | Run the core integration test | After a change, or when `just status` shows a problem. Starts a `core-test` PipelineRun at the revision Flux has applied, follows its logs with `tkn`, and fails when the run fails |
-| `just stop` (`just stop --force` stops k3s even when hibernation isn't confirmed) | Stop the cluster | Each work session. Gracefully hibernates CNPG PostgreSQL before shutting down k3s |
+| `just stop` (`just stop --force` stops k3s even when hibernation isn't confirmed) | Stop the cluster | Each work session. Gracefully hibernates CNPG PostgreSQL, drains the node, then shuts down k3s |
 | `just uninstall` | Uninstall k3s and clear stale local state | Reinstalling from scratch. Runs `k3s-uninstall.sh` and clears `.local/openbao`, orphaned `terraform/openbao` state, Cilium's persistent host files, the Gateway hostnames in `/etc/hosts`, the inotify limits and the cluster's CAs in the system trust store, VS Code and Firefox. Reboot before the next `just bootstrap` |
 | `just fuzzypods` | Interactively inspect a pod | Ad hoc troubleshooting. Fuzzy-selects a pod from all namespaces and describes it |
 | `just hubble` (runs `hubble status`) / `just hubble observe --follow` | Run the Hubble CLI inside the Cilium agent | Hubble status, or real-time network and security flow inspection |
