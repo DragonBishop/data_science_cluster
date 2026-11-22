@@ -17,6 +17,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Ansible playbook fails with missing collection errors**
   * **What's happening:** The Galaxy collection `cloud.terraform` is missing. It sits outside the `ansible` package and installs separately, as a dependency in the `dragonbishop.cluster` `galaxy.yml`.
+
   * **How to fix it:** Install the collection's Galaxy dependencies:
 
     ```bash
@@ -41,6 +42,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **OpenTofu role fails to apply OpenBao configuration**
   * **What's happening:** OpenBao is sealed, its local redirect on 127.0.0.1:8210 is missing, or OpenTofu state encryption passphrase was mistyped.
+
   * **How to fix it:** Verify the `openbao-0` pod is Running and unsealed (`kubectl exec -n openbao openbao-0 -- bao status`). If it's sealed, see "OpenBao stays sealed after a restart" below. Run OpenTofu manually to inspect verbose output:
 
     ```bash
@@ -50,6 +52,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **OpenTofu role fails with `Expecting value: line 2 column 1 (char 1)`**
   * **What's happening:** This is a Python `JSONDecodeError` from inside the `cloud.terraform` Ansible module, not a Terraform error. `tofu version -json`, the first command the module runs, prints a "CLI configuration file does not exist" warning to stdout ahead of the actual JSON whenever `TF_CLI_CONFIG_FILE` is unset and `~/.config/terraform/terraformrc` is missing. The module passes that combined output straight to `json.loads()`.
+
   * **How to fix it:** Create the default config file so `tofu` stops warning about its absence:
 
     ```bash
@@ -114,7 +117,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Gateway routing or TLS fails (`*.cluster.internal` domain unreachable)**
   * **What's happening:** The client cannot resolve the domain or route traffic to the Gateway IP.
-  * **How to fix it:** Run `just gateway-check` to verify listener routing and TLS termination. Confirm CoreDNS custom zone is responding (`dig @192.0.2.242 <name>.cluster.internal`) and verify that Gateway listeners are programmed (`kubectl get gateway -n gateway internal-gateway`).
+  * **How to fix it:** Run `just core-test`, whose `gateway-tls` Task checks listener routing and TLS termination for each HTTPRoute hostname. Confirm CoreDNS custom zone is responding (`dig @192.0.2.242 <name>.cluster.internal`) and verify that Gateway listeners are programmed (`kubectl get gateway -n gateway internal-gateway`).
 
 * **A `CiliumNetworkPolicy`/`CiliumClusterwideNetworkPolicy` `toPorts` rule drops traffic it should cover**
   * **What's happening:** Cilium enforces `toPorts` against the destination pod's container port. Traffic to a `ClusterIP` is DNATed to its backend port at the client's socket, before a packet reaches the wire. A request to `some-service:80` is policy-checked as traffic to the pod's real listening port, for example `:9090`.
@@ -129,6 +132,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **`flux reconcile helmrelease cilium` reports `RetriesExceeded` / `Stalled` and does nothing**
   * **What's happening:** After enough failed upgrade attempts (e.g. from the Hubble issue above), `helm-controller` hits its retry budget and marks the release `Stalled` with a **terminal** error. A plain reconcile re-checks that exhausted state and fails at once, without a new upgrade attempt.
+
   * **How to fix it:** Clear the retry lock first, then it reconciles normally:
 
     ```bash
@@ -155,6 +159,10 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 > [!IMPORTANT]
 > Commit and push the fix together with any live patch to a `prune: true` Kustomization. The next reconcile reverts an uncommitted patch silently.
+
+* **A Kustomization fails its dry run with `expected string, got` a number, on a CiliumNetworkPolicy port**
+  * **What's happening:** The port was written as `port: "${SOME_PORT}"`. kustomize writes the placeholder out unquoted, and Flux's substitution then produces an integer. A CiliumNetworkPolicy port is a string field, so the API server rejects the object and the Kustomization never becomes Ready. pytest's `flux build` checks don't validate field types and miss it.
+  * **How to fix it:** Write the port as a literal string, such as `port: "9445"`, as every Cilium policy in this repo does ([Network Policy conventions](NETWORKPOLICY.md#conventions)).
 
 * **`kubectl kustomize apps/databases/objectstore` fails with `security; file '.../cluster/databases-cluster.yaml' is not in or below '.../objectstore'`**
   * **What's happening:** `apps/databases/objectstore/kustomization.yaml` generates ConfigMap `postgres-bootstrap-cluster` from `../cluster/databases-cluster.yaml`. `kubectl kustomize` refuses files outside the Kustomization's directory by default. Flux builds the directory without that restriction.
@@ -185,6 +193,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **The OpenBao root token is needed and was lost**
   * **What's happening:** `bao operator init` prints the root token once. The bootstrap play prints it to the terminal at the end of a successful initialization run and keeps it off disk by design.
+
   * **How to fix it:** Retrieve the recovery key shares from your external store, then generate a new token:
 
     ```bash
@@ -230,7 +239,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Tables created by a lease are unreadable by the next one**
   * **What's happening:** The lease was issued before `ALTER ROLE ... SET role = app_readwrite` was added to `creation_statements`. The lease's role owns its objects.
-  * **How to fix it:** Update the role definition in `terraform/openbao/database.tf`, then `bao lease revoke -prefix database/creds/postgres-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
+  * **How to fix it:** Update the role definition in `terraform/openbao/database.tf`, then `bao lease revoke -prefix database/creds/ds-app-role`. Reassign what already exists as `postgres`: `REASSIGN OWNED BY "<lease-role>" TO app_readwrite;`, then drop the stale role.
 
 > [!IMPORTANT]
 > `DROP ROLE` at lease expiry fails with `cannot be dropped because some objects depend on it` until ownership is reassigned. OpenBao leaves the stale role behind on every expiry until then.
@@ -249,6 +258,7 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Barman Cloud Plugin backups start failing**
   * **What's happening:** The database cannot reach or authenticate to the object store, or S3 TLS handshake fails.
+
   * **How to fix it:** Run `kubectl cnpg status postgres-cluster -n databases` and read the plugin's status block. Confirm the `plugin-barman-cloud` Deployment in `cnpg-system` is running (`kubectl rollout status deployment -n cnpg-system plugin-barman-cloud`). Confirm SeaweedFS S3 is serving TLS (`https://seaweedfs-s3.seaweedfs.svc:9000`) with a valid certificate from `openbao-pki-issuer`. Confirm the `barman-s3-credentials` pod in `databases` is running and Secret `barman-s3-credentials` holds `ACCESS_KEY_ID` and `ACCESS_SECRET_KEY`. `kubectl describe pod -l app.kubernetes.io/name=barman-s3-credentials -n databases` shows a failed mount in its events. Confirm the bucket exists:
 
     ```bash
@@ -263,7 +273,8 @@ Diagnostic procedures and remediation steps for issues across Ansible bootstrap,
 
 * **Retention fails with `InvalidAccessKeyId` about 10 minutes after startup**
   * **What's happening:** The CSI login token expired and OpenBao revoked its S3 lease, deleting the key from SeaweedFS. A 4-day S3 lease cannot outlive its issuing token. The same deleted key also blocks WAL uploads. Correlate `kubectl logs -n openbao openbao-0` with the `plugin-barman-cloud` container in the primary database pod: token and `seaweedfs/creds/barman` revocations precede failed `ListObjectsV2` and `PutObject` calls.
-  * **How to fix it:** Apply the CSI auth-role TTLs in `terraform/openbao/kubernetes-auth.tf` and the provider's `-cache-size=0` setting in `infrastructure/openbao/openbao-values.yaml`. Both CSI roles use 4-day login tokens, and each daily rotation authenticates afresh so a new credential cannot inherit a nearly expired token. Existing tokens and deleted keys are not repaired by changing a role: after applying the changes and waiting for the CSI provider rollout, refresh Barman's holder mount:
+
+  * **How to fix it:** Apply the CSI auth-role TTLs in `terraform/openbao/kubernetes-auth.tf` and the provider's `-cache-size=0` setting in `infrastructure/openbao/server/openbao-values.yaml`. Both CSI roles use 4-day login tokens, and each daily rotation authenticates afresh so a new credential cannot inherit a nearly expired token. Existing tokens and deleted keys are not repaired by changing a role: after applying the changes and waiting for the CSI provider rollout, refresh Barman's holder mount:
 
     ```bash
     kubectl rollout restart deployment/barman-s3-credentials -n databases

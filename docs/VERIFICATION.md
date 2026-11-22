@@ -13,6 +13,7 @@
   * [Restored Schemas (if migrating data)](#restored-schemas-if-migrating-data)
 * [Verify Gateway Routing](#verify-gateway-routing)
 * [Hubble Observability Access](#hubble-observability-access)
+* [Verify Observability](#verify-observability)
 * [Host Firewall Network Checks](#host-firewall-network-checks)
 * [Verify Certificate Issuance](#verify-certificate-issuance)
 * [Verify Cluster Health](#verify-cluster-health)
@@ -106,14 +107,7 @@ Verify all application schemas are present.
 
 ## Verify Gateway Routing
 
-Test Gateway listener routing and edge certificate termination:
-
-> [!TIP]
-> **Just Recipe:**
->
-> ```bash
-> just gateway-check <name>.cluster.internal
-> ```
+`core-test`'s `gateway-tls` Task checks every HTTPRoute hostname through the Gateway on each run. To check one hostname by hand:
 
 > [!NOTE]
 > **Manual Shell Command:**
@@ -124,7 +118,7 @@ Test Gateway listener routing and edge certificate termination:
 >   https://<name>.cluster.internal/
 > ```
 
-Run it for any hostname with an HTTPRoute on the Gateway. Verify that the page responds and the certificate chains to `openbao-pki-issuer`'s CA (`internal-edge-cert`).
+Run it for any hostname with an HTTPRoute on the Gateway, such as Grafana's `grafana.<INTERNAL_DOMAIN>`. Verify that the page responds and the certificate chains to the desktop CA, an intermediate under `openbao-root-ca`. With the bootstrap's trust prompt answered yes, a browser opens it without a warning.
 
 For Gateway publication, inspect the approved namespaces and database route:
 
@@ -152,6 +146,52 @@ In `cluster-default`, the ingress rule selecting all pods should allow `host`. T
 Verify network visibility with the Hubble CLI:
 
 * **CLI Flow Streaming**: `just hubble status` and `just hubble observe --follow` run the Hubble CLI inside the Cilium agent and stream its flows.
+* **Hubble UI**: `just ui hubble` opens `https://localhost:12000`, whose service map shows live flows.
+
+## Workstation UIs
+
+With the bootstrap's trust prompt answered yes, each of these opens without a certificate warning in a browser and in VS Code's Simple Browser:
+
+| UI | Command | Expected result |
+| --- | --- | --- |
+| Hubble UI | `just ui hubble` | The namespace list and a live service map |
+| Tekton Dashboard | `just ui tekton` | PipelineRuns in `tekton-pipelines`, read-only |
+| OpenBao UI | `just ui openbao` | OpenBao's sign-in page |
+| Grafana | `https://grafana.<INTERNAL_DOMAIN>` | Grafana's sign-in page |
+
+The installed anchors carry only their permitted names:
+
+```bash
+openssl x509 -noout -ext nameConstraints -in /etc/pki/ca-trust/source/anchors/data-science-cluster-desktop-ca.crt
+openssl x509 -noout -ext nameConstraints -in /etc/pki/ca-trust/source/anchors/data-science-cluster-openbao-ca.crt
+```
+
+On Ubuntu the anchors are in `/usr/local/share/ca-certificates/`.
+
+---
+
+## Verify Observability
+
+Prometheus, Alertmanager, Grafana, Loki and Alloy run in `observability`, node-exporter in `node-exporter`, and Tetragon in `kube-system`:
+
+```bash
+flux get kustomizations | grep -E 'kube-prometheus-stack|loki|alloy|tetragon'
+kubectl get pods -n observability
+kubectl get pods -n node-exporter
+kubectl get pods -n kube-system -l 'app.kubernetes.io/name in (tetragon,tetragon-operator)'
+kubectl get tracingpolicy sensitive-files
+kubectl get httproute,backendtlspolicy -n observability
+```
+
+The four `kube-prometheus-stack-*` Kustomizations, `loki`, `alloy`, `tetragon-server` and `tetragon-config` should be Ready and every pod Running. The HTTPRoute and BackendTLSPolicy should report `Accepted=True`.
+
+Sign in to Grafana at `https://grafana.<INTERNAL_DOMAIN>` as `admin`. Run `just bao-shell --login` with a token that can read `secret/grafana/admin`, then read the password:
+
+```bash
+bao kv get -field=admin-password secret/grafana/admin
+```
+
+Under **Connections → Data sources**, **Save & test** on Prometheus, Alertmanager and Loki should succeed. In **Explore**, the Prometheus query `up == 0` should return no series, the Loki query `{namespace="observability"}` should return recent lines, and `{namespace="kube-system", container="export-stdout"}` should return Tetragon's events. Alerts are read under **Alerting**.
 
 ---
 
@@ -163,9 +203,10 @@ Run these checks before changing the firewall and repeat them afterward. Compare
 | --- | --- | --- |
 | Host to LAN DNS address | `dig @<COREDNS_LAN_IP> databases.<INTERNAL_DOMAIN> A +short`, then repeat with `+tcp` | Both return `GATEWAY_IP` |
 | Host through Gateway to PostgreSQL | `pg_isready -h <GATEWAY_IP> -p 5432 -t 5` | Accepting connections. Also repeat a normal authenticated database query with the existing client |
-| Host through HTTPS Gateway to a workload | `just gateway-check <existing-route-hostname>` | Valid TLS and the workload's expected response. Requires an HTTPRoute |
+| Host through HTTPS Gateway to a workload | The `curl --resolve` command under [Verify Gateway Routing](#verify-gateway-routing), for `grafana.<INTERNAL_DOMAIN>` | Valid TLS and Grafana's sign-in page |
 | Metrics-server pod to host kubelet | `kubectl top nodes` | Current metrics for the node |
 | Hubble Relay pod to host agent | Commands below | Relay Ready and recent forwarded traffic to 4244 |
+| Host loopback to Hubble UI through its `localhost-tls` container | `curl --silent --output /dev/null --write-out '%{http_code}\n' https://localhost:12000/` | `200`, with the certificate verified by the system trust store |
 | Host to Kubernetes API | `kubectl get --raw /readyz` | `ok` |
 | Host to OpenBao localhost redirect | TLS health request below | Initialized and unsealed |
 
@@ -188,6 +229,8 @@ nc -vz -w 3 <NODE_LAN_IP> 6443
 nc -vz -w 3 <NODE_LAN_IP> 10250
 nc -vz -w 3 <NODE_LAN_IP> 4244
 ```
+
+The host-network metrics listeners must also refuse or time out from that client: 9445 (Cilium agent), 9446 (node-exporter), 9963 (Cilium operator) and 9965 (Hubble).
 
 Also check the allocated NodePorts (`kubectl get svc -A`) from that client. Cilium handles these paths in eBPF, outside firewalld's port ranges. Confirm every reachable NodePort serves an intended published service. LAN isolation needs a check from another machine on the LAN.
 
