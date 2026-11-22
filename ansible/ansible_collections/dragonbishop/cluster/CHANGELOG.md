@@ -1,3 +1,39 @@
+## [3.0.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.6.0...v3.0.0) - 2026-11-22
+
+### 🚀 Features
+
+- *(ansible)* End every playbook run with core-test ([f59f28c](https://github.com/DragonBishop/data_science_cluster/commit/f59f28c8f537900864e76009be853e25676f2707))
+- *(bootstrap)* Prompt to trust the desktop and OpenBao CAs ([594f8cd](https://github.com/DragonBishop/data_science_cluster/commit/594f8cd762926424c83ef04402085c56795c02c5))
+- *(metrics)* Add Prometheus, Alertmanager, and Grafana ([54b4420](https://github.com/DragonBishop/data_science_cluster/commit/54b44209b1168bbec58263a00c9419f3ecab7efd))
+- *(metrics)* Serve Cilium and Hubble metrics over TLS ([4f00afa](https://github.com/DragonBishop/data_science_cluster/commit/4f00afab3e643eb1908eb13963181bb9c6a30a99))
+- *(storage)* Provision Loki’s SeaweedFS bucket and credentials ([a584a5c](https://github.com/DragonBishop/data_science_cluster/commit/a584a5c1006cfc7bd2f775dc46c9bca9032c6594))
+- *(observability)* Deploy Loki ([21b4097](https://github.com/DragonBishop/data_science_cluster/commit/21b4097880f16b1a0f887a299e425b650fbc86d8))
+- *(observability)* Collect Kubernetes logs with Alloy ([a7f4a82](https://github.com/DragonBishop/data_science_cluster/commit/a7f4a82c8b27d8154eb2c205e7245cfc5ae16d12))
+- *(openbao)* Provision Zot S3 access and push credentials ([54461a9](https://github.com/DragonBishop/data_science_cluster/commit/54461a9cd08209cec1c3ecc347cafbe5cdedb0c8))
+- *(k3s)* Configure Zot as the cluster mirror registry ([0ee5f93](https://github.com/DragonBishop/data_science_cluster/commit/0ee5f935ec6fb78d8fe973926273b8311769e645))
+
+### 🐛 Bug Fixes
+
+- *(ci)* Run Tekton integration tests after cluster bootstrap ([442af4f](https://github.com/DragonBishop/data_science_cluster/commit/442af4f7618ee8d8401c6086ba21f52d5c3a8ef0))
+
+### 📚 Documentation
+
+- *(openbao)* Remove the retired GPG recovery-key backup ([b63758d](https://github.com/DragonBishop/data_science_cluster/commit/b63758d14159fe3e07910a4b3f34ac6dff42b302))
+- *(readme)* Rewrite architecture overview for current stack ([b4dd975](https://github.com/DragonBishop/data_science_cluster/commit/b4dd9758fcf496a6cf3133af00296c611e4ff71e))
+
+### ♻️ Refactor
+
+- [**breaking**] Split Cilium, the Gateway, OpenBao, SPIRE and Tekton into per-role folders and Kustomizations ([c71ceaf](https://github.com/DragonBishop/data_science_cluster/commit/c71ceafa1d1b35b9620225ac0574225329703eb3))
+
+### 🧪 Testing
+
+- *(core-test)* Add Zot integration task ([5763099](https://github.com/DragonBishop/data_science_cluster/commit/576309929581e287905d9ec81def80bc069562d8))
+
+### ⚙️ Miscellaneous Tasks
+
+- Drop persisted checkout credentials and scope the release token ([d1b0924](https://github.com/DragonBishop/data_science_cluster/commit/d1b09248041811a75f8beae2a0a867da11a9e08a))
+- Run Tekton checks after cluster bootstrap ([a326dcc](https://github.com/DragonBishop/data_science_cluster/commit/a326dcc660a0fd9148d9c72e22be11c37cfd8109))
+
 ## [2.6.0](https://github.com/DragonBishop/data_science_cluster/compare/v2.5.0...v2.6.0) - 2026-11-14
 
 ### 🚀 Features
