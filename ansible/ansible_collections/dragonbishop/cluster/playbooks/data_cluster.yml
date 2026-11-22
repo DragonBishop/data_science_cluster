@@ -12,10 +12,6 @@
       prompt: "Postgres superuser password"
       private: true
       default: ""
-    - name: opentofu_desktop_trust
-      prompt: "Trust the cluster's desktop and OpenBao CAs in this machine's trust store, for browsers and VS Code? (yes/no)"
-      private: false
-      default: "yes"
 
   pre_tasks:
     - name: Prompt for the OpenBao root token if OpenBao is already initialized
@@ -57,7 +53,7 @@
     - { role: dragonbishop.cluster.trust_manager, tags: [trust_manager] }
 
   tasks:
-    - name: Provision OpenBao and dependent services and report generated credentials
+    - name: Provision the cluster and report its credentials
       block:
         - name: Provision OpenBao
           ansible.builtin.import_role:
@@ -78,22 +74,27 @@
           ansible.builtin.import_role:
             name: dragonbishop.cluster.flux
           tags: [flux]
+
+        - name: Configure k3s to use the cluster registry
+          ansible.builtin.import_role:
+            name: dragonbishop.cluster.k3s
+            tasks_from: registries
+          tags: [flux]
+
+        - name: Run core-test for workstation bootstrap
+          ansible.builtin.include_role:
+            name: dragonbishop.cluster.flux
+            tasks_from: core_test
+            apply:
+              tags: always
+          when: not flux_ci_managed_tests
+          tags: always
+      # Prints last, even when provisioning fails
       always:
-        - name: Report OpenBao credentials even when provisioning fails
+        - name: Report OpenBao credentials
           ansible.builtin.import_tasks: tasks/openbao_credentials.yml
           tags: always
 
-    - name: Configure k3s to use the cluster registry
-      ansible.builtin.import_role:
-        name: dragonbishop.cluster.k3s
-        tasks_from: registries
-      tags: [flux]
-
-    - name: Run core-test for workstation bootstrap
-      ansible.builtin.include_role:
-        name: dragonbishop.cluster.flux
-        tasks_from: core_test
-        apply:
+        - name: Report the Grafana admin login
+          ansible.builtin.import_tasks: tasks/grafana_credentials.yml
           tags: always
-      when: not flux_ci_managed_tests
-      tags: always

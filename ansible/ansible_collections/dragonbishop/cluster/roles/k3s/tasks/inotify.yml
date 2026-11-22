@@ -1,0 +1,12 @@
+---
+# k3s, containerd and root pods share root's inotify budget
+- name: Raise the inotify limits
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-data-science-cluster-inotify.conf
+    sysctl_set: true
+  loop: "{{ k3s_inotify_limits | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  become: true

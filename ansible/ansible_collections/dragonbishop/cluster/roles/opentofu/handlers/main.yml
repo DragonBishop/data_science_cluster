@@ -21,8 +21,3 @@
             annotations:
               kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
   listen: Restart the S3 gateway
-
-- name: Refresh the system trust store
-  ansible.builtin.command: "{{ opentofu_trust_update_commands[ansible_facts.os_family] }}"
-  become: true
-  changed_when: true

@@ -90,7 +90,7 @@ clear_cilium_host_files() {
     sudo rm -rf /var/lib/cilium
 }
 
-# Installed by the opentofu role's trust prompt
+# Installed by workstation_trust
 remove_trust_anchors() {
     local anchor_dir update_command anchor_name
     if [ -d /etc/pki/ca-trust/source/anchors ]; then
@@ -107,6 +107,32 @@ remove_trust_anchors() {
         sudo rm -f "$anchor_dir/$anchor_name"
     done
     sudo "$update_command"
+}
+
+# Installed by workstation_trust
+remove_application_trust() {
+    local nss_database nickname
+    nss_database="$HOME/.local/share/pki/nssdb"
+    [ -d "$HOME/.pki/nssdb" ] && nss_database="$HOME/.pki/nssdb"
+    if command -v certutil >/dev/null && [ -f "$nss_database/cert9.db" ]; then
+        for nickname in "data-science-cluster Desktop CA" "openbao-local-ca"; do
+            if certutil -L -d "sql:$nss_database" -n "$nickname" >/dev/null 2>&1; then
+                echo "🧹 Removing $nickname from $nss_database..."
+                certutil -D -d "sql:$nss_database" -n "$nickname"
+            fi
+        done
+    fi
+    sudo rm -f /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/"$(uname -m)"/stable/policies/policies.json
+}
+
+# workstation_trust's block and the k3s role's Zot line
+remove_gateway_hosts() {
+    echo "🧹 Removing the Gateway hostnames from /etc/hosts..."
+    sudo sed -i '/^# BEGIN data-science-cluster Gateway hostnames$/,/^# END data-science-cluster Gateway hostnames$/d; / # data-science-cluster-zot$/d' /etc/hosts
+}
+
+remove_inotify_limits() {
+    sudo rm -f /etc/sysctl.d/90-data-science-cluster-inotify.conf
 }
 
 clear_openbao_cache() {
@@ -129,11 +155,11 @@ main() {
     acquire_sudo
     select_persistent_storage
     uninstall_k3s
-    if grep -q ' # data-science-cluster-zot$' /etc/hosts; then
-        sudo sed -i '/ # data-science-cluster-zot$/d' /etc/hosts
-    fi
+    remove_gateway_hosts
     clear_cilium_host_files
+    remove_inotify_limits
     remove_trust_anchors
+    remove_application_trust
 
     clear_openbao_cache
     clear_terraform_state

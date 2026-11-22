@@ -1,0 +1,5 @@
+---
+- name: Refresh the system trust store
+  ansible.builtin.command: "{{ workstation_trust_update_commands[ansible_facts.os_family] }}"
+  become: true
+  changed_when: true

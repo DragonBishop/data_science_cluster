@@ -1,2 +1,5 @@
 ---
 k3s_install_script_url: https://get.k3s.io
+k3s_inotify_limits:
+  fs.inotify.max_user_instances: 8192
+  fs.inotify.max_user_watches: 524288

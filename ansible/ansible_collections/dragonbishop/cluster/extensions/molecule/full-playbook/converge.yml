@@ -2,6 +2,9 @@
 - name: Converge
   ansible.builtin.import_playbook: dragonbishop.cluster.data_cluster
 
+- name: Set up the workstation
+  ansible.builtin.import_playbook: dragonbishop.cluster.workstation_trust
+
 - name: Hand the OpenBao root token to later runs
   hosts: localhost
   gather_facts: false

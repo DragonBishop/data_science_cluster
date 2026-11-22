@@ -1,0 +1,16 @@
+---
+- name: Read the cluster's CAs
+  ansible.builtin.import_tasks: cas.yml
+  when: workstation_trust_install | bool
+
+- name: Install or remove the CAs in the system trust store
+  ansible.builtin.import_tasks: system_trust.yml
+
+- name: Install or remove the CAs in VS Code's NSS database
+  ansible.builtin.import_tasks: vscode_trust.yml
+
+- name: Install or remove the Firefox Flatpak policy
+  ansible.builtin.import_tasks: firefox.yml
+
+- name: Resolve the Gateway's hostnames
+  ansible.builtin.import_tasks: gateway_hosts.yml

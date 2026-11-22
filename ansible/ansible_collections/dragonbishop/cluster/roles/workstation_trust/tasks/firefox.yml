@@ -1,0 +1,37 @@
+---
+# Flatpak Firefox ignores both stores
+- name: Check for the Firefox Flatpak
+  ansible.builtin.command:
+    argv: [flatpak, info, --system, org.mozilla.firefox]
+  register: workstation_trust_firefox_flatpak
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Configure the Firefox Flatpak policy
+  when:
+    - workstation_trust_install | bool
+    - workstation_trust_firefox_flatpak.rc == 0
+  become: true
+  block:
+    - name: Create the Firefox policy directory
+      ansible.builtin.file:
+        path: "{{ workstation_trust_firefox_policy_file | dirname }}"
+        state: directory
+        mode: "0755"
+
+    # p11-kit-client exposes the host's anchors in the sandbox
+    - name: Write the Firefox policy
+      ansible.builtin.copy:
+        dest: "{{ workstation_trust_firefox_policy_file }}"
+        content: "{{ workstation_trust_firefox_policy | to_nice_json }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+
+- name: Remove the Firefox policy
+  ansible.builtin.file:
+    path: "{{ workstation_trust_firefox_policy_file }}"
+    state: absent
+  become: true
+  when: not (workstation_trust_install | bool)

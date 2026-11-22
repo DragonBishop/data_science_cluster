@@ -1,0 +1,91 @@
+---
+# VS Code reads the user's NSS database
+- name: Check for Chromium's legacy NSS database
+  ansible.builtin.stat:
+    path: "{{ workstation_trust_chromium_legacy_nssdb }}"
+  register: workstation_trust_chromium_legacy_nssdb_stat
+
+- name: Pick the NSS database Chromium uses
+  ansible.builtin.set_fact:
+    workstation_trust_chromium_nssdb: >-
+      {{ workstation_trust_chromium_legacy_nssdb if workstation_trust_chromium_legacy_nssdb_stat.stat.exists
+         else workstation_trust_chromium_nssdb_default }}
+
+- name: Trust the CAs in the NSS database
+  when: workstation_trust_install | bool
+  block:
+    - name: Install certutil
+      ansible.builtin.package:
+        name: "{{ workstation_trust_nss_tools_packages[ansible_facts.os_family] }}"
+        state: present
+      become: true
+
+    - name: Create the NSS database directory
+      ansible.builtin.file:
+        path: "{{ workstation_trust_chromium_nssdb }}"
+        state: directory
+        mode: "0700"
+
+    - name: Create the NSS database
+      ansible.builtin.command:
+        argv: [certutil, -N, -d, "sql:{{ workstation_trust_chromium_nssdb }}", --empty-password]
+        creates: "{{ workstation_trust_chromium_nssdb }}/cert9.db"
+
+    - name: Read the CAs from the NSS database
+      ansible.builtin.command:
+        argv: [certutil, -L, -d, "sql:{{ workstation_trust_chromium_nssdb }}", -n, "{{ item.nickname }}", -a]
+      loop: "{{ workstation_trust_cas }}"
+      loop_control:
+        label: "{{ item.nickname }}"
+      register: workstation_trust_nss_current
+      changed_when: false
+      check_mode: false
+      # certutil exits 255 when the nickname is absent
+      failed_when: workstation_trust_nss_current.rc not in [0, 255]
+
+    - name: Remove stale CAs from the NSS database
+      ansible.builtin.command:
+        argv: [certutil, -D, -d, "sql:{{ workstation_trust_chromium_nssdb }}", -n, "{{ item.item.nickname }}"]
+      loop: "{{ workstation_trust_nss_current.results }}"
+      loop_control:
+        label: "{{ item.item.nickname }}"
+      changed_when: true
+      when:
+        - item.rc == 0
+        - (item.stdout | replace('\r', '') | trim) != item.item.certificate
+
+    - name: Add the CAs to the NSS database
+      ansible.builtin.command:
+        argv: [certutil, -A, -d, "sql:{{ workstation_trust_chromium_nssdb }}", -n, "{{ item.item.nickname }}", -t, "C,,"]
+        stdin: "{{ item.item.certificate }}"
+      loop: "{{ workstation_trust_nss_current.results }}"
+      loop_control:
+        label: "{{ item.item.nickname }}"
+      changed_when: true
+      when: >-
+        item.rc != 0
+        or (item.stdout | replace('\r', '') | trim) != item.item.certificate
+
+- name: Remove the CAs from the NSS database
+  when: not (workstation_trust_install | bool)
+  block:
+    - name: Read the CAs from the NSS database
+      ansible.builtin.command:
+        argv: [certutil, -L, -d, "sql:{{ workstation_trust_chromium_nssdb }}", -n, "{{ item }}"]
+      loop:
+        - data-science-cluster Desktop CA
+        - openbao-local-ca
+      register: workstation_trust_nss_present
+      changed_when: false
+      check_mode: false
+      # Fails when the CA, database or certutil is absent
+      failed_when: false
+
+    - name: Delete the CAs from the NSS database
+      ansible.builtin.command:
+        argv: [certutil, -D, -d, "sql:{{ workstation_trust_chromium_nssdb }}", -n, "{{ item.item }}"]
+      loop: "{{ workstation_trust_nss_present.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      changed_when: true
+      when: item.rc == 0

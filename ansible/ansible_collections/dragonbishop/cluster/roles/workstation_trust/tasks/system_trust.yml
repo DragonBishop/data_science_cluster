@@ -1,0 +1,25 @@
+---
+- name: Install the CAs into the system trust store
+  ansible.builtin.copy:
+    dest: "{{ workstation_trust_anchor_dirs[ansible_facts.os_family] }}/{{ item.anchor }}"
+    content: "{{ item.certificate }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ workstation_trust_cas }}"
+  loop_control:
+    label: "{{ item.anchor }}"
+  become: true
+  notify: Refresh the system trust store
+  when: workstation_trust_install | bool
+
+- name: Remove the CAs from the system trust store
+  ansible.builtin.file:
+    path: "{{ workstation_trust_anchor_dirs[ansible_facts.os_family] }}/{{ item }}"
+    state: absent
+  loop:
+    - data-science-cluster-desktop-ca.crt
+    - data-science-cluster-openbao-ca.crt
+  become: true
+  notify: Refresh the system trust store
+  when: not (workstation_trust_install | bool)
