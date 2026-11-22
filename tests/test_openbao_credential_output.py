@@ -9,9 +9,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLAYBOOK_DIR = REPO_ROOT / "ansible/ansible_collections/dragonbishop/cluster/playbooks"
-PROVISIONING_TASK = (
-    "Provision OpenBao and dependent services and report generated credentials"
-)
+PROVISIONING_TASK = "Provision the cluster and report its credentials"
 CREDENTIALS = ["test-seal", "test-root", "test-recovery"]
 FAILURE_MESSAGE = "simulated provisioning failure"
 
@@ -65,6 +63,8 @@ def run_playbook(test_playbook: Path, tmp_path: Path) -> subprocess.CompletedPro
             "ANSIBLE_HOME": str(tmp_path / "ansible"),
             "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-tmp"),
             "ANSIBLE_NOCOLOR": "1",
+            # The Grafana report must not reach a real cluster
+            "K8S_AUTH_KUBECONFIG": str(tmp_path / "no-kubeconfig"),
         },
         stdin=subprocess.DEVNULL,
         capture_output=True,
