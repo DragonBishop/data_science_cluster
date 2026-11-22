@@ -3,11 +3,3 @@ opentofu_binary: /usr/bin/tofu
 opentofu_secrets_dir: "{{ ansible_facts.env.HOME }}/.config/data_science_cluster"
 opentofu_secrets_wo_version_file: "{{ opentofu_secrets_dir }}/openbao-secrets-wo-version"
 opentofu_rotate_secrets_marker: "{{ opentofu_secrets_dir }}/rotate-openbao-secrets"
-# Set by the playbook's prompt
-opentofu_desktop_trust: true
-opentofu_trust_anchor_dirs:
-  RedHat: /etc/pki/ca-trust/source/anchors
-  Debian: /usr/local/share/ca-certificates
-opentofu_trust_update_commands:
-  RedHat: update-ca-trust
-  Debian: update-ca-certificates

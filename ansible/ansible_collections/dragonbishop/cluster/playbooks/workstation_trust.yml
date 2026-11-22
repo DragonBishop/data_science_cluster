@@ -1,0 +1,13 @@
+---
+- name: Set up this workstation for the cluster
+  hosts: "{{ target_host | default('localhost') }}"
+  become: false
+
+  vars_prompt:
+    - name: workstation_trust_install
+      prompt: "Trust the cluster's desktop and OpenBao CAs in the system trust store, VS Code and Flatpak Firefox? (yes/no)"
+      private: false
+      default: "yes"
+
+  roles:
+    - dragonbishop.cluster.workstation_trust

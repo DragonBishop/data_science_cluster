@@ -28,6 +28,8 @@ The playbook runs them in this order.
 | `spire` | Installs SPIRE, whose CA OpenBao's PKI root signs. The Flux controllers then have identities when they start. |
 | `flux` | Installs Flux, its Git credentials and the network policy Flux needs to fetch its first source. |
 
+The separate `workstation_trust` playbook runs the `workstation_trust` role, which trusts the cluster's desktop and OpenBao CAs in the system trust store, VS Code and Flatpak Firefox, and points each HTTPRoute hostname at `GATEWAY_IP` in `/etc/hosts`.
+
 ## Requirements
 
 * `ansible-core` 2.19 or later, tested with 2.21.5
@@ -56,13 +58,19 @@ uv run ansible-playbook dragonbishop.cluster.data_cluster --ask-become-pass
 
 `just bootstrap` runs the install and the playbook, and passes on any extra flags. The playbook is idempotent, and a second run changes nothing.
 
+```bash
+uv run ansible-playbook dragonbishop.cluster.workstation_trust --ask-become-pass
+```
+
+`just workstation-trust` runs the optional workstation playbook the same way.
+
 Each role has its own tag. `opentofu` also carries `openbao`:
 
 ```bash
 just bootstrap --tags opentofu
 ```
 
-The playbook prompts for the state-encryption passphrase and Postgres password, and asks whether to install the cluster's desktop and OpenBao CAs into the machine's trust store. On a cluster where OpenBao is already initialized, it also asks for the root token. Fresh installations generate a seal key automatically. Recovering a missing seal Secret with existing storage requires the original seal key. Bootstrap preserves an existing Secret and skips that input.
+The playbook prompts for the state-encryption passphrase and Postgres password,. On a cluster where OpenBao is already initialized, it also asks for the root token. Fresh installations generate a seal key automatically. Recovering a missing seal Secret with existing storage requires the original seal key. Bootstrap preserves an existing Secret and skips that input.
 
 | Input | Source | Used for |
 | --- | --- | --- |
@@ -70,7 +78,7 @@ The playbook prompts for the state-encryption passphrase and Postgres password, 
 | `opentofu_state_encryption_passphrase` | prompt | Encrypting the `terraform/openbao` state |
 | `opentofu_postgres_superuser_password` | prompt | The Postgres superuser password OpenTofu writes to OpenBao |
 | `openbao_root_token` | prompt, or `OPENBAO_ROOT_TOKEN` | Logging in to an initialized OpenBao |
-| `opentofu_desktop_trust` | prompt (default `yes`), or `-e opentofu_desktop_trust=yes` | Installing (`yes`) or removing (`no`) the desktop and OpenBao CAs in the system trust store, for browsers and VS Code |
+| `workstation_trust_install` | `workstation_trust` prompt (default `yes`), or `-e workstation_trust_install=yes` | Installing (`yes`) or removing (`no`) the desktop and OpenBao CAs in the system trust store, VS Code and Flatpak Firefox |
 | `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_PATH` | environment | Flux's Git credentials from a GitHub App. Without them, the `flux` role uses `gh auth token`. |
 | `FLUX_GIT_BRANCH` | environment | Points the `flux-system` GitRepository at another branch |
 | `target_host` | extra var | The host to provision, `localhost` by default |
@@ -98,6 +106,8 @@ The role defaults:
 * `PROMETHEUS_HOST_PATH` and `ALERTMANAGER_HOST_PATH` default to `/var/lib/data-cluster/prometheus` and `/var/lib/data-cluster/alertmanager`. The playbook prepares both paths and the database subdirectories with ownership `1000:2000`.
 * `/etc/rancher/k3s/zot-ca.crt`: the `pki_desktop` CA, written by `registries.yml` for containerd to verify the Zot Gateway hostname.
 * `/etc/hosts` entry for `zot.${INTERNAL_DOMAIN}` → `GATEWAY_IP`, written by `registries.yml`.
+* `/etc/sysctl.d/90-data-science-cluster-inotify.conf`: the inotify limits k3s and its pods share.
+* From `workstation_trust`: the `data-science-cluster-*.crt` system anchors, both CAs in the user's NSS database, the Flatpak Firefox `policies.json`, and the `/etc/hosts` block of Gateway hostnames.
 * `/etc/rancher/k3s/certs.d/<registry>/hosts.toml` for docker.io, ghcr.io, quay.io and registry.k8s.io: containerd mirror config pointing each at `zot.${INTERNAL_DOMAIN}`, written by `registries.yml`.
 * `terraform/openbao/terraform.tfstate`: the encrypted OpenTofu state
 * `~/.config/data_science_cluster/openbao-secrets-wo-version`: the version of the secrets OpenTofu writes. A run that changes the Postgres password or SeaweedFS's admin key pair records a new version. Create `rotate-openbao-secrets` beside it, and the next run gives OpenBao a new SeaweedFS admin key pair and removes the marker.

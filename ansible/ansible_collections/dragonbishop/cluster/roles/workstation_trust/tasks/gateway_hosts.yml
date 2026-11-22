@@ -1,0 +1,40 @@
+---
+# All HTTPRoutes exist once Flux is Ready
+- name: List the Flux Kustomizations
+  kubernetes.core.k8s_info:
+    api_version: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    namespace: flux-system
+  register: workstation_trust_flux_kustomizations
+
+- name: Wait for each Flux Kustomization
+  kubernetes.core.k8s_info:
+    api_version: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    namespace: flux-system
+    name: "{{ item }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 1200
+  loop: "{{ workstation_trust_flux_kustomizations.resources | map(attribute='metadata.name') | sort }}"
+
+- name: Read the HTTPRoutes
+  kubernetes.core.k8s_info:
+    api_version: gateway.networking.k8s.io/v1
+    kind: HTTPRoute
+  register: workstation_trust_http_routes
+
+- name: Point the HTTPRoute hostnames at the Gateway
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} data-science-cluster Gateway hostnames"
+    block: |
+      {% for hostname in workstation_trust_gateway_hostnames %}
+      {{ cluster_config.GATEWAY_IP }} {{ hostname }}
+      {% endfor %}
+  vars:
+    workstation_trust_gateway_hostnames: >-
+      {{ workstation_trust_http_routes.resources | map(attribute='spec.hostnames', default=[]) | flatten | unique | sort }}
+  become: true

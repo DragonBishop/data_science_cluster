@@ -192,13 +192,13 @@ The **Tekton Operator** installs **Tekton Pipelines** and **Tekton Triggers**, w
 
 ### Workstation UIs
 
-These are the graphical tools for the cluster on the workstation. Each opens in a browser or in VS Code's Simple Browser except Headlamp, which is a desktop app. Their certificates verify once the bootstrap's trust prompt is answered yes ([Access Policy](docs/ACCESSPOLICY.md#workstation-trust)).
+These are the graphical tools for the cluster on the workstation. Each opens in a browser or in VS Code's Simple Browser except Headlamp, which is a desktop app. Their names resolve and their certificates verify after `just workstation-trust` ([Access Policy](docs/ACCESSPOLICY.md#workstation-trust)).
 
 Hubble UI and the Tekton Dashboard serve plain HTTP without authentication, so each pod gets a `localhost-tls` container: Ghostunnel serving HTTPS from a `localhost` certificate (desktop CA) and forwarding locally to the UI. A CiliumLocalRedirectPolicy sends the workstation's `127.0.0.1:12000` (Hubble UI) or `127.0.0.1:12001` (Tekton Dashboard) to that container. Both are reachable from the local workstation only.
 
 | UI | Version | Address | Description |
 | --- | --- | --- | --- |
-| Grafana | Same as kube-prometheus-stack | `https://grafana.cluster.internal` | Dashboards, logs and alerts, through the shared Gateway with its certificate from the desktop CA. Grafana has its own login. |
+| Grafana | Same as kube-prometheus-stack | `https://grafana.cluster.internal` (`just ui grafana`) | Dashboards, logs and alerts, through the shared Gateway with its certificate from the desktop CA. Grafana has its own login. |
 | Headlamp | `0.45.0` (desktop app) | `~/.kube/config` | Kubernetes GUI on the host, reading the admin kubeconfig. Its plugins assist with cluster management. |
 | Hubble UI | `v0.13.6` (via Cilium) | `https://localhost:12000` (`just ui hubble`) | Service map and flow browser, through its `localhost-tls` container. |
 | OpenBao UI | Same as OpenBao | `https://localhost:8210/ui` (`just ui openbao`) | OpenBao's own UI through its existing loopback redirect, serving its own certificate from the name-constrained `openbao-local-ca`. OpenBao has its own login. |

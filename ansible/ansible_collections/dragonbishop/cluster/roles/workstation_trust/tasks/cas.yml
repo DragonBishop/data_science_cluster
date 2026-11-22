@@ -1,0 +1,28 @@
+---
+- name: Read openbao-local-ca
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    namespace: "{{ openbao_namespace }}"
+    name: openbao-ca-bundle
+  register: workstation_trust_openbao_ca_bundle
+
+# Public endpoint, verified with the bootstrap's OpenBao CA
+- name: Read the desktop CA from OpenBao
+  ansible.builtin.uri:
+    url: https://localhost:8210/v1/pki_desktop/ca/pem
+    ca_path: "{{ openbao_local_dir }}/certs/openbao-internal-ca.crt"
+    use_proxy: false
+    return_content: true
+  register: workstation_trust_desktop_ca
+  check_mode: false
+
+- name: Collect the CAs
+  ansible.builtin.set_fact:
+    workstation_trust_cas:
+      - anchor: data-science-cluster-desktop-ca.crt
+        nickname: data-science-cluster Desktop CA
+        certificate: "{{ workstation_trust_desktop_ca.content | trim }}"
+      - anchor: data-science-cluster-openbao-ca.crt
+        nickname: openbao-local-ca
+        certificate: "{{ workstation_trust_openbao_ca_bundle.resources[0].data['ca.crt'] | trim }}"

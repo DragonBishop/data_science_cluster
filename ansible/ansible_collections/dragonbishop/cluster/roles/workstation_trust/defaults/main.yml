@@ -1,0 +1,24 @@
+---
+# Set by the playbook's prompt
+workstation_trust_install: true
+workstation_trust_anchor_dirs:
+  RedHat: /etc/pki/ca-trust/source/anchors
+  Debian: /usr/local/share/ca-certificates
+workstation_trust_update_commands:
+  RedHat: update-ca-trust
+  Debian: update-ca-certificates
+workstation_trust_nss_tools_packages:
+  RedHat: nss-tools
+  Debian: libnss3-tools
+# Chromium prefers the legacy path when present
+workstation_trust_chromium_legacy_nssdb: "{{ ansible_facts.env.HOME }}/.pki/nssdb"
+workstation_trust_chromium_nssdb_default: "{{ ansible_facts.env.HOME }}/.local/share/pki/nssdb"
+workstation_trust_firefox_policy_file: >-
+  /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/{{ ansible_facts.architecture }}/stable/policies/policies.json
+workstation_trust_firefox_policy:
+  policies:
+    SecurityDevices:
+      Add:
+        p11-kit-client: "/usr/lib/{{ ansible_facts.architecture }}-linux-gnu/pkcs11/p11-kit-client.so"
+    DNSOverHTTPS:
+      ExcludedDomains: ["{{ cluster_config.INTERNAL_DOMAIN }}"]
