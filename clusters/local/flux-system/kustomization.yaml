@@ -124,3 +124,11 @@ patches:
       name: flux-system
       labels:
         data-cluster/ca-bundles: "true"
+# Above observed use, so Flux is evicted last
+- target:
+    kind: Deployment
+    labelSelector: app.kubernetes.io/part-of=flux
+  patch: |
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/requests/memory
+      value: 160Mi

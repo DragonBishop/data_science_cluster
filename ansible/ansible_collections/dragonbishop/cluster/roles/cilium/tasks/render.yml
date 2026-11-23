@@ -5,6 +5,10 @@
     stdin: "{{ lookup('ansible.builtin.file', repo_root + '/infrastructure/cilium/server/cilium-values.yaml') }}"
   environment:
     CILIUM_CPU_REQUEST: "{{ cilium_cpu_request }}"
+    CILIUM_ENDPOINT_CREATE_BURST: "{{ cilium_endpoint_create_burst }}"
+    CILIUM_ENDPOINT_CREATE_MAX_WAIT: "{{ cilium_endpoint_create_max_wait }}"
+    CILIUM_ENDPOINT_CREATE_PARALLEL: "{{ cilium_endpoint_create_parallel }}"
+    CILIUM_ENDPOINT_CREATE_RATE_LIMIT: "{{ cilium_endpoint_create_rate_limit }}"
     CILIUM_ENVOY_CPU_REQUEST: "{{ cilium_envoy_cpu_request }}"
     CILIUM_ENVOY_MEM_REQUEST: "{{ cilium_envoy_mem_request }}"
     CILIUM_MEM_LIMIT: "{{ cilium_mem_limit }}"

@@ -55,6 +55,9 @@ egressGateway:
 # Enables the CiliumLocalRedirectPolicy CRD.
 localRedirectPolicy: true
 
+# Lets every pod on a booting node queue for its network endpoint instead of getting 429s
+apiRateLimit: "endpoint-create=auto-adjust:false,rate-limit:${CILIUM_ENDPOINT_CREATE_RATE_LIMIT},rate-burst:${CILIUM_ENDPOINT_CREATE_BURST},parallel-requests:${CILIUM_ENDPOINT_CREATE_PARALLEL},max-wait-duration:${CILIUM_ENDPOINT_CREATE_MAX_WAIT}"
+
 # Agent metrics on loopback; Ghostunnel serves them to Prometheus with the SPIRE socket over hostPath
 extraConfig:
   prometheus-serve-addr: "127.0.0.1:9962"
