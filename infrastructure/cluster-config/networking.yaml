@@ -1,10 +1,14 @@
-# IPs, CIDRs, ports, hostnames, domains and interfaces.
+# IPs, CIDRs, ports, hostnames, domains, interfaces and Cilium's endpoint creation limits.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cluster-config
   namespace: flux-system
 data:
+  CILIUM_ENDPOINT_CREATE_BURST: "40"
+  CILIUM_ENDPOINT_CREATE_MAX_WAIT: "60s"
+  CILIUM_ENDPOINT_CREATE_PARALLEL: "8"
+  CILIUM_ENDPOINT_CREATE_RATE_LIMIT: "5/s"
   COREDNS_LAN_IP: "192.0.2.242"
   GATEWAY_IP: "192.0.2.240"
   INTERNAL_DOMAIN: "cluster.internal"

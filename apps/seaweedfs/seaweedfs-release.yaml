@@ -301,6 +301,8 @@ spec:
       readinessProbe:
         httpGet:
           scheme: HTTPS
+        periodSeconds: 10
+        successThreshold: 1
       data:
         type: "hostPath"
         hostPathPrefix: "${SEAWEEDFS_HOST_PATH}"

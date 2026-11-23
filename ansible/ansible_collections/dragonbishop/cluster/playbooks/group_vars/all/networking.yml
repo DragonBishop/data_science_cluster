@@ -1,5 +1,9 @@
 ---
 # --- cluster-config/networking.yaml ---
+cilium_endpoint_create_burst: "{{ cluster_config.CILIUM_ENDPOINT_CREATE_BURST }}"
+cilium_endpoint_create_max_wait: "{{ cluster_config.CILIUM_ENDPOINT_CREATE_MAX_WAIT }}"
+cilium_endpoint_create_parallel: "{{ cluster_config.CILIUM_ENDPOINT_CREATE_PARALLEL }}"
+cilium_endpoint_create_rate_limit: "{{ cluster_config.CILIUM_ENDPOINT_CREATE_RATE_LIMIT }}"
 k3s_api_host: "{{ cluster_config.K3S_API_HOST }}"
 k3s_api_port: "{{ cluster_config.K3S_API_PORT }}"
 lan_cidr: "{{ cluster_config.LAN_CIDR }}"
