@@ -18,19 +18,14 @@ spec:
               protocol: TCP
             - port: "8080"
               protocol: TCP
-    # Queries
     - fromEndpoints:
+        # Queries
         - matchLabels:
             app.kubernetes.io/name: grafana
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: tekton-pipelines
             tekton.dev/pipeline: core-test
-      toPorts:
-        - ports:
-            - port: "9090"
-              protocol: TCP
-    # Tekton's OTLP push
-    - fromEndpoints:
+        # Tekton's OTLP push
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: tekton
         - matchLabels:

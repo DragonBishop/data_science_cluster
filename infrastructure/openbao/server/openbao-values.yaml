@@ -8,7 +8,6 @@ injector:
 
 server:
   image:
-    repository: "openbao/openbao"
     tag: "${OPENBAO_IMAGE_TAG}"
   resources:
     requests:

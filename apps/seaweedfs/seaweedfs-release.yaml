@@ -131,7 +131,8 @@ spec:
         s3:
           extraIngress:
             # Ghostunnel metrics
-            - from:
+            - &prometheus-metrics
+              from:
                 - namespaceSelector:
                     matchLabels:
                       kubernetes.io/metadata.name: observability
@@ -141,41 +142,30 @@ spec:
               ports:
                 - protocol: TCP
                   port: ${METRICS_TLS_PORT}
-            # Barman Cloud WAL archiving and base backups
+            # S3 clients
             - from:
+                # Barman Cloud WAL archiving and base backups
                 - namespaceSelector:
                     matchLabels:
                       kubernetes.io/metadata.name: databases
                   podSelector:
                     matchLabels:
                       cnpg.io/cluster: postgres-cluster
-              ports:
-                - protocol: TCP
-                  port: ${SEAWEEDFS_S3_PORT}
-            # OpenBao's secrets-aws plugin creates and deletes IAM users, and its snapshot agent uploads Raft snapshots
-            - from:
+                # OpenBao's secrets-aws plugin creates and deletes IAM users, and its snapshot agent uploads Raft snapshots
                 - namespaceSelector:
                     matchLabels:
                       kubernetes.io/metadata.name: openbao
                   podSelector:
                     matchLabels:
                       app.kubernetes.io/name: openbao
-              ports:
-                - protocol: TCP
-                  port: ${SEAWEEDFS_S3_PORT}
-            # postgres-bootstrap reads the backup catalog before creating the Cluster
-            - from:
+                # postgres-bootstrap reads the backup catalog before creating the Cluster
                 - namespaceSelector:
                     matchLabels:
                       kubernetes.io/metadata.name: databases
                   podSelector:
                     matchLabels:
                       app.kubernetes.io/name: postgres-bootstrap
-              ports:
-                - protocol: TCP
-                  port: ${SEAWEEDFS_S3_PORT}
-            # Loki's bucket
-            - from:
+                # Loki's bucket
                 - namespaceSelector:
                     matchLabels:
                       kubernetes.io/metadata.name: observability
@@ -183,22 +173,14 @@ spec:
                     matchLabels:
                       app.kubernetes.io/name: loki
                       app.kubernetes.io/component: single-binary
-              ports:
-                - protocol: TCP
-                  port: ${SEAWEEDFS_S3_PORT}
-            # Zot's registry bucket
-            - from:
+                # Zot's registry bucket
                 - namespaceSelector:
                     matchLabels:
                       kubernetes.io/metadata.name: zot
                   podSelector:
                     matchLabels:
                       app.kubernetes.io/name: zot
-              ports:
-                - protocol: TCP
-                  port: ${SEAWEEDFS_S3_PORT}
-            # core-test checks the S3 certificate
-            - from:
+                # core-test checks the S3 certificate
                 - namespaceSelector:
                     matchLabels:
                       kubernetes.io/metadata.name: tekton-pipelines
@@ -211,16 +193,7 @@ spec:
         master:
           extraIngress:
             # Ghostunnel metrics
-            - from:
-                - namespaceSelector:
-                    matchLabels:
-                      kubernetes.io/metadata.name: observability
-                  podSelector:
-                    matchLabels:
-                      app.kubernetes.io/name: prometheus
-              ports:
-                - protocol: TCP
-                  port: ${METRICS_TLS_PORT}
+            - *prometheus-metrics
             # core-test checks that gRPC refuses a client without a certificate
             - from:
                 - namespaceSelector:
@@ -235,16 +208,7 @@ spec:
         filer:
           extraIngress:
             # Ghostunnel metrics
-            - from:
-                - namespaceSelector:
-                    matchLabels:
-                      kubernetes.io/metadata.name: observability
-                  podSelector:
-                    matchLabels:
-                      app.kubernetes.io/name: prometheus
-              ports:
-                - protocol: TCP
-                  port: ${METRICS_TLS_PORT}
+            - *prometheus-metrics
             # core-test checks that gRPC refuses a client without a certificate
             - from:
                 - namespaceSelector:
@@ -259,16 +223,7 @@ spec:
         volume:
           extraIngress:
             # Ghostunnel metrics
-            - from:
-                - namespaceSelector:
-                    matchLabels:
-                      kubernetes.io/metadata.name: observability
-                  podSelector:
-                    matchLabels:
-                      app.kubernetes.io/name: prometheus
-              ports:
-                - protocol: TCP
-                  port: ${METRICS_TLS_PORT}
+            - *prometheus-metrics
             # core-test checks that gRPC refuses a client without a certificate
             - from:
                 - namespaceSelector:
@@ -281,7 +236,6 @@ spec:
                 - protocol: TCP
                   port: 18080
     master:
-      ipBind: "0.0.0.0"
       metricsIp: 127.0.0.1
       # Deletes multipart uploads a killed backup left unfinished
       config: |-
@@ -313,7 +267,6 @@ spec:
         limits:
           memory: ${SEAWEEDFS_MASTER_MEM_LIMIT}
     filer:
-      ipBind: "0.0.0.0"
       metricsIp: 127.0.0.1
       extraEnvironmentVars:
         WEED_HTTPS_FILER_CERT: /usr/local/share/ca-certificates/filer/tls.crt

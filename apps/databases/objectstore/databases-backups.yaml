@@ -96,7 +96,7 @@ spec:
       initContainers:
         - name: read-archive
           image: ghcr.io/cloudnative-pg/postgis:${POSTGIS_IMAGE_TAG}
-          securityContext:
+          securityContext: &container-security
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
@@ -148,7 +148,7 @@ spec:
 
               echo "The archive holds WAL but no completed base backup, so neither recovery nor initdb can use it"
               exit 1
-          resources:
+          resources: &bootstrap-resources
             requests:
               cpu: ${POSTGRES_BOOTSTRAP_CPU_REQUEST}
               memory: ${POSTGRES_BOOTSTRAP_MEM_REQUEST}
@@ -166,11 +166,7 @@ spec:
       containers:
         - name: create-cluster
           image: alpine/k8s:${ALPINE_K8S_VERSION}
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
+          securityContext: *container-security
           env:
             - name: HOME
               value: /tmp
@@ -192,13 +188,7 @@ spec:
               kubectl patch --local -f /cluster/databases-cluster.yaml --type merge \
                 --patch-file "/patches/$bootstrap_method.yaml" -o yaml \
                 | kubectl create --field-manager=postgres-bootstrap -f -
-          resources:
-            requests:
-              cpu: ${POSTGRES_BOOTSTRAP_CPU_REQUEST}
-              memory: ${POSTGRES_BOOTSTRAP_MEM_REQUEST}
-            limits:
-              cpu: ${POSTGRES_BOOTSTRAP_CPU_LIMIT}
-              memory: ${POSTGRES_BOOTSTRAP_MEM_LIMIT}
+          resources: *bootstrap-resources
           volumeMounts:
             - name: decision
               mountPath: /decision
