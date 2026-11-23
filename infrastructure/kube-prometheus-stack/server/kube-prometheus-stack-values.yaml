@@ -13,9 +13,6 @@ defaultRules:
     kubeSchedulerRecording: false
     windows: false
 
-windowsMonitoring:
-  enabled: false
-
 # Inside k3s's server process; CoreDNS has no metrics TLS
 kubeControllerManager:
   enabled: false
@@ -27,16 +24,20 @@ kubeProxy:
   enabled: false
 coreDns:
   enabled: false
-kubeDns:
-  enabled: false
 
 # Verified against kube-root-ca.crt
 kubelet:
   serviceMonitor:
-    insecureSkipVerify: false
+    # Keeps the chart's CA
+    tlsConfig:
+      insecureSkipVerify: false
+    # Duplicates of the apiserver job's series on k3s
+    metricRelabelings:
+    - action: drop
+      sourceLabels: [__name__]
+      regex: (apiserver|etcd)_.*
 
 grafana:
-  enabled: true
   # Bound by OpenBao's grafana-role
   serviceAccount:
     name: grafana
@@ -180,9 +181,9 @@ grafana:
     dashboards:
       searchNamespace: [observability]
       reloadURL: https://localhost:3000/api/admin/provisioning/dashboards/reload
-      env:
+      env: &grafana-sidecar-env
         REQUESTS_CA_BUNDLE: /etc/openbao-root-ca/ca.crt
-      extraMounts:
+      extraMounts: &grafana-sidecar-mounts
         - name: openbao-root-ca
           mountPath: /etc/openbao-root-ca
           readOnly: true
@@ -192,12 +193,8 @@ grafana:
       alertmanager:
         enabled: false
       reloadURL: https://localhost:3000/api/admin/provisioning/datasources/reload
-      env:
-        REQUESTS_CA_BUNDLE: /etc/openbao-root-ca/ca.crt
-      extraMounts:
-        - name: openbao-root-ca
-          mountPath: /etc/openbao-root-ca
-          readOnly: true
+      env: *grafana-sidecar-env
+      extraMounts: *grafana-sidecar-mounts
   additionalDataSources:
     - name: Prometheus
       type: prometheus
@@ -354,7 +351,7 @@ prometheus:
           certFile: /svid/svid.pem
           keyFile: /svid/svid_key.pem
           caFile: /svid/bundle.pem
-    volumes:
+    volumes: &spiffe-helper-volumes
       - name: spiffe-workload-api
         csi:
           driver: csi.spiffe.io
@@ -373,18 +370,18 @@ prometheus:
       - name: spiffe-helper
         image: ghcr.io/spiffe/spiffe-helper:${SPIFFE_HELPER_VERSION}
         args: ["-config", "/config/spiffe-helper.conf"]
-        securityContext:
+        securityContext: &spiffe-helper-security
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
           capabilities:
             drop: [ALL]
-        resources:
+        resources: &spiffe-helper-resources
           requests:
             cpu: ${SPIFFE_HELPER_CPU_REQUEST}
             memory: ${SPIFFE_HELPER_MEM_REQUEST}
           limits:
             memory: ${SPIFFE_HELPER_MEM_LIMIT}
-        volumeMounts:
+        volumeMounts: &spiffe-helper-mounts
           - name: spiffe-workload-api
             mountPath: /spiffe-workload-api
             readOnly: true
@@ -413,17 +410,7 @@ kube-state-metrics:
   # Serves mTLS itself
   extraArgs:
     - --tls-config=/config/kube-state-metrics-web.yaml
-  volumes:
-    - name: spiffe-workload-api
-      csi:
-        driver: csi.spiffe.io
-        readOnly: true
-    - name: svid
-      emptyDir:
-        medium: Memory
-    - name: prometheus-sidecars
-      configMap:
-        name: prometheus-sidecars
+  volumes: *spiffe-helper-volumes
   volumeMounts:
     - name: svid
       mountPath: /svid
@@ -437,29 +424,9 @@ kube-state-metrics:
       image: ghcr.io/spiffe/spiffe-helper:${SPIFFE_HELPER_VERSION}
       restartPolicy: Always
       args: ["-config", "/config/spiffe-helper.conf"]
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        capabilities:
-          drop: [ALL]
-      resources:
-        requests:
-          cpu: ${SPIFFE_HELPER_CPU_REQUEST}
-          memory: ${SPIFFE_HELPER_MEM_REQUEST}
-        limits:
-          memory: ${SPIFFE_HELPER_MEM_LIMIT}
-      volumeMounts:
-        - name: spiffe-workload-api
-          mountPath: /spiffe-workload-api
-          readOnly: true
-        - name: svid
-          mountPath: /svid
-        - name: prometheus-sidecars
-          mountPath: /config
-          readOnly: true
-
-nodeExporter:
-  enabled: true
+      securityContext: *spiffe-helper-security
+      resources: *spiffe-helper-resources
+      volumeMounts: *spiffe-helper-mounts
 
 prometheus-node-exporter:
   namespaceOverride: node-exporter
