@@ -22,7 +22,7 @@ data:
   # renovate: datasource=github-releases depName=k3s-io/k3s
   K3S_VERSION: "v1.37.2+k3s1"
   # renovate: datasource=helm depName=kube-prometheus-stack registryUrl=https://prometheus-community.github.io/helm-charts
-  KUBE_PROMETHEUS_STACK_VERSION: "93.6.1"
+  KUBE_PROMETHEUS_STACK_VERSION: "93.11.0"
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
   KUBECTL_VERSION: "v1.37.2"
   # renovate: datasource=docker depName=alpine/k8s
@@ -42,11 +42,11 @@ data:
   # renovate: datasource=docker depName=registry.k8s.io/pause
   PAUSE_IMAGE_TAG: "3.10.2"
   # renovate: datasource=helm depName=seaweedfs registryUrl=https://seaweedfs.github.io/seaweedfs/helm
-  SEAWEEDFS_VERSION: "4.54.0"
+  SEAWEEDFS_VERSION: "4.55.0"
   # renovate: datasource=helm depName=secrets-store-csi-driver registryUrl=https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
   SECRETS_STORE_CSI_DRIVER_VERSION: "1.6.2"
   # renovate: datasource=docker depName=ghcr.io/spiffe/spiffe-helper
-  SPIFFE_HELPER_VERSION: "0.12.3"
+  SPIFFE_HELPER_VERSION: "0.12.4"
   # renovate: datasource=helm depName=spire-crds registryUrl=https://spiffe.github.io/helm-charts-hardened
   SPIRE_CRDS_VERSION: "0.6.1"
   # renovate: datasource=helm depName=spire registryUrl=https://spiffe.github.io/helm-charts-hardened
