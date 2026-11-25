@@ -24,6 +24,19 @@ spec:
                       secretKeyRef:
                         name: el-flux-events-cert
                         key: tls.key
+                  - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+                    valueFrom:
+                      secretKeyRef:
+                        name: el-flux-events-otel
+                        key: OTEL_EXPORTER_OTLP_CERTIFICATE
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: el-flux-events-otel
+  namespace: tekton-triggers
+stringData:
+  OTEL_EXPORTER_OTLP_CERTIFICATE: /etc/triggers/tls/ca.crt
 ---
 apiVersion: notification.toolkit.fluxcd.io/v1
 kind: Provider

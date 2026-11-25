@@ -349,7 +349,6 @@
 │   │   └── triggers/                    # the EventListener that starts runs from Flux events
 │   │       ├── alert-pull-request.yaml
 │   │       ├── kustomization.yaml
-│   │       ├── tekton-triggers-admission.yaml
 │   │       ├── tekton-triggers-listener.yaml
 │   │       ├── tekton-triggers-networkpolicy.yaml
 │   │       ├── tekton-triggers-rbac.yaml
@@ -685,8 +684,7 @@
     * **`zot.yaml`**: Checks that Zot's `/v2/` endpoint returns HTTP 200, that `/metrics` returns HTTP 200, that an unauthenticated push to `/v2/dev/test/manifests/latest` returns HTTP 401, and that the busybox manifest is reachable via the docker.io pull-through cache.
   * **`triggers/`**: The Flux `Kustomization` `tekton-triggers` (`clusters/local/tekton-triggers.yaml`). It holds the EventListener in `tekton-triggers` that starts runs from Flux events.
     * **`alert-pull-request.yaml`**: Alert `pull-request` in `flux-system`, which sends Provider `el-flux-events` each Kustomization apply event that changed objects.
-    * **`tekton-triggers-admission.yaml`**: MutatingAdmissionPolicy `el-flux-events-otlp-ca`, which injects `OTEL_EXPORTER_OTLP_CERTIFICATE` into `el-flux-events` so it verifies Prometheus against `openbao-root-ca`. An EventListener's env accepts only Secret references, hence the admission policy.
-    * **`tekton-triggers-listener.yaml`**: EventListener `flux-events`, which serves HTTPS with `el-flux-events-cert` on Service `el-flux-events` port 8443 and runs Trigger `pull-request`, and Provider `el-flux-events` in `flux-system`, which POSTs Alert `pull-request`'s events to it and verifies its certificate with the `openbao-root-ca` Secret.
+    * **`tekton-triggers-listener.yaml`**: EventListener `flux-events`, which serves HTTPS with `el-flux-events-cert` on Service `el-flux-events` port 8443 and runs Trigger `pull-request`; Secret `el-flux-events-otel`, which holds the path of the CA file that `el-flux-events` verifies Prometheus with, read through `OTEL_EXPORTER_OTLP_CERTIFICATE` because an EventListener's env accepts only Secret references; and Provider `el-flux-events` in `flux-system`, which POSTs Alert `pull-request`'s events to it and verifies its certificate with the `openbao-root-ca` Secret.
     * **`tekton-triggers-rbac.yaml`**: ServiceAccount `el-flux-events`, ClusterRoleBinding `el-flux-events-view` to the built-in `view` ClusterRole for its reads of Triggers objects, and Role and RoleBinding `el-flux-events-role` in `tekton-pipelines`, which let it create PipelineRuns.
     * **`trigger-pull-request.yaml`**: Trigger `pull-request`. For a Kustomization event at a revision on a branch other than `main`, which Flux follows only while a pull request is tested, it starts a `core-test-<sha>` PipelineRun at that revision. Later events for the same commit find that name taken and start nothing.
     * **`tekton-triggers-networkpolicy.yaml`**: `tekton-triggers`' policy file, which admits notification-controller to the EventListener's pod port.
