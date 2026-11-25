@@ -84,7 +84,7 @@ The first four tables list host-side tools. The remaining tables describe the co
 | fzf | `fzf` | Interactive pod picker for `just fuzzypods`. |
 | jq | `jq` | Optional for alert and scrape summaries in `just status`. |
 | just | `just` | Command runner orchestrating cluster lifecycle, database, and dev recipes (`justfile`). |
-| kubectl | `v1.37.2` <!-- renovate: datasource=github-releases depName=kubernetes/kubernetes --> (`KUBECTL_VERSION`, matching `K3S_VERSION`, packaged per minor version) | Kubernetes CLI for every cluster operation and recipe. |
+| kubectl | `v1.37.3` <!-- renovate: datasource=github-releases depName=kubernetes/kubernetes --> (`KUBECTL_VERSION`, matching `K3S_VERSION`, packaged per minor version) | Kubernetes CLI for every cluster operation and recipe. |
 | kubectl cnpg plugin | `kubectl-cnpg` / krew (the CNPG operator's minor version) | CloudNativePG status, backups, restarts, and `psql` sessions that run inside the primary pod (`kubectl cnpg ...`). |
 | Tekton CLI (`tkn`) | `tektoncd-cli` | Lists and follows PipelineRuns, TaskRuns and their logs, and follows the run `just core-test` starts. |
 
