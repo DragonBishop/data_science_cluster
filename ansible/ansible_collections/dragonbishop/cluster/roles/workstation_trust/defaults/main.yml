@@ -4,12 +4,15 @@ workstation_trust_install: true
 workstation_trust_anchor_dirs:
   RedHat: /etc/pki/ca-trust/source/anchors
   Debian: /usr/local/share/ca-certificates
+  Archlinux: /etc/ca-certificates/trust-source/anchors
 workstation_trust_update_commands:
   RedHat: update-ca-trust
   Debian: update-ca-certificates
+  Archlinux: update-ca-trust
 workstation_trust_nss_tools_packages:
   RedHat: nss-tools
   Debian: libnss3-tools
+  Archlinux: nss
 # Chromium prefers the legacy path when present
 workstation_trust_chromium_legacy_nssdb: "{{ ansible_facts.env.HOME }}/.pki/nssdb"
 workstation_trust_chromium_nssdb_default: "{{ ansible_facts.env.HOME }}/.local/share/pki/nssdb"
