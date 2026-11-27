@@ -1,3 +1,37 @@
+## [3.2.0](https://github.com/DragonBishop/data_science_cluster/compare/v3.1.0...v3.2.0) - 2026-11-27
+
+### 🚀 Features
+
+- *(observability)* Allow Grafana plugin downloads and enable Loki patterns ([fce9c09](https://github.com/DragonBishop/data_science_cluster/commit/fce9c09ff2297bcb56710eb669ae47641eb11dce))
+- *(zot)* Serve Zot's web UI and open it with just ui zot ([b8140b4](https://github.com/DragonBishop/data_science_cluster/commit/b8140b41aba410bb6923d2454255b2a053aca9e5))
+- *(firewall)* Configure ufw on Arch ([86209fe](https://github.com/DragonBishop/data_science_cluster/commit/86209fea24d45a545788f95cca283221c191c030))
+- *(workstation-trust)* Trust the CAs on Arch ([dba96c4](https://github.com/DragonBishop/data_science_cluster/commit/dba96c45a7b133b579f57f63241c54d051ba1d82))
+
+### 🐛 Bug Fixes
+
+- *(k3s)* Stop pods gracefully at shutdown and collect terminated pods ([11a52e7](https://github.com/DragonBishop/data_science_cluster/commit/11a52e79b43bda34ac6457ee541e5a6c049c0c07))
+- *(bash)* Drain the node on stop and uncordon it on start ([7f0c7c9](https://github.com/DragonBishop/data_science_cluster/commit/7f0c7c935bcf8ee6d141eca45dedba3d77ce1872))
+- *(ansible)* Run core-test only when Flux is provisioned ([0dd02fe](https://github.com/DragonBishop/data_science_cluster/commit/0dd02fe5af4df64e5faaf30413b121dde8a0f492))
+- Queue Cilium endpoint creation and mark the SeaweedFS master ready sooner ([699c3dd](https://github.com/DragonBishop/data_science_cluster/commit/699c3dd7c726829056db944be08e7b45441802c6))
+- *(observability)* Verify the kubelet's certificate and drop duplicate k3s series ([bb623af](https://github.com/DragonBishop/data_science_cluster/commit/bb623af20a335dddf6e59182c2d35c067d437c8d))
+- Size requests from observed use and turn off Pipelines-as-Code ([70efbe9](https://github.com/DragonBishop/data_science_cluster/commit/70efbe96ec07e7392873b97ee7f0cebe9a05970c))
+
+### 📚 Documentation
+
+- Describe node drain, core-test tagging, Grafana egress and Loki patterns ([633e3c1](https://github.com/DragonBishop/data_science_cluster/commit/633e3c1978a0b856176e2fd1f0ff75b85ab90681))
+- Describe the kubelet monitor, Flux memory patch and Pipelines-as-Code setting ([d3a70f5](https://github.com/DragonBishop/data_science_cluster/commit/d3a70f5f0f99bef3ea53a12e1d2b4c6867dddacf))
+- Describe the Arch e2e job and ufw on Arch ([52346b2](https://github.com/DragonBishop/data_science_cluster/commit/52346b293298988f4a57caf31e2483bd3b40da17))
+
+### ♻️ Refactor
+
+- Merge repeated rules and blocks and drop chart defaults ([4083646](https://github.com/DragonBishop/data_science_cluster/commit/4083646bb6dbc0de894f1837652e44c63dcf9e4e))
+- *(triggers)* Remove tekton-triggers-admission.yaml and replace with el-flux-events-otel secret. ([31ea2db](https://github.com/DragonBishop/data_science_cluster/commit/31ea2dbbc462bf3ddc50f5fba7624644a2128921))
+- *(ansible)* Print the Grafana login only when it exists ([694b8d5](https://github.com/DragonBishop/data_science_cluster/commit/694b8d59037b82bf8d7dc220378d56e5b1f9bc82))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(e2e)* Bootstrap in an Arch Lima VM ([b509f3c](https://github.com/DragonBishop/data_science_cluster/commit/b509f3c27efc5e2da13f7fd3ab3ac660e9cada94))
+
 ## [3.1.0](https://github.com/DragonBishop/data_science_cluster/compare/v3.0.0...v3.1.0) - 2026-11-22
 
 ### 🚀 Features
