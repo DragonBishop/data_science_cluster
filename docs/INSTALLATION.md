@@ -402,6 +402,8 @@ Renovate runs as Mend's hosted Renovate App. Install it from <https://github.com
 
   On Fedora/RHEL, firewalld must already be active. Setup finds the zone of `LAN_INTERFACE` from cluster-config. It retains named workstation services and explicit ports, opens DNS and the Gateway's 443/5432 listeners, removes the unrestricted `1025-65535` TCP/UDP ranges, and restricts `k8s-containers-to-host` to the trusted Cilium zone. `setup-firewall.sh --check`, which preflight runs, checks the same restrictions and forwarding directions.
 
+  On Ubuntu/Debian and Arch, setup configures ufw when it is active. It sets the default forward policy to `ACCEPT`, opens 443/tcp, and allows the Cilium interfaces and the pod CIDR.
+
   Before applying this change to an existing host, inspect its configuration and save a copy:
 
   ```bash

@@ -218,7 +218,8 @@ jobs:
           lan_interface="$(yq '.data.LAN_INTERFACE' infrastructure/cluster-config/networking.yaml)"
           $ON_NODE sudo ip link add "$lan_interface" type dummy
 
-      - name: Copy the tools into the VM
+      - &copy_tools
+        name: Copy the tools into the VM
         run: |
           for tool_name in uv kubectl helm flux tofu tkn; do
             tool_path="$(command -v "$tool_name")"
@@ -226,7 +227,8 @@ jobs:
               "$tool_path" "lima-node:/usr/local/bin/$tool_name"
           done
 
-      - name: Copy the repository into the VM
+      - &copy_repository
+        name: Copy the repository into the VM
         run: rsync --archive ./ "lima-node:$REPO_DIR/"
 
       - *install_python_environment
@@ -240,3 +242,61 @@ jobs:
       - name: Show SELinux denials
         if: failure() || cancelled()
         run: $ON_NODE sudo journalctl -k --grep=avc --no-pager || true
+
+  bootstrap-arch:
+    needs: e2e-scope
+    if: ${{ !cancelled() && needs.e2e-scope.outputs.skip != 'true' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    env:
+      ON_NODE: ssh lima-node
+      REPO_DIR: repo
+    steps:
+      - *checkout
+      - *setup_uv
+      - *setup_flux
+      - *setup_opentofu
+      - *install_tkn
+      - uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
+        with:
+          # renovate: datasource=github-releases depName=lima-vm/lima
+          version: v2.3.0
+
+      - name: Start the Arch VM
+        run: |
+          limactl start --plain --name=node \
+            --cpus=4 --memory=12 --disk=60 template:archlinux
+
+      - name: Install the VM's packages
+        run: $ON_NODE sudo pacman -Syu --needed --noconfirm rsync ufw git gnupg jq openssl
+
+      # pacman -Syu removes the running kernel's modules
+      - name: Reboot the VM into the upgraded kernel
+        run: limactl stop node && limactl start node
+
+      - name: Turn on ufw in the VM
+        run: |
+          $ON_NODE sudo ufw allow 22/tcp
+          $ON_NODE sudo systemctl enable --now ufw
+          $ON_NODE sudo ufw --force enable
+
+      - name: Give the VM the cluster's LAN interface
+        run: |
+          lan_interface="$(yq '.data.LAN_INTERFACE' infrastructure/cluster-config/networking.yaml)"
+          $ON_NODE sudo ip link add "$lan_interface" type dummy
+
+      - *copy_tools
+      - *copy_repository
+      - *install_python_environment
+      - *install_collection
+      - *write_flux_private_key
+      - *run_full_playbook
+      - *run_tekton_pipelines
+      - *show_flux_objects
+      - *show_cluster_state
+
+      - name: Show ufw's rules and blocked packets
+        if: failure() || cancelled()
+        run: |
+          $ON_NODE sudo ufw status verbose || true
+          $ON_NODE sudo journalctl -k --grep='UFW BLOCK' --no-pager | tail -n 100

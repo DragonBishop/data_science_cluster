@@ -96,6 +96,9 @@ remove_trust_anchors() {
     if [ -d /etc/pki/ca-trust/source/anchors ]; then
         anchor_dir=/etc/pki/ca-trust/source/anchors
         update_command=update-ca-trust
+    elif [ -d /etc/ca-certificates/trust-source/anchors ]; then
+        anchor_dir=/etc/ca-certificates/trust-source/anchors
+        update_command=update-ca-trust
     elif [ -d /usr/local/share/ca-certificates ]; then
         anchor_dir=/usr/local/share/ca-certificates
         update_command=update-ca-certificates
