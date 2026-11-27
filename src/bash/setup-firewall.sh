@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 #
 # setup-firewall.sh: Configures host firewall rules for Kubernetes & Cilium.
-# Supports Fedora/RHEL (firewalld) and Ubuntu/Debian (ufw).
+# Supports Fedora/RHEL (firewalld) and Ubuntu/Debian/Arch (ufw).
 #
 set -euo pipefail
 
 firewall_mode=setup
 
 detect_distro() {
-    local distro_id=unknown distro_family=unknown
+    local distro_id=unknown firewall_family=unknown
 
     if [ ! -f /etc/os-release ]; then
-        echo "$distro_family $distro_id"
+        echo "$firewall_family $distro_id"
         return 0
     fi
 
@@ -19,11 +19,11 @@ detect_distro() {
     . /etc/os-release
     distro_id="${ID:-unknown}"
     case " ${ID:-} ${ID_LIKE:-} " in
-        *" ubuntu "*|*" debian "*) distro_family=debian ;;
-        *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) distro_family=fedora ;;
+        *" ubuntu "*|*" debian "*|*" arch "*) firewall_family=ufw ;;
+        *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) firewall_family=firewalld ;;
     esac
 
-    echo "$distro_family $distro_id"
+    echo "$firewall_family $distro_id"
 }
 
 # Read the configuration Flux will use, before the cluster exists.
@@ -84,7 +84,7 @@ parse_args() {
                 echo "Usage: $0 [options]"
                 echo ""
                 echo "Configures host firewall rules for Kubernetes and Cilium."
-                echo "Supports Fedora/RHEL (firewalld) and Ubuntu/Debian (ufw)."
+                echo "Supports Fedora/RHEL (firewalld) and Ubuntu/Debian/Arch (ufw)."
                 echo ""
                 echo "Options:"
                 echo "  --check       Check the rules without changing them"
@@ -111,16 +111,16 @@ print_header() {
     echo "🔒 Host Firewall Setup"
 }
 
-print_detected_os() {
-    local distro_family="$1"
+print_detected_firewall() {
+    local firewall_family="$1"
     local distro_id="$2"
-    echo "   Detected OS family: $distro_family ($distro_id)"
+    echo "   Detected firewall: $firewall_family ($distro_id)"
 }
 
-print_unsupported_os() {
-    local distro_family="$1"
+print_unsupported_firewall() {
+    local firewall_family="$1"
     local distro_id="$2"
-    echo "⚠️  Unsupported or unrecognized OS family '$distro_family' ($distro_id)."
+    echo "⚠️  No supported firewall for this distribution ('$firewall_family', $distro_id)."
     echo "   Please refer to docs/INSTALLATION.md for manual firewall configuration."
 }
 
@@ -129,7 +129,7 @@ print_next_steps() {
     echo "💡 Next step: Run 'just preflight' to verify host readiness."
 }
 
-# Ubuntu / Debian (UFW)
+# Ubuntu / Debian / Arch (UFW)
 ufw_is_active() {
     sudo ufw status 2>/dev/null | grep -q "Status: active"
 }
@@ -179,7 +179,7 @@ reload_ufw() {
     sudo ufw reload >/dev/null
 }
 
-setup_debian_firewall() {
+setup_ufw_firewall() {
     local pod_cidr="$1"
 
     if ! command -v ufw >/dev/null 2>&1; then
@@ -290,7 +290,7 @@ reload_firewalld() {
     sudo firewall-cmd --reload >/dev/null
 }
 
-setup_fedora_firewall() {
+setup_firewalld_firewall() {
     local pod_cidr="$1" lan_zone
     require_firewalld || return 1
     lan_zone=$(get_firewalld_lan_zone) || return 1
@@ -308,9 +308,9 @@ setup_fedora_firewall() {
 }
 
 # Read-only checks of the rules the setup functions apply
-check_debian_firewall() {
+check_ufw_firewall() {
     if ! command -v ufw >/dev/null 2>&1; then
-        echo "⚠️  ufw not found on a Debian/Ubuntu host (expected on this distro family). Inspect the firewall's INPUT policy with:"
+        echo "⚠️  ufw not found on a Debian, Ubuntu or Arch host. Inspect the firewall's INPUT policy with:"
         echo "   sudo iptables -L INPUT -n -v"
         return 1
     fi
@@ -396,7 +396,7 @@ check_firewalld_policies() {
     report_missing_firewalld_rules "${missing_rules[@]}"
 }
 
-check_fedora_firewall() {
+check_firewalld_firewall() {
     local lan_zone pod_cidr
     require_firewalld || return 1
     lan_zone=$(get_firewalld_lan_zone) || return 1
@@ -410,11 +410,11 @@ check_fedora_firewall() {
 
 # Dynamic dispatch
 dispatch_firewall_setup() {
-    local distro_family="$1" distro_id="$2" pod_cidr="$3"
-    local setup_function="setup_${distro_family}_firewall"
+    local firewall_family="$1" distro_id="$2" pod_cidr="$3"
+    local setup_function="setup_${firewall_family}_firewall"
 
     if ! declare -f "$setup_function" >/dev/null 2>&1; then
-        print_unsupported_os "$distro_family" "$distro_id"
+        print_unsupported_firewall "$firewall_family" "$distro_id"
         return 0
     fi
 
@@ -422,8 +422,8 @@ dispatch_firewall_setup() {
 }
 
 dispatch_firewall_check() {
-    local distro_family="$1" distro_id="$2"
-    local check_function="check_${distro_family}_firewall"
+    local firewall_family="$1" distro_id="$2"
+    local check_function="check_${firewall_family}_firewall"
 
     if ! declare -f "$check_function" >/dev/null 2>&1; then
         echo "⚠️  Unrecognized distro '$distro_id'; inspect the host firewall manually."
@@ -436,25 +436,25 @@ dispatch_firewall_check() {
 # Main entrypoint
 main() {
     local distro_info
-    local distro_family
+    local firewall_family
     local distro_id
     local pod_cidr
 
     parse_args "$@"
     distro_info=$(detect_distro)
-    distro_family="${distro_info%% *}"
+    firewall_family="${distro_info%% *}"
     distro_id="${distro_info#* }"
 
     if [ "$firewall_mode" = check ]; then
-        dispatch_firewall_check "$distro_family" "$distro_id"
+        dispatch_firewall_check "$firewall_family" "$distro_id"
         return
     fi
 
     print_header
     pod_cidr=$(get_cluster_config_value POD_CIDR)
-    print_detected_os "$distro_family" "$distro_id"
+    print_detected_firewall "$firewall_family" "$distro_id"
     acquire_sudo
-    dispatch_firewall_setup "$distro_family" "$distro_id" "$pod_cidr"
+    dispatch_firewall_setup "$firewall_family" "$distro_id" "$pod_cidr"
     print_next_steps
 }
 
