@@ -1,3 +1,19 @@
+## [3.2.0](https://github.com/DragonBishop/data_science_cluster/compare/v3.1.0...v3.2.0) - 2026-11-27
+
+### 🚀 Features
+
+- *(workstation-trust)* Trust the CAs on Arch ([dba96c4](https://github.com/DragonBishop/data_science_cluster/commit/dba96c45a7b133b579f57f63241c54d051ba1d82))
+
+### 🐛 Bug Fixes
+
+- *(k3s)* Stop pods gracefully at shutdown and collect terminated pods ([11a52e7](https://github.com/DragonBishop/data_science_cluster/commit/11a52e79b43bda34ac6457ee541e5a6c049c0c07))
+- *(ansible)* Run core-test only when Flux is provisioned ([0dd02fe](https://github.com/DragonBishop/data_science_cluster/commit/0dd02fe5af4df64e5faaf30413b121dde8a0f492))
+- Queue Cilium endpoint creation and mark the SeaweedFS master ready sooner ([699c3dd](https://github.com/DragonBishop/data_science_cluster/commit/699c3dd7c726829056db944be08e7b45441802c6))
+
+### ♻️ Refactor
+
+- *(ansible)* Print the Grafana login only when it exists ([694b8d5](https://github.com/DragonBishop/data_science_cluster/commit/694b8d59037b82bf8d7dc220378d56e5b1f9bc82))
+
 ## [3.1.0](https://github.com/DragonBishop/data_science_cluster/compare/v3.0.0...v3.1.0) - 2026-11-22
 
 ### 🚀 Features
